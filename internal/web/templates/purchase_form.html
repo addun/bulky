@@ -1,0 +1,13 @@
+{{template "header" .}}
+<h1>Edit purchase</h1>
+<p class="lede">{{.Product.Name}} · {{.Product.UnitName}}</p>
+<form class="stack" method="post" action="/purchases/{{.Purchase.ID}}">
+  <label>Date <input type="date" name="bought_on" required value="{{.Purchase.BoughtOn}}"></label>
+  <label>Quantity ({{.Product.UnitName}}) <input name="quantity" required inputmode="decimal" value="{{qty .Purchase.Quantity}}"></label>
+  <label>Amount ({{.Page.Currency}}) <input name="amount" required inputmode="decimal" value="{{.Purchase.Amount}}"></label>
+  <div class="actions">
+    <button type="submit" class="btn btn-tag">Save purchase</button>
+    <a href="/products/{{.Product.ID}}">Cancel</a>
+  </div>
+</form>
+{{template "footer" .}}

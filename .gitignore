@@ -1,0 +1,5 @@
+/data
+/bulkly
+*.db
+*.exe
+.DS_Store

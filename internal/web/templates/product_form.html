@@ -1,0 +1,36 @@
+{{template "header" .}}
+<h1>{{if .New}}Add product{{else}}Edit {{.Product.Name}}{{end}}</h1>
+<form class="stack" method="post" action="{{if .New}}/products{{else}}/products/{{.Product.ID}}{{end}}" enctype="multipart/form-data">
+  <label>
+    Name
+    <input name="name" required value="{{.Product.Name}}" autofocus>
+  </label>
+  <label>
+    Unit
+    <select name="unit_id">
+      <option value="">Select…</option>
+      {{range .Units}}
+      <option value="{{.ID}}" {{if eq .ID $.Product.UnitID}}selected{{end}}>{{.Name}}</option>
+      {{end}}
+    </select>
+  </label>
+  <label>
+    Or add a new unit
+    <input name="new_unit" placeholder="e.g. l, szt, bottle">
+  </label>
+  <label>
+    Photo <span class="hint">optional, jpeg/png/webp/gif, max 5 MB</span>
+    <input name="image" type="file" accept="image/jpeg,image/png,image/webp,image/gif">
+  </label>
+  {{if and (not .New) .Product.ImagePath.Valid}}
+  <div class="preview">
+    <img src="/images/{{.Product.ImagePath.String}}" alt="">
+    <label class="check"><input type="checkbox" name="clear_image" value="1"> Remove photo</label>
+  </div>
+  {{end}}
+  <div class="actions">
+    <button type="submit" class="btn btn-tag">{{if .New}}Save product{{else}}Save changes{{end}}</button>
+    <a href="{{if .New}}/{{else}}/products/{{.Product.ID}}{{end}}">Cancel</a>
+  </div>
+</form>
+{{template "footer" .}}

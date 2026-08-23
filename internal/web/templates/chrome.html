@@ -1,0 +1,30 @@
+{{define "header"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{if .Page.Title}}{{.Page.Title}} · {{end}}Bulkly</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <header class="mast">
+    <a class="wordmark" href="/">Bulkly</a>
+    <nav>
+      <a href="/">Products</a>
+      <a href="/units">Units</a>
+      <a class="btn btn-tag" href="/products/new">Add product</a>
+    </nav>
+  </header>
+  <main class="sheet">
+    {{if .Page.Error}}<p class="banner" role="alert">{{.Page.Error}}</p>{{end}}
+{{end}}
+
+{{define "footer"}}
+  </main>
+</body>
+</html>
+{{end}}

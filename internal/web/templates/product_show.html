@@ -1,0 +1,75 @@
+{{template "header" .}}
+<article class="product-head">
+  {{if .Product.ImagePath.Valid}}
+    <img class="hero" src="/images/{{.Product.ImagePath.String}}" alt="">
+  {{else}}
+    <span class="hero hero-empty" aria-hidden="true"></span>
+  {{end}}
+  <div>
+    <p class="eyebrow">{{.Product.UnitName}}</p>
+    <h1>{{.Product.Name}}</h1>
+    <p class="actions">
+      <a href="/products/{{.Product.ID}}/edit">Edit</a>
+      <a class="danger" href="/products/{{.Product.ID}}/delete">Delete</a>
+    </p>
+  </div>
+</article>
+
+{{if .Years}}
+<section>
+  <h2>By year</h2>
+  <ul class="years">
+    {{range .Years}}
+    <li>
+      <span class="year">{{.Year}}</span>
+      <span>{{qty .Quantity}} {{$.Product.UnitName}}</span>
+      <span class="row-amt">{{money .Amount}}</span>
+    </li>
+    {{end}}
+  </ul>
+</section>
+{{end}}
+
+<section>
+  <h2>Add a purchase</h2>
+  <form class="grid-form" method="post" action="/products/{{.Product.ID}}/purchases">
+    <label>Date <input type="date" name="bought_on" required value="{{.Page.Today}}"></label>
+    <label>Quantity ({{.Product.UnitName}}) <input name="quantity" required inputmode="decimal" placeholder="1.5"></label>
+    <label>Amount ({{.Page.Currency}}) <input name="amount" required inputmode="decimal" placeholder="12.40"></label>
+    <button type="submit" class="btn btn-tag">Save purchase</button>
+  </form>
+</section>
+
+<section>
+  <h2>History</h2>
+  {{if not .Purchases}}
+    <p class="empty">No purchases yet.</p>
+  {{else}}
+    <table class="history">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Qty</th>
+          <th>Amount</th>
+          <th>Unit price</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Purchases}}
+        <tr>
+          <td>{{date .BoughtOn}}</td>
+          <td>{{qty .Quantity}} {{$.Product.UnitName}}</td>
+          <td>{{money .Amount}}</td>
+          <td>{{unitPrice .Amount .Quantity}}</td>
+          <td class="tight">
+            <a href="/purchases/{{.ID}}/edit">Edit</a>
+            <a class="danger" href="/purchases/{{.ID}}/delete">Delete</a>
+          </td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  {{end}}
+</section>
+{{template "footer" .}}

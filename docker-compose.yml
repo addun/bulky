@@ -1,0 +1,16 @@
+services:
+  bulkly:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      DATA_DIR: /data
+      ADDR: ":8080"
+      CURRENCY: PLN
+      CURRENCY_SYMBOL: zł
+      TZ: Europe/Warsaw
+    volumes:
+      - bulkly-data:/data
+
+volumes:
+  bulkly-data:

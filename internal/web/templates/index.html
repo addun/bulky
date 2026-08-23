@@ -1,0 +1,39 @@
+{{template "header" .}}
+<div class="toolbar">
+  <form class="search" method="get" action="/">
+    <label class="sr" for="q">Search</label>
+    <input id="q" name="q" type="search" value="{{.Page.Query}}" placeholder="Find a product" autocomplete="off">
+    <button type="submit" class="btn btn-tag">Search</button>
+  </form>
+</div>
+
+{{if not .Products}}
+  <div class="empty">
+    {{if .Page.Query}}
+      <p>No product matches “{{.Page.Query}}”.</p>
+    {{else}}
+      <p>Nothing on the list yet.</p>
+      <p><a href="/products/new">Add the first product you buy in bulk.</a></p>
+    {{end}}
+  </div>
+{{else}}
+  <ul class="ledger">
+    {{range .Products}}
+    <li>
+      <a class="row" href="/products/{{.ID}}">
+        {{if .ImagePath.Valid}}
+          <img class="thumb" src="/images/{{.ImagePath.String}}" alt="">
+        {{else}}
+          <span class="thumb thumb-empty" aria-hidden="true"></span>
+        {{end}}
+        <span class="row-main">
+          <strong>{{.Name}}</strong>
+          <span class="meta">{{.UnitName}}{{if .LastBought.Valid}} · last {{date .LastBought.String}}{{end}}</span>
+        </span>
+        <span class="row-amt">{{if gt .PurchaseCount 0}}{{money .LifetimeAmount}}{{else}}—{{end}}</span>
+      </a>
+    </li>
+    {{end}}
+  </ul>
+{{end}}
+{{template "footer" .}}

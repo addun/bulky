@@ -1,0 +1,28 @@
+{{template "header" .}}
+<h1>Units</h1>
+<p class="lede">Products pick a unit from this list. Seeded with kg and g; add anything else you need.</p>
+
+<form class="inline" method="post" action="/units">
+  <label class="grow">New unit <input name="name" required placeholder="l, szt, bottle…"></label>
+  <button type="submit" class="btn btn-tag">Add unit</button>
+</form>
+
+{{if not .Units}}
+  <p class="empty">No units yet.</p>
+{{else}}
+  <ul class="units">
+    {{range .Units}}
+    <li>
+      <span class="unit-name">{{.Name}}</span>
+      <span class="meta">{{.ProductCount}} product{{if ne .ProductCount 1}}s{{end}}</span>
+      <span class="tight">
+        <a href="/units/{{.ID}}/edit">Rename</a>
+        {{if eq .ProductCount 0}}
+          <a class="danger" href="/units/{{.ID}}/delete">Delete</a>
+        {{end}}
+      </span>
+    </li>
+    {{end}}
+  </ul>
+{{end}}
+{{template "footer" .}}

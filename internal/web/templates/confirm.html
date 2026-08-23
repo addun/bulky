@@ -1,0 +1,10 @@
+{{template "header" .}}
+<h1>{{.Title}}</h1>
+<p class="lede">{{.Body}}</p>
+<form method="post" action="{{.Action}}">
+  <div class="actions">
+    <button type="submit" class="btn btn-danger">{{.Confirm}}</button>
+    <a href="{{.Cancel}}">Cancel</a>
+  </div>
+</form>
+{{template "footer" .}}
