@@ -8,6 +8,22 @@ A local log of products you buy in bulk: quantity, price in PLN, and a running h
 docker compose up --build
 ```
 
+Published images from GitHub Releases go to the [GitHub Container Registry](https://ghcr.io) as `ghcr.io/<owner>/<repo>` (linux/amd64 and linux/arm64):
+
+```bash
+docker pull ghcr.io/addun/bulky:v1.0.0
+```
+
+Create a GitHub Release whose tag is a semantic version starting with `v` (`v1.0.0`, `v1.2.3`, `v2.0.0-rc.1`). That publishes:
+
+| Image tag     | When                                    |
+| ------------- | --------------------------------------- |
+| `v1.2.3`      | every matching release                  |
+| `v1.2` / `v1` | stable releases only (not pre-releases) |
+| `latest`      | stable releases only                    |
+
+No extra secrets: the workflow authenticates with `GITHUB_TOKEN`. After the first push, the package appears on the repo’s **Packages** tab. For a public repo the image is public; for a private repo, `docker login ghcr.io` with a PAT that has `read:packages`.
+
 Open [http://localhost:8080](http://localhost:8080).
 
 Data (SQLite + product photos) lives in the `bulkly-data` volume.
