@@ -28,7 +28,12 @@ func (s *Server) createPurchase(c *gin.Context) {
 		c.Redirect(http.StatusSeeOther, "/products/"+itoa(id)+"?error="+url.QueryEscape(msg))
 		return
 	}
-	if _, err := s.store.CreatePurchase(id, boughtOn, qty, amount); err != nil {
+	companyID, msg := s.resolveCompanyForm(c)
+	if msg != "" {
+		c.Redirect(http.StatusSeeOther, "/products/"+itoa(id)+"?error="+url.QueryEscape(msg))
+		return
+	}
+	if _, err := s.store.CreatePurchase(id, companyID, boughtOn, qty, amount); err != nil {
 		c.Redirect(http.StatusSeeOther, "/products/"+itoa(id)+"?error="+url.QueryEscape("Could not save the purchase."))
 		return
 	}
@@ -55,10 +60,16 @@ func (s *Server) editPurchase(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "could not load product")
 		return
 	}
+	companies, err := s.store.ListCompanies()
+	if err != nil {
+		c.String(http.StatusInternalServerError, "could not load companies")
+		return
+	}
 	c.HTML(http.StatusOK, "purchase_form.html", gin.H{
-		"Page":     s.page("Edit purchase", "", ""),
-		"Product":  prod,
-		"Purchase": p,
+		"Page":      s.page("Edit purchase", "", ""),
+		"Product":   prod,
+		"Purchase":  p,
+		"Companies": companies,
 	})
 }
 
@@ -82,21 +93,31 @@ func (s *Server) updatePurchase(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "could not load product")
 		return
 	}
-	boughtOn, qty, amount, msg := s.parsePurchase(c)
-	if msg != "" {
-		c.HTML(http.StatusUnprocessableEntity, "purchase_form.html", gin.H{
-			"Page":     s.page("Edit purchase", "", msg),
-			"Product":  prod,
-			"Purchase": p,
-		})
+	companies, err := s.store.ListCompanies()
+	if err != nil {
+		c.String(http.StatusInternalServerError, "could not load companies")
 		return
 	}
-	if err := s.store.UpdatePurchase(id, boughtOn, qty, amount); err != nil {
+	renderErr := func(msg string) {
 		c.HTML(http.StatusUnprocessableEntity, "purchase_form.html", gin.H{
-			"Page":     s.page("Edit purchase", "", "Could not save the purchase."),
-			"Product":  prod,
-			"Purchase": p,
+			"Page":      s.page("Edit purchase", "", msg),
+			"Product":   prod,
+			"Purchase":  p,
+			"Companies": companies,
 		})
+	}
+	boughtOn, qty, amount, msg := s.parsePurchase(c)
+	if msg != "" {
+		renderErr(msg)
+		return
+	}
+	companyID, msg := s.resolveCompanyForm(c)
+	if msg != "" {
+		renderErr(msg)
+		return
+	}
+	if err := s.store.UpdatePurchase(id, companyID, boughtOn, qty, amount); err != nil {
+		renderErr("Could not save the purchase.")
 		return
 	}
 	c.Redirect(http.StatusSeeOther, "/products/"+itoa(p.ProductID))

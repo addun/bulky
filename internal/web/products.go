@@ -93,14 +93,15 @@ func (s *Server) saveProduct(c *gin.Context, id int64) {
 		renderErr("Name is required.", store.Product{ID: id, Name: name, UnitID: formInt64(c, "unit_id")})
 		return
 	}
-	unitID, err := s.store.ResolveUnit(formInt64(c, "unit_id"), c.PostForm("new_unit"))
-	if err != nil {
-		renderErr("Choose a unit or type a new one.", store.Product{ID: id, Name: name, UnitID: formInt64(c, "unit_id")})
+	unitID := formInt64(c, "unit_id")
+	if _, err := s.store.GetUnit(unitID); err != nil {
+		renderErr("Choose a unit.", store.Product{ID: id, Name: name, UnitID: unitID})
 		return
 	}
 
 	var imgName string
 	if fh, ferr := c.FormFile("image"); ferr == nil {
+		var err error
 		imgName, err = s.saveImage(fh)
 		if err != nil {
 			renderErr(err.Error()+".", store.Product{ID: id, Name: name, UnitID: unitID})
@@ -174,12 +175,19 @@ func (s *Server) showProduct(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "could not load purchases")
 		return
 	}
+	companies, err := s.store.ListCompanies()
+	if err != nil {
+		c.String(http.StatusInternalServerError, "could not load companies")
+		return
+	}
 	errMsg := c.Query("error")
 	c.HTML(http.StatusOK, "product_show.html", gin.H{
-		"Page":      s.page(p.Name, "", errMsg),
-		"Product":   p,
-		"Purchases": purchases,
-		"Years":     store.YearlySummaries(purchases),
+		"Page":        s.page(p.Name, "", errMsg),
+		"Product":     p,
+		"Purchases":   purchases,
+		"Companies":   companies,
+		"CompanyByID": companiesByID(companies),
+		"Years":       store.YearlySummaries(purchases),
 	})
 }
 

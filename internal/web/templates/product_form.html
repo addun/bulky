@@ -7,17 +7,16 @@
   </label>
   <label>
     Unit
-    <select name="unit_id">
+    <select name="unit_id" required>
       <option value="">Select…</option>
       {{range .Units}}
       <option value="{{.ID}}" {{if eq .ID $.Product.UnitID}}selected{{end}}>{{.Name}}</option>
       {{end}}
     </select>
   </label>
-  <label>
-    Or add a new unit
-    <input name="new_unit" placeholder="e.g. l, szt, bottle">
-  </label>
+  {{if not .Units}}
+    <p class="hint">No units yet. <a href="/units">Add a unit</a> first.</p>
+  {{end}}
   <label>
     Photo <span class="hint">optional, jpeg/png/webp/gif up to 5 MB — stored as a 240×240 JPEG</span>
     <input name="image" type="file" accept="image/jpeg,image/png,image/webp,image/gif">

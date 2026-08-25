@@ -14,10 +14,17 @@ import (
 )
 
 var (
-	ErrNotFound    = errors.New("not found")
-	ErrUnitInUse   = errors.New("unit is in use")
-	ErrDuplicate   = errors.New("already exists")
-	ErrInvalidUnit = errors.New("invalid unit")
+	ErrNotFound        = errors.New("not found")
+	ErrUnitInUse       = errors.New("unit is in use")
+	ErrCompanyInUse    = errors.New("company is in use")
+	ErrDuplicate       = errors.New("already exists")
+	ErrInvalidUnit     = errors.New("invalid unit")
+	ErrInvalidCompany  = errors.New("invalid company")
+	ErrCompanyName     = errors.New("company name required")
+	ErrCompanyStreet   = errors.New("company street name required")
+	ErrCompanyBuilding = errors.New("company building number required")
+	ErrCompanyPostal   = errors.New("company postal code required")
+	ErrCompanyCity     = errors.New("company city required")
 )
 
 type Store struct {
@@ -42,14 +49,55 @@ type Product struct {
 
 type ProductListItem struct {
 	Product
-	LastBought      sql.NullString
-	LifetimeAmount  decimal.Decimal
+	LastBought     sql.NullString
+	LifetimeAmount decimal.Decimal
+	PurchaseCount  int
+}
+
+type Company struct {
+	ID              int64
+	Name            string
+	StreetName      string
+	BuildingNumber  string
+	ApartmentNumber string
+	PostalCode      string
+	City            string
 	PurchaseCount   int
+}
+
+func (c Company) StreetLine() string {
+	s := strings.TrimSpace(c.StreetName + " " + c.BuildingNumber)
+	if c.ApartmentNumber != "" {
+		s += "/" + c.ApartmentNumber
+	}
+	return s
+}
+
+func (c Company) AddressLine() string {
+	street := c.StreetLine()
+	loc := strings.TrimSpace(c.PostalCode + " " + c.City)
+	switch {
+	case street != "" && loc != "":
+		return street + ", " + loc
+	case street != "":
+		return street
+	default:
+		return loc
+	}
+}
+
+func (c Company) Label() string {
+	addr := c.AddressLine()
+	if addr == "" {
+		return c.Name
+	}
+	return c.Name + " — " + addr
 }
 
 type Purchase struct {
 	ID        int64
 	ProductID int64
+	CompanyID int64
 	BoughtOn  string
 	Quantity  decimal.Decimal
 	Amount    decimal.Decimal
@@ -117,9 +165,19 @@ CREATE TABLE IF NOT EXISTS products (
   image_path TEXT,
   created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS companies (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  street_name TEXT NOT NULL,
+  building_number TEXT NOT NULL,
+  apartment_number TEXT NOT NULL DEFAULT '',
+  postal_code TEXT NOT NULL,
+  city TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS purchases (
   id INTEGER PRIMARY KEY,
   product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  company_id INTEGER REFERENCES companies(id),
   bought_on TEXT NOT NULL,
   quantity TEXT NOT NULL,
   amount TEXT NOT NULL,
@@ -127,8 +185,102 @@ CREATE TABLE IF NOT EXISTS purchases (
 );
 CREATE INDEX IF NOT EXISTS idx_products_name ON products(name COLLATE NOCASE);
 CREATE INDEX IF NOT EXISTS idx_purchases_product ON purchases(product_id, bought_on);
+CREATE INDEX IF NOT EXISTS idx_companies_name ON companies(name COLLATE NOCASE);
 `)
+	if err != nil {
+		return err
+	}
+	if err := s.ensurePurchaseCompanyColumn(); err != nil {
+		return err
+	}
+	if err := s.migrateCompanyAddress(); err != nil {
+		return err
+	}
+	_, err = s.db.Exec(`CREATE INDEX IF NOT EXISTS idx_purchases_company ON purchases(company_id)`)
 	return err
+}
+
+func (s *Store) migrateCompanyAddress() error {
+	if err := s.ensureColumn("companies", "postal_code", `ALTER TABLE companies ADD COLUMN postal_code TEXT NOT NULL DEFAULT ''`); err != nil {
+		return err
+	}
+	if err := s.ensureColumn("companies", "city", `ALTER TABLE companies ADD COLUMN city TEXT NOT NULL DEFAULT ''`); err != nil {
+		return err
+	}
+	hasStreetName, err := s.hasColumn("companies", "street_name")
+	if err != nil {
+		return err
+	}
+	if !hasStreetName {
+		for _, stmt := range []string{
+			`ALTER TABLE companies ADD COLUMN street_name TEXT NOT NULL DEFAULT ''`,
+			`ALTER TABLE companies ADD COLUMN building_number TEXT NOT NULL DEFAULT ''`,
+			`ALTER TABLE companies ADD COLUMN apartment_number TEXT NOT NULL DEFAULT ''`,
+		} {
+			if _, err := s.db.Exec(stmt); err != nil {
+				return err
+			}
+		}
+		hasStreet, err := s.hasColumn("companies", "street")
+		if err != nil {
+			return err
+		}
+		if hasStreet {
+			if _, err := s.db.Exec(`UPDATE companies SET street_name = street WHERE IFNULL(street_name, '') = '' AND IFNULL(street, '') != ''`); err != nil {
+				return err
+			}
+			if _, err := s.db.Exec(`ALTER TABLE companies DROP COLUMN street`); err != nil {
+				return err
+			}
+		}
+	}
+	hasAddress, err := s.hasColumn("companies", "address")
+	if err != nil || !hasAddress {
+		return err
+	}
+	if _, err := s.db.Exec(`UPDATE companies SET street_name = address WHERE IFNULL(street_name, '') = '' AND IFNULL(address, '') != ''`); err != nil {
+		return err
+	}
+	_, err = s.db.Exec(`ALTER TABLE companies DROP COLUMN address`)
+	return err
+}
+
+func (s *Store) ensureColumn(table, col, alter string) error {
+	has, err := s.hasColumn(table, col)
+	if err != nil || has {
+		return err
+	}
+	_, err = s.db.Exec(alter)
+	return err
+}
+
+func (s *Store) ensurePurchaseCompanyColumn() error {
+	has, err := s.hasColumn("purchases", "company_id")
+	if err != nil || has {
+		return err
+	}
+	_, err = s.db.Exec(`ALTER TABLE purchases ADD COLUMN company_id INTEGER REFERENCES companies(id)`)
+	return err
+}
+
+func (s *Store) hasColumn(table, col string) (bool, error) {
+	rows, err := s.db.Query(`PRAGMA table_info(` + table + `)`)
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid, notnull, pk int
+		var name, ctype string
+		var dflt sql.NullString
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			return false, err
+		}
+		if strings.EqualFold(name, col) {
+			return true, nil
+		}
+	}
+	return false, rows.Err()
 }
 
 func (s *Store) seedUnits() error {
@@ -260,6 +412,105 @@ func (s *Store) DeleteUnit(id int64) error {
 	return nil
 }
 
+func (s *Store) ListCompanies() ([]Company, error) {
+	rows, err := s.db.Query(`
+SELECT c.id, c.name, c.street_name, c.building_number, c.apartment_number, c.postal_code, c.city, COUNT(p.id)
+FROM companies c
+LEFT JOIN purchases p ON p.company_id = c.id
+GROUP BY c.id
+ORDER BY c.name COLLATE NOCASE, c.id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Company
+	for rows.Next() {
+		var c Company
+		if err := rows.Scan(&c.ID, &c.Name, &c.StreetName, &c.BuildingNumber, &c.ApartmentNumber, &c.PostalCode, &c.City, &c.PurchaseCount); err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) GetCompany(id int64) (Company, error) {
+	var c Company
+	err := s.db.QueryRow(`
+SELECT c.id, c.name, c.street_name, c.building_number, c.apartment_number, c.postal_code, c.city, COUNT(p.id)
+FROM companies c
+LEFT JOIN purchases p ON p.company_id = c.id
+WHERE c.id = ?
+GROUP BY c.id`, id).Scan(&c.ID, &c.Name, &c.StreetName, &c.BuildingNumber, &c.ApartmentNumber, &c.PostalCode, &c.City, &c.PurchaseCount)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Company{}, ErrNotFound
+	}
+	return c, err
+}
+
+func (s *Store) CreateCompany(name, streetName, building, apartment, postalCode, city string) (Company, error) {
+	c, err := normalizeCompany(name, streetName, building, apartment, postalCode, city)
+	if err != nil {
+		return Company{}, err
+	}
+	res, err := s.db.Exec(
+		`INSERT INTO companies (name, street_name, building_number, apartment_number, postal_code, city) VALUES (?, ?, ?, ?, ?, ?)`,
+		c.Name, c.StreetName, c.BuildingNumber, c.ApartmentNumber, c.PostalCode, c.City,
+	)
+	if err != nil {
+		return Company{}, err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return Company{}, err
+	}
+	return s.GetCompany(id)
+}
+
+func (s *Store) UpdateCompany(id int64, name, streetName, building, apartment, postalCode, city string) error {
+	c, err := normalizeCompany(name, streetName, building, apartment, postalCode, city)
+	if err != nil {
+		return err
+	}
+	res, err := s.db.Exec(
+		`UPDATE companies SET name = ?, street_name = ?, building_number = ?, apartment_number = ?, postal_code = ?, city = ? WHERE id = ?`,
+		c.Name, c.StreetName, c.BuildingNumber, c.ApartmentNumber, c.PostalCode, c.City, id,
+	)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (s *Store) DeleteCompany(id int64) error {
+	c, err := s.GetCompany(id)
+	if err != nil {
+		return err
+	}
+	if c.PurchaseCount > 0 {
+		return ErrCompanyInUse
+	}
+	res, err := s.db.Exec(`DELETE FROM companies WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (s *Store) ListProducts(q string) ([]ProductListItem, error) {
 	q = strings.TrimSpace(q)
 	var rows *sql.Rows
@@ -340,31 +591,6 @@ WHERE p.id = ?`, id).Scan(&p.ID, &p.Name, &p.UnitID, &p.UnitName, &p.ImagePath, 
 		return Product{}, ErrNotFound
 	}
 	return p, err
-}
-
-func (s *Store) ResolveUnit(unitID int64, newName string) (int64, error) {
-	newName = strings.TrimSpace(newName)
-	if newName != "" {
-		u, err := s.FindUnitByName(newName)
-		if err == nil {
-			return u.ID, nil
-		}
-		if !errors.Is(err, ErrNotFound) {
-			return 0, err
-		}
-		u, err = s.CreateUnit(newName)
-		if err != nil {
-			return 0, err
-		}
-		return u.ID, nil
-	}
-	if unitID <= 0 {
-		return 0, ErrInvalidUnit
-	}
-	if _, err := s.GetUnit(unitID); err != nil {
-		return 0, err
-	}
-	return unitID, nil
 }
 
 func (s *Store) CreateProduct(name string, unitID int64, imagePath *string) (Product, error) {
@@ -451,7 +677,7 @@ func (s *Store) DeleteProduct(id int64) (imageName string, err error) {
 
 func (s *Store) ListPurchases(productID int64) ([]Purchase, error) {
 	rows, err := s.db.Query(`
-SELECT id, product_id, bought_on, quantity, amount, created_at
+SELECT id, product_id, company_id, bought_on, quantity, amount, created_at
 FROM purchases
 WHERE product_id = ?
 ORDER BY bought_on DESC, id DESC`, productID)
@@ -472,7 +698,7 @@ ORDER BY bought_on DESC, id DESC`, productID)
 
 func (s *Store) GetPurchase(id int64) (Purchase, error) {
 	row := s.db.QueryRow(`
-SELECT id, product_id, bought_on, quantity, amount, created_at
+SELECT id, product_id, company_id, bought_on, quantity, amount, created_at
 FROM purchases WHERE id = ?`, id)
 	p, err := scanPurchase(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -481,13 +707,19 @@ FROM purchases WHERE id = ?`, id)
 	return p, err
 }
 
-func (s *Store) CreatePurchase(productID int64, boughtOn string, quantity, amount decimal.Decimal) (Purchase, error) {
+func (s *Store) CreatePurchase(productID, companyID int64, boughtOn string, quantity, amount decimal.Decimal) (Purchase, error) {
 	if _, err := s.GetProduct(productID); err != nil {
 		return Purchase{}, err
 	}
+	if _, err := s.GetCompany(companyID); err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return Purchase{}, ErrInvalidCompany
+		}
+		return Purchase{}, err
+	}
 	res, err := s.db.Exec(
-		`INSERT INTO purchases (product_id, bought_on, quantity, amount, created_at) VALUES (?, ?, ?, ?, ?)`,
-		productID, boughtOn, quantity.String(), amount.String(), nowRFC3339(),
+		`INSERT INTO purchases (product_id, company_id, bought_on, quantity, amount, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+		productID, companyID, boughtOn, quantity.String(), amount.String(), nowRFC3339(),
 	)
 	if err != nil {
 		return Purchase{}, err
@@ -499,10 +731,16 @@ func (s *Store) CreatePurchase(productID int64, boughtOn string, quantity, amoun
 	return s.GetPurchase(id)
 }
 
-func (s *Store) UpdatePurchase(id int64, boughtOn string, quantity, amount decimal.Decimal) error {
+func (s *Store) UpdatePurchase(id, companyID int64, boughtOn string, quantity, amount decimal.Decimal) error {
+	if _, err := s.GetCompany(companyID); err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return ErrInvalidCompany
+		}
+		return err
+	}
 	res, err := s.db.Exec(
-		`UPDATE purchases SET bought_on = ?, quantity = ?, amount = ? WHERE id = ?`,
-		boughtOn, quantity.String(), amount.String(), id,
+		`UPDATE purchases SET company_id = ?, bought_on = ?, quantity = ?, amount = ? WHERE id = ?`,
+		companyID, boughtOn, quantity.String(), amount.String(), id,
 	)
 	if err != nil {
 		return err
@@ -568,10 +806,12 @@ type rowScanner interface {
 
 func scanPurchase(row rowScanner) (Purchase, error) {
 	var p Purchase
+	var companyID sql.NullInt64
 	var qty, amt string
-	if err := row.Scan(&p.ID, &p.ProductID, &p.BoughtOn, &qty, &amt, &p.CreatedAt); err != nil {
+	if err := row.Scan(&p.ID, &p.ProductID, &companyID, &p.BoughtOn, &qty, &amt, &p.CreatedAt); err != nil {
 		return Purchase{}, err
 	}
+	p.CompanyID = companyID.Int64
 	q, err := decimal.NewFromString(qty)
 	if err != nil {
 		return Purchase{}, err
@@ -583,6 +823,33 @@ func scanPurchase(row rowScanner) (Purchase, error) {
 	p.Quantity = q
 	p.Amount = a
 	return p, nil
+}
+
+func normalizeCompany(name, streetName, building, apartment, postalCode, city string) (Company, error) {
+	c := Company{
+		Name:            strings.TrimSpace(name),
+		StreetName:      strings.TrimSpace(streetName),
+		BuildingNumber:  strings.TrimSpace(building),
+		ApartmentNumber: strings.TrimSpace(apartment),
+		PostalCode:      strings.TrimSpace(postalCode),
+		City:            strings.TrimSpace(city),
+	}
+	if c.Name == "" {
+		return Company{}, ErrCompanyName
+	}
+	if c.StreetName == "" {
+		return Company{}, ErrCompanyStreet
+	}
+	if c.BuildingNumber == "" {
+		return Company{}, ErrCompanyBuilding
+	}
+	if c.PostalCode == "" {
+		return Company{}, ErrCompanyPostal
+	}
+	if c.City == "" {
+		return Company{}, ErrCompanyCity
+	}
+	return c, nil
 }
 
 func likeContains(q string) string {
