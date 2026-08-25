@@ -1,0 +1,42 @@
+{{template "header" .}}
+<h1>Companies</h1>
+<p class="lede">Each purchase is tied to a company. Add the suppliers you buy from, then pick one when you log a buy.</p>
+
+<form class="stack add-company" method="post" action="/companies">
+  <label>Name <input name="name" required placeholder="Makro, local mill…"></label>
+  <label>Street name <input name="street_name" required placeholder="Al. Jerozolimskie" autocomplete="street-address"></label>
+  <div class="street-row">
+    <label>Building number <input name="building_number" required placeholder="179"></label>
+    <label>Apartment number <span class="hint">optional</span> <input name="apartment_number" placeholder="12"></label>
+  </div>
+  <div class="city-row">
+    <label>Postal code <input name="postal_code" required placeholder="00-001" autocomplete="postal-code"></label>
+    <label>City <input name="city" required placeholder="Warszawa"></label>
+  </div>
+  <div class="actions">
+    <button type="submit" class="btn btn-tag">Add company</button>
+  </div>
+</form>
+
+{{if not .Companies}}
+  <p class="empty">No companies yet.</p>
+{{else}}
+  <ul class="units companies">
+    {{range .Companies}}
+    <li>
+      <span class="row-main">
+        <span class="unit-name">{{.Name}}</span>
+        <span class="meta company-addr">{{.AddressLine}}</span>
+      </span>
+      <span class="meta">{{.PurchaseCount}} purchase{{if ne .PurchaseCount 1}}s{{end}}</span>
+      <span class="tight">
+        <a href="/companies/{{.ID}}/edit">Edit</a>
+        {{if eq .PurchaseCount 0}}
+          <a class="danger" href="/companies/{{.ID}}/delete">Delete</a>
+        {{end}}
+      </span>
+    </li>
+    {{end}}
+  </ul>
+{{end}}
+{{template "footer" .}}

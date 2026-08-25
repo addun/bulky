@@ -83,6 +83,13 @@ func (s *Server) routes() {
 	s.engine.GET("/units/:id/delete", s.confirmDeleteUnit)
 	s.engine.POST("/units/:id/delete", s.deleteUnit)
 
+	s.engine.GET("/companies", s.companies)
+	s.engine.POST("/companies", s.createCompany)
+	s.engine.GET("/companies/:id/edit", s.editCompany)
+	s.engine.POST("/companies/:id", s.updateCompany)
+	s.engine.GET("/companies/:id/delete", s.confirmDeleteCompany)
+	s.engine.POST("/companies/:id/delete", s.deleteCompany)
+
 	s.engine.GET("/products/new", s.newProduct)
 	s.engine.POST("/products", s.createProduct)
 	s.engine.GET("/products/:id", s.showProduct)

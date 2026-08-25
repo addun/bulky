@@ -205,6 +205,29 @@ label textarea {
   grid-template-columns: 1fr auto auto;
 }
 
+.company-addr {
+  color: var(--muted);
+}
+
+.add-company {
+  margin: 1rem 0 1.6rem;
+  max-width: 36rem;
+}
+
+.street-row,
+.city-row {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.street-row {
+  grid-template-columns: 1fr 1fr;
+}
+
+.city-row {
+  grid-template-columns: minmax(7rem, 10rem) 1fr;
+}
+
 .row-main {
   display: flex;
   flex-direction: column;
