@@ -1,6 +1,8 @@
 package web
 
 import (
+	"bytes"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -195,6 +197,19 @@ func TestOCRPageRendersWhenUnconfigured(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), `name="bill"`) {
 		t.Fatal("configured page should show the upload field")
 	}
+	body = rec.Body.String()
+	if !strings.Contains(body, `capture="environment"`) {
+		t.Fatal("configured page should offer the phone camera")
+	}
+	if !strings.Contains(body, "Take photo") || !strings.Contains(body, "Choose photo") {
+		t.Fatal("configured page should offer camera and file pickers")
+	}
+	if !strings.Contains(body, `name="bill_camera"`) {
+		t.Fatal("configured page should post the camera field")
+	}
+	if !strings.Contains(body, `accept="image/*"`) {
+		t.Fatal("file inputs should accept any image so Chrome and phones can open the picker")
+	}
 }
 
 func TestOCRReviewLoadsRecipeJSON(t *testing.T) {
@@ -226,5 +241,35 @@ func TestOCRReviewLoadsRecipeJSON(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), `name="company_id"`) {
 		t.Fatal("review should include a company picker")
+	}
+}
+
+func TestPickFormFileUsesCameraField(t *testing.T) {
+	var body bytes.Buffer
+	w := multipart.NewWriter(&body)
+	fw, err := w.CreateFormFile("bill_camera", "shot.jpg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fw.Write([]byte("hello")); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	req := httptest.NewRequest(http.MethodPost, "/ocr", &body)
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	c.Request = req
+
+	fh, err := pickFormFile(c, "bill", "bill_camera")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fh.Filename != "shot.jpg" {
+		t.Fatalf("filename %q", fh.Filename)
 	}
 }
