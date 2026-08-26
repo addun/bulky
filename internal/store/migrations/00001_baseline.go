@@ -72,6 +72,15 @@ func ensurePurchaseCompanyColumn(db *sql.DB) error {
 	return err
 }
 
+func ensurePurchaseKindColumn(db *sql.DB) error {
+	has, err := hasColumn(db, "purchases", "kind")
+	if err != nil || has {
+		return err
+	}
+	_, err = db.Exec(`ALTER TABLE purchases ADD COLUMN kind TEXT NOT NULL DEFAULT 'purchase'`)
+	return err
+}
+
 func hasColumn(db *sql.DB, table, col string) (bool, error) {
 	rows, err := db.Query(`PRAGMA table_info(` + table + `)`)
 	if err != nil {
