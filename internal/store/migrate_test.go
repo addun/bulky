@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"errors"
 	"path/filepath"
 	"testing"
 
@@ -18,7 +19,7 @@ func TestOpenFreshSeedsAndVersions(t *testing.T) {
 	defer s.Close()
 
 	assertCurrentSchema(t, s.db)
-	assertGooseVersion(t, s.db, 1)
+	assertGooseVersion(t, s.db, 2)
 
 	units, err := s.ListUnits()
 	if err != nil {
@@ -53,7 +54,7 @@ func TestOpenSecondBootNoops(t *testing.T) {
 	defer s.Close()
 
 	assertCurrentSchema(t, s.db)
-	assertGooseVersion(t, s.db, 1)
+	assertGooseVersion(t, s.db, 2)
 
 	units, err := s.ListUnits()
 	if err != nil {
@@ -122,7 +123,7 @@ VALUES (1, '2024-01-02', '10', '20.50', '2024-01-02T00:00:00Z');
 	defer s.Close()
 
 	assertCurrentSchema(t, s.db)
-	assertGooseVersion(t, s.db, 1)
+	assertGooseVersion(t, s.db, 2)
 
 	var n int
 	if err := s.db.QueryRow(`SELECT COUNT(*) FROM purchases`).Scan(&n); err != nil {
@@ -138,6 +139,14 @@ VALUES (1, '2024-01-02', '10', '20.50', '2024-01-02T00:00:00Z');
 	}
 	if companyID.Valid {
 		t.Fatalf("legacy purchase company_id: got %d want NULL", companyID.Int64)
+	}
+
+	var kind string
+	if err := s.db.QueryRow(`SELECT kind FROM purchases`).Scan(&kind); err != nil {
+		t.Fatal(err)
+	}
+	if kind != string(KindPurchase) {
+		t.Fatalf("legacy purchase kind: got %q want %q", kind, KindPurchase)
 	}
 }
 
@@ -157,15 +166,81 @@ func TestPurchaseCompanyOptional(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	buy, err := s.CreatePurchase(p.ID, 0, "2024-01-02", mustDec(t, "10"), mustDec(t, "20.50"))
+	buy, err := s.CreatePurchase(p.ID, 0, "2024-01-02", mustDec(t, "10"), mustDec(t, "20.50"), KindPurchase)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if buy.CompanyID != 0 {
 		t.Fatalf("CompanyID: got %d want 0", buy.CompanyID)
 	}
-	if err := s.UpdatePurchase(buy.ID, 0, "2024-01-03", buy.Quantity, buy.Amount); err != nil {
+	if buy.Kind != KindPurchase {
+		t.Fatalf("Kind: got %q want %q", buy.Kind, KindPurchase)
+	}
+	if err := s.UpdatePurchase(buy.ID, 0, "2024-01-03", buy.Quantity, buy.Amount, KindPurchase); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestPriceKindExcludedFromSpend(t *testing.T) {
+	dir := t.TempDir()
+	s, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	units, err := s.ListUnits()
+	if err != nil || len(units) == 0 {
+		t.Fatalf("units: %v %#v", err, units)
+	}
+	p, err := s.CreateProduct("Rice", units[0].ID, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreatePurchase(p.ID, 0, "2024-06-01", mustDec(t, "10"), mustDec(t, "40"), KindPurchase); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreatePurchase(p.ID, 0, "2024-07-01", mustDec(t, "5"), mustDec(t, "30"), KindPrice); err != nil {
+		t.Fatal(err)
+	}
+
+	items, err := s.ListProducts("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("products: got %d want 1", len(items))
+	}
+	if items[0].PurchaseCount != 1 {
+		t.Fatalf("PurchaseCount: got %d want 1", items[0].PurchaseCount)
+	}
+	if !items[0].LifetimeAmount.Equal(mustDec(t, "40")) {
+		t.Fatalf("LifetimeAmount: got %s want 40", items[0].LifetimeAmount)
+	}
+	if !items[0].LastBought.Valid || items[0].LastBought.String != "2024-06-01" {
+		t.Fatalf("LastBought: got %#v want 2024-06-01", items[0].LastBought)
+	}
+
+	rows, err := s.ListPurchases(p.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("history: got %d want 2", len(rows))
+	}
+	years := YearlySummaries(rows)
+	if len(years) != 1 || years[0].Year != "2024" {
+		t.Fatalf("years: %#v", years)
+	}
+	if !years[0].Amount.Equal(mustDec(t, "40")) {
+		t.Fatalf("year amount: got %s want 40", years[0].Amount)
+	}
+	if !years[0].Quantity.Equal(mustDec(t, "10")) {
+		t.Fatalf("year qty: got %s want 10", years[0].Quantity)
+	}
+
+	if _, err := s.CreatePurchase(p.ID, 0, "2024-08-01", mustDec(t, "1"), mustDec(t, "1"), PurchaseKind("bogus")); !errors.Is(err, ErrInvalidKind) {
+		t.Fatalf("invalid kind: %v", err)
 	}
 }
 
@@ -204,6 +279,9 @@ func assertCurrentSchema(t *testing.T, db *sql.DB) {
 	}
 	if !hasColumn(t, db, "purchases", "company_id") {
 		t.Fatal("purchases missing company_id")
+	}
+	if !hasColumn(t, db, "purchases", "kind") {
+		t.Fatal("purchases missing kind")
 	}
 	for _, idx := range []string{"idx_products_name", "idx_purchases_product", "idx_companies_name", "idx_purchases_company"} {
 		if !indexExists(t, db, idx) {

@@ -1,5 +1,5 @@
 {{template "header" .}}
-<h1>Edit purchase</h1>
+<h1>{{if .Purchase.IsPrice}}Edit price{{else}}Edit purchase{{end}}</h1>
 <p class="lede">{{.Product.Name}} · {{.Product.UnitName}}</p>
 <form class="stack" method="post" action="/purchases/{{.Purchase.ID}}">
   <label>Date <input type="date" name="bought_on" required value="{{.Purchase.BoughtOn}}"></label>
@@ -14,8 +14,13 @@
       {{end}}
     </select>
   </label>
+  <fieldset class="kind-pick">
+    <legend>Kind</legend>
+    <label class="check"><input type="radio" name="kind" value="purchase" {{if .Purchase.IsPurchase}}checked{{end}}> Purchase</label>
+    <label class="check"><input type="radio" name="kind" value="price" {{if .Purchase.IsPrice}}checked{{end}}> Price only</label>
+  </fieldset>
   <div class="actions">
-    <button type="submit" class="btn btn-tag">Save purchase</button>
+    <button type="submit" class="btn btn-tag">Save</button>
     <a href="/products/{{.Product.ID}}">Cancel</a>
   </div>
 </form>

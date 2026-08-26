@@ -25,7 +25,26 @@ var (
 	ErrCompanyBuilding = errors.New("company building number required")
 	ErrCompanyPostal   = errors.New("company postal code required")
 	ErrCompanyCity     = errors.New("company city required")
+	ErrInvalidKind     = errors.New("invalid purchase kind")
 )
+
+type PurchaseKind string
+
+const (
+	KindPurchase PurchaseKind = "purchase"
+	KindPrice    PurchaseKind = "price"
+)
+
+func ParsePurchaseKind(s string) (PurchaseKind, error) {
+	switch PurchaseKind(strings.TrimSpace(s)) {
+	case KindPurchase:
+		return KindPurchase, nil
+	case KindPrice:
+		return KindPrice, nil
+	default:
+		return "", ErrInvalidKind
+	}
+}
 
 type Store struct {
 	db      *sql.DB
@@ -98,11 +117,15 @@ type Purchase struct {
 	ID        int64
 	ProductID int64
 	CompanyID int64
+	Kind      PurchaseKind
 	BoughtOn  string
 	Quantity  decimal.Decimal
 	Amount    decimal.Decimal
 	CreatedAt string
 }
+
+func (p Purchase) IsPurchase() bool { return p.Kind == KindPurchase }
+func (p Purchase) IsPrice() bool    { return p.Kind == KindPrice }
 
 type YearSummary struct {
 	Year     string
@@ -405,7 +428,7 @@ ORDER BY p.name COLLATE NOCASE`, likeContains(q))
 		return items, nil
 	}
 
-	prows, err := s.db.Query(`SELECT product_id, bought_on, amount FROM purchases`)
+	prows, err := s.db.Query(`SELECT product_id, bought_on, amount FROM purchases WHERE kind = ?`, KindPurchase)
 	if err != nil {
 		return nil, err
 	}
@@ -530,7 +553,7 @@ func (s *Store) DeleteProduct(id int64) (imageName string, err error) {
 
 func (s *Store) ListPurchases(productID int64) ([]Purchase, error) {
 	rows, err := s.db.Query(`
-SELECT id, product_id, company_id, bought_on, quantity, amount, created_at
+SELECT id, product_id, company_id, kind, bought_on, quantity, amount, created_at
 FROM purchases
 WHERE product_id = ?
 ORDER BY bought_on DESC, id DESC`, productID)
@@ -551,7 +574,7 @@ ORDER BY bought_on DESC, id DESC`, productID)
 
 func (s *Store) GetPurchase(id int64) (Purchase, error) {
 	row := s.db.QueryRow(`
-SELECT id, product_id, company_id, bought_on, quantity, amount, created_at
+SELECT id, product_id, company_id, kind, bought_on, quantity, amount, created_at
 FROM purchases WHERE id = ?`, id)
 	p, err := scanPurchase(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -560,8 +583,11 @@ FROM purchases WHERE id = ?`, id)
 	return p, err
 }
 
-func (s *Store) CreatePurchase(productID, companyID int64, boughtOn string, quantity, amount decimal.Decimal) (Purchase, error) {
+func (s *Store) CreatePurchase(productID, companyID int64, boughtOn string, quantity, amount decimal.Decimal, kind PurchaseKind) (Purchase, error) {
 	if _, err := s.GetProduct(productID); err != nil {
+		return Purchase{}, err
+	}
+	if _, err := ParsePurchaseKind(string(kind)); err != nil {
 		return Purchase{}, err
 	}
 	company, err := s.optionalCompanyArg(companyID)
@@ -569,8 +595,8 @@ func (s *Store) CreatePurchase(productID, companyID int64, boughtOn string, quan
 		return Purchase{}, err
 	}
 	res, err := s.db.Exec(
-		`INSERT INTO purchases (product_id, company_id, bought_on, quantity, amount, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
-		productID, company, boughtOn, quantity.String(), amount.String(), nowRFC3339(),
+		`INSERT INTO purchases (product_id, company_id, kind, bought_on, quantity, amount, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		productID, company, kind, boughtOn, quantity.String(), amount.String(), nowRFC3339(),
 	)
 	if err != nil {
 		return Purchase{}, err
@@ -582,14 +608,17 @@ func (s *Store) CreatePurchase(productID, companyID int64, boughtOn string, quan
 	return s.GetPurchase(id)
 }
 
-func (s *Store) UpdatePurchase(id, companyID int64, boughtOn string, quantity, amount decimal.Decimal) error {
+func (s *Store) UpdatePurchase(id, companyID int64, boughtOn string, quantity, amount decimal.Decimal, kind PurchaseKind) error {
+	if _, err := ParsePurchaseKind(string(kind)); err != nil {
+		return err
+	}
 	company, err := s.optionalCompanyArg(companyID)
 	if err != nil {
 		return err
 	}
 	res, err := s.db.Exec(
-		`UPDATE purchases SET company_id = ?, bought_on = ?, quantity = ?, amount = ? WHERE id = ?`,
-		company, boughtOn, quantity.String(), amount.String(), id,
+		`UPDATE purchases SET company_id = ?, kind = ?, bought_on = ?, quantity = ?, amount = ? WHERE id = ?`,
+		company, kind, boughtOn, quantity.String(), amount.String(), id,
 	)
 	if err != nil {
 		return err
@@ -623,6 +652,9 @@ func YearlySummaries(purchases []Purchase) []YearSummary {
 	order := []string{}
 	byYear := map[string]*YearSummary{}
 	for _, p := range purchases {
+		if !p.IsPurchase() {
+			continue
+		}
 		year := p.BoughtOn
 		if len(year) >= 4 {
 			year = year[:4]
@@ -657,10 +689,12 @@ func scanPurchase(row rowScanner) (Purchase, error) {
 	var p Purchase
 	var companyID sql.NullInt64
 	var qty, amt string
-	if err := row.Scan(&p.ID, &p.ProductID, &companyID, &p.BoughtOn, &qty, &amt, &p.CreatedAt); err != nil {
+	var kind string
+	if err := row.Scan(&p.ID, &p.ProductID, &companyID, &kind, &p.BoughtOn, &qty, &amt, &p.CreatedAt); err != nil {
 		return Purchase{}, err
 	}
 	p.CompanyID = companyID.Int64
+	p.Kind = PurchaseKind(kind)
 	q, err := decimal.NewFromString(qty)
 	if err != nil {
 		return Purchase{}, err
