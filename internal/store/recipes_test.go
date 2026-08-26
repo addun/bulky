@@ -17,6 +17,10 @@ func TestRecipeAIThenMigrate(t *testing.T) {
 	if err != nil || len(units) == 0 {
 		t.Fatalf("units: %v %#v", err, units)
 	}
+	co, err := s.CreateCompany("Local Mill", "Kościuszki", "10", "", "40-001", "Katowice")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	r, err := s.CreateRecipe("aabbccddeeff00112233445566778899")
 	if err != nil {
@@ -44,7 +48,8 @@ func TestRecipeAIThenMigrate(t *testing.T) {
 	}
 
 	res, err := s.MigrateRecipe(r.ID, BillImport{
-		BoughtOn: "2026-08-20",
+		CompanyID: co.ID,
+		BoughtOn:  "2026-08-20",
 		Lines: []BillLineInput{
 			{ProductName: "Rice", UnitID: units[0].ID, Quantity: mustDec(t, "10"), Amount: mustDec(t, "40.00")},
 		},
@@ -88,6 +93,9 @@ func TestRecipeAIThenMigrate(t *testing.T) {
 	}
 	if buys[0].Kind != KindPurchase {
 		t.Fatalf("kind: got %q want %q", buys[0].Kind, KindPurchase)
+	}
+	if buys[0].CompanyID != co.ID {
+		t.Fatalf("company_id: got %d want %d", buys[0].CompanyID, co.ID)
 	}
 }
 

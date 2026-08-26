@@ -20,6 +20,16 @@
     <input type="hidden" name="line_count" id="line-count" value="{{len .View.Lines}}">
 
     <label>Date <input type="date" name="bought_on" required value="{{.View.BoughtOn}}"></label>
+    <label>
+      Company
+      <select name="company_id">
+        <option value="">None</option>
+        {{range .Companies}}
+        <option value="{{.ID}}" {{if eq .ID $.View.CompanyID}}selected{{end}}>{{.Label}}</option>
+        {{end}}
+      </select>
+    </label>
+    {{if not .Companies}}<p class="hint">No companies yet. You can still save, or <a href="/companies">add a company</a> first.</p>{{end}}
 
     <h2>Products</h2>
     <div id="ocr-lines">

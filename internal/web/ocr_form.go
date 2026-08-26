@@ -17,6 +17,7 @@ type ocrView struct {
 	Status    string
 	BoughtOn  string
 	Notes     string
+	CompanyID int64
 	Lines     []ocrLineView
 }
 
@@ -92,6 +93,7 @@ func billToView(bill ocr.Bill, recipeID int64, imagePath, status string) ocrView
 		Status:    status,
 		BoughtOn:  bill.BoughtOn,
 		Notes:     bill.Notes,
+		CompanyID: bill.CompanyID,
 	}
 	for _, line := range bill.ProductLines() {
 		name := line.ProductName
@@ -111,7 +113,7 @@ func billToView(bill ocr.Bill, recipeID int64, imagePath, status string) ocrView
 	return view
 }
 
-func recipeToView(r store.Recipe, products []store.ProductListItem, units []store.Unit) (ocrView, error) {
+func recipeToView(r store.Recipe, products []store.ProductListItem, units []store.Unit, companies []store.Company) (ocrView, error) {
 	var bill ocr.Bill
 	if strings.TrimSpace(r.RawResponse) != "" {
 		if err := json.Unmarshal([]byte(r.RawResponse), &bill); err != nil {
@@ -120,6 +122,7 @@ func recipeToView(r store.Recipe, products []store.ProductListItem, units []stor
 		bill = hydrateBill(bill, products, units)
 	}
 	view := billToView(bill, r.ID, r.ImagePath, r.Status)
+	view.CompanyID = knownCompanyID(view.CompanyID, companies)
 	if view.BoughtOn == "" {
 		view.BoughtOn = time.Now().Format("2006-01-02")
 	}
@@ -128,8 +131,9 @@ func recipeToView(r store.Recipe, products []store.ProductListItem, units []stor
 
 func viewToRawJSON(view ocrView) (string, error) {
 	bill := ocr.Bill{
-		BoughtOn: view.BoughtOn,
-		Notes:    view.Notes,
+		BoughtOn:  view.BoughtOn,
+		Notes:     view.Notes,
+		CompanyID: view.CompanyID,
 	}
 	for _, line := range view.Lines {
 		bill.Lines = append(bill.Lines, ocr.Line{
@@ -155,6 +159,7 @@ func parseOCRView(get func(string) string) ocrView {
 		ImagePath: strings.TrimSpace(get("image_path")),
 		BoughtOn:  strings.TrimSpace(get("bought_on")),
 		Notes:     strings.TrimSpace(get("notes")),
+		CompanyID: formInt(get("company_id")),
 	}
 	n, _ := strconv.Atoi(strings.TrimSpace(get("line_count")))
 	if n < 0 {
@@ -189,7 +194,7 @@ func parseOCRForm(get func(string) string) (store.BillImport, ocrView, string) {
 		return store.BillImport{}, view, "Date must be a valid day."
 	}
 
-	in := store.BillImport{BoughtOn: view.BoughtOn}
+	in := store.BillImport{BoughtOn: view.BoughtOn, CompanyID: view.CompanyID}
 	for i, line := range view.Lines {
 		if !line.Include {
 			continue
@@ -226,6 +231,18 @@ func parseOCRForm(get func(string) string) (store.BillImport, ocrView, string) {
 func formInt(s string) int64 {
 	v, _ := strconv.ParseInt(strings.TrimSpace(s), 10, 64)
 	return v
+}
+
+func knownCompanyID(id int64, companies []store.Company) int64 {
+	if id <= 0 {
+		return 0
+	}
+	for _, c := range companies {
+		if c.ID == id {
+			return id
+		}
+	}
+	return 0
 }
 
 func unitKey(s string) string {
