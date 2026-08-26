@@ -138,7 +138,7 @@ func (s *Server) deleteCompany(c *gin.Context) {
 func (s *Server) resolveCompanyForm(c *gin.Context) (int64, string) {
 	id := formInt64(c, "company_id")
 	if id <= 0 {
-		return 0, "Choose a company."
+		return 0, ""
 	}
 	if _, err := s.store.GetCompany(id); errors.Is(err, store.ErrNotFound) {
 		return 0, "Choose a company."

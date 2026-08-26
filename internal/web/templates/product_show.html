@@ -38,8 +38,8 @@
     <label>Amount ({{.Page.Currency}}) <input name="amount" required inputmode="decimal" placeholder="12.40"></label>
     <label>
       Company
-      <select name="company_id" required>
-        <option value="">Select…</option>
+      <select name="company_id">
+        <option value="">None</option>
         {{range .Companies}}
         <option value="{{.ID}}">{{.Label}}</option>
         {{end}}
@@ -48,7 +48,7 @@
     <button type="submit" class="btn btn-tag">Save purchase</button>
   </form>
   {{if not .Companies}}
-    <p class="hint">No companies yet. <a href="/companies">Add a company</a> first.</p>
+    <p class="hint">No companies yet. You can still save a purchase, or <a href="/companies">add a company</a> first.</p>
   {{end}}
 </section>
 

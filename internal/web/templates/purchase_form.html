@@ -7,8 +7,8 @@
   <label>Amount ({{.Page.Currency}}) <input name="amount" required inputmode="decimal" value="{{.Purchase.Amount}}"></label>
   <label>
     Company
-    <select name="company_id" required>
-      <option value="">Select…</option>
+    <select name="company_id">
+      <option value="">None</option>
       {{range .Companies}}
       <option value="{{.ID}}" {{if eq .ID $.Purchase.CompanyID}}selected{{end}}>{{.Label}}</option>
       {{end}}
