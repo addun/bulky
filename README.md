@@ -38,9 +38,14 @@ go run ./cmd/bulkly
 
 Optional environment:
 
-| Variable          | Default  | Meaning                   |
-| ----------------- | -------- | ------------------------- |
-| `DATA_DIR`        | `./data` | SQLite file and `images/` |
-| `ADDR`            | `:8080`  | Listen address            |
-| `CURRENCY`        | `PLN`    | Label only                |
-| `CURRENCY_SYMBOL` | `zł`     | Shown next to amounts     |
+| Variable          | Default                    | Meaning                                      |
+| ----------------- | -------------------------- | -------------------------------------------- |
+| `DATA_DIR`        | `./data`                   | SQLite file and `images/`                    |
+| `ADDR`            | `:8080`                    | Listen address                               |
+| `CURRENCY`        | `PLN`                      | Label only                                   |
+| `CURRENCY_SYMBOL` | `zł`                       | Shown next to amounts                        |
+| `OCR_API_KEY`     |                            | API key for the bill reader (`OPENAI_API_KEY` is also accepted) |
+| `OCR_BASE_URL`    | `https://api.openai.com/v1` | OpenAI-compatible base URL (Ollama, etc.)   |
+| `OCR_MODEL`       | `gpt-4o-mini`              | Vision model name                            |
+
+**Scan a bill:** open [http://localhost:8080/ocr](http://localhost:8080/ocr) and upload a photo of a receipt. That creates a `recipes` row, runs the vision model, and stores the raw JSON. Confirm or edit the product list to migrate those lines into purchases; the recipe status then becomes `migrated`. For OpenAI, set `OCR_API_KEY`. For a local OpenAI-compatible server (for example Ollama), set `OCR_BASE_URL` to that server’s `/v1` endpoint and pick a vision model with `OCR_MODEL`.

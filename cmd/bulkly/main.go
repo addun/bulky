@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/adrian/bulkly/internal/ocr"
 	"github.com/adrian/bulkly/internal/store"
 	"github.com/adrian/bulkly/internal/web"
 )
@@ -22,6 +23,11 @@ func main() {
 	srv, err := web.New(st, web.Config{
 		Currency:       getenv("CURRENCY", "PLN"),
 		CurrencySymbol: getenv("CURRENCY_SYMBOL", "zł"),
+		OCR: ocr.Config{
+			APIKey:  firstEnv("OCR_API_KEY", "OPENAI_API_KEY"),
+			BaseURL: os.Getenv("OCR_BASE_URL"),
+			Model:   getenv("OCR_MODEL", ""),
+		},
 	})
 	if err != nil {
 		log.Fatalf("web: %v", err)
@@ -38,4 +44,13 @@ func getenv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func firstEnv(keys ...string) string {
+	for _, key := range keys {
+		if v := os.Getenv(key); v != "" {
+			return v
+		}
+	}
+	return ""
 }

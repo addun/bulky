@@ -143,4 +143,3 @@ func (s *Server) deleteUnit(c *gin.Context) {
 	}
 	c.Redirect(http.StatusSeeOther, "/units")
 }
-
