@@ -3,6 +3,7 @@ package web
 import (
 	"errors"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"os"
@@ -27,7 +28,7 @@ func (s *Server) ocrScan(c *gin.Context) {
 		c.Redirect(http.StatusSeeOther, "/ocr?error="+url.QueryEscape("Set OCR_API_KEY or OCR_BASE_URL so the reader can run."))
 		return
 	}
-	fh, err := c.FormFile("bill")
+	fh, err := pickFormFile(c, "bill", "bill_camera")
 	if err != nil {
 		s.renderOCR(c, http.StatusUnprocessableEntity, "Choose a photo of the bill.")
 		return
@@ -279,4 +280,22 @@ func (s *Server) ocrModel() string {
 		return s.cfg.OCR.Model
 	}
 	return ocr.DefaultModel
+}
+
+func pickFormFile(c *gin.Context, names ...string) (*multipart.FileHeader, error) {
+	var lastErr error
+	for _, name := range names {
+		fh, err := c.FormFile(name)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		if fh != nil && (fh.Filename != "" || fh.Size > 0) {
+			return fh, nil
+		}
+	}
+	if lastErr != nil {
+		return nil, lastErr
+	}
+	return nil, http.ErrMissingFile
 }

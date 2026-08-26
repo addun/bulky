@@ -18,8 +18,8 @@
     <p class="hint">No units yet. <a href="/units">Add a unit</a> first.</p>
   {{end}}
   <label>
-    Photo <span class="hint">optional, jpeg/png/webp/gif up to 5 MB — stored as a 240×240 JPEG</span>
-    <input name="image" type="file" accept="image/jpeg,image/png,image/webp,image/gif">
+    Photo <span class="hint">optional, jpeg/png/webp/gif up to 5 MB — stored as a 240×240 JPEG · take or choose on a phone</span>
+    <input name="image" type="file" accept="image/*">
   </label>
   {{if and (not .New) .Product.ImagePath.Valid}}
   <div class="preview">
