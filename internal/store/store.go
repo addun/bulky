@@ -118,6 +118,7 @@ type Purchase struct {
 	ProductID int64
 	CompanyID int64
 	Kind      PurchaseKind
+	RecipeID  int64
 	BoughtOn  string
 	Quantity  decimal.Decimal
 	Amount    decimal.Decimal
@@ -553,7 +554,7 @@ func (s *Store) DeleteProduct(id int64) (imageName string, err error) {
 
 func (s *Store) ListPurchases(productID int64) ([]Purchase, error) {
 	rows, err := s.db.Query(`
-SELECT id, product_id, company_id, kind, bought_on, quantity, amount, created_at
+SELECT id, product_id, company_id, kind, recipe_id, bought_on, quantity, amount, created_at
 FROM purchases
 WHERE product_id = ?
 ORDER BY bought_on DESC, id DESC`, productID)
@@ -574,7 +575,7 @@ ORDER BY bought_on DESC, id DESC`, productID)
 
 func (s *Store) GetPurchase(id int64) (Purchase, error) {
 	row := s.db.QueryRow(`
-SELECT id, product_id, company_id, kind, bought_on, quantity, amount, created_at
+SELECT id, product_id, company_id, kind, recipe_id, bought_on, quantity, amount, created_at
 FROM purchases WHERE id = ?`, id)
 	p, err := scanPurchase(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -595,8 +596,8 @@ func (s *Store) CreatePurchase(productID, companyID int64, boughtOn string, quan
 		return Purchase{}, err
 	}
 	res, err := s.db.Exec(
-		`INSERT INTO purchases (product_id, company_id, kind, bought_on, quantity, amount, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		productID, company, kind, boughtOn, quantity.String(), amount.String(), nowRFC3339(),
+		`INSERT INTO purchases (product_id, company_id, kind, recipe_id, bought_on, quantity, amount, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		productID, company, kind, nil, boughtOn, quantity.String(), amount.String(), nowRFC3339(),
 	)
 	if err != nil {
 		return Purchase{}, err
@@ -687,14 +688,14 @@ type rowScanner interface {
 
 func scanPurchase(row rowScanner) (Purchase, error) {
 	var p Purchase
-	var companyID sql.NullInt64
-	var qty, amt string
-	var kind string
-	if err := row.Scan(&p.ID, &p.ProductID, &companyID, &kind, &p.BoughtOn, &qty, &amt, &p.CreatedAt); err != nil {
+	var companyID, recipeID sql.NullInt64
+	var qty, amt, kind string
+	if err := row.Scan(&p.ID, &p.ProductID, &companyID, &kind, &recipeID, &p.BoughtOn, &qty, &amt, &p.CreatedAt); err != nil {
 		return Purchase{}, err
 	}
 	p.CompanyID = companyID.Int64
 	p.Kind = PurchaseKind(kind)
+	p.RecipeID = recipeID.Int64
 	q, err := decimal.NewFromString(qty)
 	if err != nil {
 		return Purchase{}, err

@@ -12,12 +12,14 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/shopspring/decimal"
 
+	"github.com/adrian/bulkly/internal/ocr"
 	"github.com/adrian/bulkly/internal/store"
 )
 
 type Config struct {
 	Currency       string
 	CurrencySymbol string
+	OCR            ocr.Config
 }
 
 type Server struct {
@@ -25,6 +27,7 @@ type Server struct {
 	engine *gin.Engine
 	tmpl   *template.Template
 	cfg    Config
+	ocr    *ocr.Agent
 }
 
 type page struct {
@@ -54,10 +57,10 @@ func New(st *store.Store, cfg Config) (*Server, error) {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	r.Use(gin.Logger(), gin.Recovery())
-	r.MaxMultipartMemory = 8 << 20
+	r.MaxMultipartMemory = 12 << 20
 	r.SetHTMLTemplate(tmpl)
 
-	s := &Server{store: st, engine: r, tmpl: tmpl, cfg: cfg}
+	s := &Server{store: st, engine: r, tmpl: tmpl, cfg: cfg, ocr: ocr.New(cfg.OCR)}
 	s.routes()
 	return s, nil
 }
@@ -75,6 +78,12 @@ func (s *Server) routes() {
 	s.engine.Static("/images", s.store.ImagesDir())
 
 	s.engine.GET("/", s.index)
+
+	s.engine.GET("/ocr", s.ocrPage)
+	s.engine.POST("/ocr", s.ocrScan)
+	s.engine.GET("/ocr/preview/:id", s.ocrPreview)
+	s.engine.GET("/ocr/:id", s.ocrReview)
+	s.engine.POST("/ocr/:id", s.ocrConfirm)
 
 	s.engine.GET("/units", s.units)
 	s.engine.POST("/units", s.createUnit)

@@ -1,4 +1,7 @@
 {{template "header" .}}
+{{if gt .Imported 0}}
+<p class="banner">Saved {{.Imported}} purchase{{if ne .Imported 1}}s{{end}} from the bill.</p>
+{{end}}
 <div class="toolbar">
   <form class="search" method="get" action="/">
     <label class="sr" for="q">Search</label>
@@ -13,7 +16,7 @@
       <p>No product matches “{{.Page.Query}}”.</p>
     {{else}}
       <p>Nothing on the list yet.</p>
-      <p><a href="/products/new">Add the first product you buy in bulk.</a></p>
+      <p><a href="/products/new">Add the first product you buy in bulk</a>, or <a href="/ocr">scan a bill</a>.</p>
     {{end}}
   </div>
 {{else}}

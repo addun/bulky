@@ -1,0 +1,126 @@
+{{template "header" .}}
+<h1>Confirm the bill</h1>
+<p class="lede">The AI response is saved on this recipe. Check every line, then save as purchases.</p>
+
+{{if .View.Migrated}}<p class="banner">This bill is already saved as purchases.</p>{{end}}
+{{if .View.Notes}}<p class="banner">{{.View.Notes}}</p>{{end}}
+
+<div class="ocr-layout">
+  {{if .View.ImagePath}}
+  <figure class="ocr-slip">
+    <img src="/ocr/preview/{{.View.ImagePath}}" alt="Uploaded bill">
+    <figcaption class="hint">The photo the reader used</figcaption>
+  </figure>
+  {{end}}
+
+  <form class="stack" method="post" action="/ocr/{{.View.RecipeID}}" id="ocr-review">
+    <input type="hidden" name="recipe_id" value="{{.View.RecipeID}}">
+    <input type="hidden" name="image_path" value="{{.View.ImagePath}}">
+    <input type="hidden" name="notes" value="{{.View.Notes}}">
+    <input type="hidden" name="line_count" id="line-count" value="{{len .View.Lines}}">
+
+    <label>Date <input type="date" name="bought_on" required value="{{.View.BoughtOn}}"></label>
+
+    <h2>Products</h2>
+    <div id="ocr-lines">
+      {{range $i, $line := .View.Lines}}
+      <fieldset class="ocr-line{{if not $line.Include}} is-off{{end}}">
+        <legend class="sr">Line {{add $i 1}}</legend>
+        <input type="hidden" name="receipt_name_{{$i}}" value="{{$line.ReceiptName}}">
+        <label class="check ocr-include">
+          <input type="checkbox" name="include_{{$i}}" value="1" {{if $line.Include}}checked{{end}}>
+          Include
+        </label>
+        {{if $line.ReceiptName}}<p class="meta ocr-receipt">On the bill: {{$line.ReceiptName}}</p>{{end}}
+        <label>
+          Product
+          <select name="product_choice_{{$i}}">
+            <option value="new" {{if eq $line.ProductID 0}}selected{{end}}>New product</option>
+            {{range $.Products}}
+            <option value="{{.ID}}" {{if eq .ID $line.ProductID}}selected{{end}}>{{.Name}} ({{.UnitName}})</option>
+            {{end}}
+          </select>
+        </label>
+        <label>Name <input name="product_name_{{$i}}" value="{{$line.ProductName}}"></label>
+        <div class="ocr-nums">
+          <label>
+            Unit
+            <select name="unit_id_{{$i}}">
+              <option value="">Select…</option>
+              {{range $.Units}}
+              <option value="{{.ID}}" {{if eq .ID $line.UnitID}}selected{{end}}>{{.Name}}</option>
+              {{end}}
+            </select>
+          </label>
+          <label>Quantity <input name="quantity_{{$i}}" inputmode="decimal" value="{{$line.Quantity}}"></label>
+          <label>Amount ({{$.Page.Currency}}) <input name="amount_{{$i}}" inputmode="decimal" value="{{$line.Amount}}"></label>
+        </div>
+      </fieldset>
+      {{end}}
+    </div>
+    <p>{{if not .View.Migrated}}<button type="button" class="btn btn-ghost" id="add-line">Add a product</button>{{end}}</p>
+    <div class="actions">
+      {{if not .View.Migrated}}<button type="submit" class="btn btn-tag">Save purchases</button>{{end}}
+      <a href="/ocr">Scan another</a>
+    </div>
+  </form>
+</div>
+
+<template id="ocr-line-template">
+  <fieldset class="ocr-line">
+    <legend class="sr">New line</legend>
+    <input type="hidden" name="receipt_name___I__" value="">
+    <label class="check ocr-include">
+      <input type="checkbox" name="include___I__" value="1" checked>
+      Include
+    </label>
+    <label>
+      Product
+      <select name="product_choice___I__">
+        <option value="new" selected>New product</option>
+        {{range .Products}}
+        <option value="{{.ID}}">{{.Name}} ({{.UnitName}})</option>
+        {{end}}
+      </select>
+    </label>
+    <label>Name <input name="product_name___I__" value=""></label>
+    <div class="ocr-nums">
+      <label>
+        Unit
+        <select name="unit_id___I__">
+          <option value="">Select…</option>
+          {{range .Units}}
+          <option value="{{.ID}}">{{.Name}}</option>
+          {{end}}
+        </select>
+      </label>
+      <label>Quantity <input name="quantity___I__" inputmode="decimal" value=""></label>
+      <label>Amount ({{.Page.Currency}}) <input name="amount___I__" inputmode="decimal" value=""></label>
+    </div>
+  </fieldset>
+</template>
+<script>
+(function () {
+  var lines = document.getElementById("ocr-lines");
+  lines.addEventListener("change", function (e) {
+    if (e.target && e.target.name && e.target.name.indexOf("include_") === 0) {
+      var field = e.target.closest(".ocr-line");
+      if (field) field.classList.toggle("is-off", !e.target.checked);
+    }
+  });
+
+  var add = document.getElementById("add-line");
+  if (!add) return;
+  var count = document.getElementById("line-count");
+  var tmpl = document.getElementById("ocr-line-template");
+  add.addEventListener("click", function () {
+    var i = parseInt(count.value, 10) || 0;
+    var html = tmpl.innerHTML.split("__I__").join(String(i));
+    var wrap = document.createElement("div");
+    wrap.innerHTML = html.trim();
+    lines.appendChild(wrap.firstElementChild);
+    count.value = String(i + 1);
+  });
+})();
+</script>
+{{template "footer" .}}

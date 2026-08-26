@@ -29,6 +29,7 @@ func templateFuncs(symbol string) template.FuncMap {
 		"hasImage": func(path string) bool {
 			return strings.TrimSpace(path) != ""
 		},
+		"add": func(a, b int) int { return a + b },
 	}
 }
 

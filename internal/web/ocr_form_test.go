@@ -1,0 +1,207 @@
+package web
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"github.com/gin-gonic/gin"
+
+	"github.com/adrian/bulkly/internal/ocr"
+	"github.com/adrian/bulkly/internal/store"
+)
+
+func TestHydrateBillMatchesCatalog(t *testing.T) {
+	products := []store.ProductListItem{
+		{Product: store.Product{ID: 4, Name: "Rice", UnitID: 1, UnitName: "kg"}},
+	}
+	units := []store.Unit{{ID: 1, Name: "kg"}, {ID: 2, Name: "g"}}
+
+	bill := ocr.Bill{
+		Lines: []ocr.Line{
+			{ReceiptName: "RYZ 10KG", ProductName: "Rice", ProductID: 0, UnitName: "kg", Quantity: "10", Amount: "40"},
+			{ReceiptName: "Flour", ProductName: "Flour", ProductID: 0, UnitID: 0, UnitName: "KG", Quantity: "2", Amount: "8"},
+			{ReceiptName: "Ghost", ProductName: "Ghost", ProductID: 123, Skip: true},
+		},
+	}
+	got := hydrateBill(bill, products, units)
+	if got.Lines[0].ProductID != 4 || got.Lines[0].UnitID != 1 {
+		t.Fatalf("rice: %#v", got.Lines[0])
+	}
+	if got.Lines[1].UnitID != 1 {
+		t.Fatalf("flour unit: %#v", got.Lines[1])
+	}
+	if got.Lines[2].ProductID != 0 {
+		t.Fatalf("invalid product id should clear: %#v", got.Lines[2])
+	}
+}
+
+func TestParseOCRForm(t *testing.T) {
+	get := func(form map[string]string) func(string) string {
+		return func(k string) string { return form[k] }
+	}
+
+	in, _, msg := parseOCRForm(get(map[string]string{
+		"bought_on":        "2026-08-20",
+		"line_count":       "3",
+		"include_0":        "1",
+		"product_choice_0": "4",
+		"quantity_0":       "10",
+		"amount_0":         "40,00",
+		"include_1":        "1",
+		"product_choice_1": "new",
+		"product_name_1":   "Flour",
+		"unit_id_1":        "1",
+		"quantity_1":       "5",
+		"amount_1":         "18.50",
+		"include_2":        "",
+		"product_choice_2": "new",
+		"product_name_2":   "Skip me",
+		"unit_id_2":        "1",
+		"quantity_2":       "1",
+		"amount_2":         "1",
+	}))
+	if msg != "" {
+		t.Fatal(msg)
+	}
+	if in.Company != nil || in.CompanyID != 0 {
+		t.Fatalf("company should be empty: %#v", in)
+	}
+	if len(in.Lines) != 2 {
+		t.Fatalf("lines: %#v", in.Lines)
+	}
+	if in.Lines[0].ProductID != 4 || in.Lines[0].Amount.StringFixed(2) != "40.00" {
+		t.Fatalf("line0: %#v", in.Lines[0])
+	}
+	if in.Lines[1].ProductName != "Flour" || in.Lines[1].UnitID != 1 {
+		t.Fatalf("line1: %#v", in.Lines[1])
+	}
+
+	_, _, msg = parseOCRForm(get(map[string]string{
+		"bought_on":        "2026-08-20",
+		"line_count":       "1",
+		"include_0":        "1",
+		"product_choice_0": "new",
+		"product_name_0":   "",
+		"unit_id_0":        "1",
+		"quantity_0":       "1",
+		"amount_0":         "1",
+	}))
+	if msg == "" {
+		t.Fatal("expected name error")
+	}
+}
+
+func TestOCRReviewTemplateExecutes(t *testing.T) {
+	dir := t.TempDir()
+	st, err := store.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	srv, err := New(st, Config{Currency: "PLN", CurrencySymbol: "zł"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var buf strings.Builder
+	err = srv.tmpl.ExecuteTemplate(&buf, "ocr_review.html", gin.H{
+		"Page": page{Title: "Confirm bill", Currency: "PLN"},
+		"View": ocrView{
+			RecipeID:  3,
+			ImagePath: "aabbccddeeff00112233445566778899",
+			Status:    store.RecipeReady,
+			BoughtOn:  "2026-08-20",
+			Lines: []ocrLineView{{
+				Include: true, ProductName: "Rice", UnitID: 1, Quantity: "10", Amount: "40.00", ReceiptName: "RYZ",
+			}},
+		},
+		"Products": []store.ProductListItem{},
+		"Units":    []store.Unit{{ID: 1, Name: "kg"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := buf.String()
+	if !strings.Contains(body, "Save purchases") || !strings.Contains(body, "Rice") {
+		t.Fatalf("unexpected body: %s", body)
+	}
+	if !strings.Contains(body, `name="recipe_id"`) {
+		t.Fatal("missing recipe id")
+	}
+	if strings.Contains(body, "company_choice") || strings.Contains(body, "Street name") {
+		t.Fatal("review form should not ask for company address")
+	}
+}
+
+func TestOCRPageRendersWhenUnconfigured(t *testing.T) {
+	dir := t.TempDir()
+	st, err := store.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	srv, err := New(st, Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/ocr", nil)
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "Scan a bill") {
+		t.Fatal("missing heading")
+	}
+	if !strings.Contains(body, "OCR_API_KEY") {
+		t.Fatal("missing setup hint")
+	}
+	if !strings.Contains(body, "Scan bill") {
+		t.Fatal("missing nav")
+	}
+
+	srv, err = New(st, Config{OCR: ocr.Config{APIKey: "sk-test"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/ocr", nil)
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("configured status %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), `name="bill"`) {
+		t.Fatal("configured page should show the upload field")
+	}
+}
+
+func TestOCRReviewLoadsRecipeJSON(t *testing.T) {
+	dir := t.TempDir()
+	st, err := store.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	r, err := st.CreateRecipe("aabbccddeeff00112233445566778899")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SaveAIResponse(r.ID, `{"bought_on":"2026-08-20","lines":[{"product_name":"Rice","quantity":"10","amount":"40.00","unit_name":"kg"}]}`); err != nil {
+		t.Fatal(err)
+	}
+	srv, err := New(st, Config{Currency: "PLN", CurrencySymbol: "zł"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/ocr/"+itoa(r.ID), nil)
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "Rice") {
+		t.Fatal("review should show the saved product")
+	}
+}

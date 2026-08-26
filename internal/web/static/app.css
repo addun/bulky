@@ -419,6 +419,100 @@ label .hint {
   color: var(--muted);
 }
 
+code {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.92em;
+}
+
+.scan-drop {
+  border: 2px dashed var(--line);
+  background: #fff;
+  padding: 1.1rem 1.2rem 1.2rem;
+}
+
+.scan-drop.has-file {
+  border-color: var(--pine);
+}
+
+.scan-file input {
+  margin-top: 0.4rem;
+}
+
+.scan-preview {
+  margin-top: 0.9rem;
+}
+
+.scan-preview img {
+  display: block;
+  max-width: min(100%, 22rem);
+  max-height: 18rem;
+  object-fit: contain;
+  background: var(--paper);
+  border: 1px solid var(--line);
+}
+
+.ocr-layout {
+  display: grid;
+  grid-template-columns: minmax(11rem, 16rem) 1fr;
+  gap: 1.4rem;
+  align-items: start;
+}
+
+.ocr-slip {
+  margin: 0;
+  background: #fff;
+  border: 1px solid var(--line);
+  padding: 0.45rem 0.45rem 0.7rem;
+}
+
+.ocr-slip img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.ocr-slip figcaption {
+  margin-top: 0.4rem;
+  padding: 0 0.2rem;
+}
+
+.ocr-line {
+  border: 1px solid var(--line);
+  background: #fff;
+  padding: 0.75rem 0.9rem 1rem;
+  margin: 0 0 0.8rem;
+  min-width: 0;
+}
+
+.ocr-line.is-off {
+  opacity: 0.5;
+}
+
+.ocr-include {
+  margin-bottom: 0.4rem;
+}
+
+.ocr-receipt {
+  margin: 0 0 0.6rem;
+}
+
+.ocr-nums {
+  display: grid;
+  grid-template-columns: minmax(6rem, 1fr) 1fr 1fr;
+  gap: 0.7rem;
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  padding: 0.4rem 0.75rem;
+}
+
+.btn-ghost:hover {
+  background: rgba(255, 212, 0, 0.18);
+}
+
 .sr {
   position: absolute;
   width: 1px;
@@ -453,5 +547,12 @@ label .hint {
   .history .tight {
     flex-direction: column;
     gap: 0.2rem;
+  }
+
+  .ocr-layout,
+  .ocr-nums,
+  .street-row,
+  .city-row {
+    grid-template-columns: 1fr;
   }
 }

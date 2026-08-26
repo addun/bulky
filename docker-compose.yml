@@ -9,6 +9,9 @@ services:
       CURRENCY: PLN
       CURRENCY_SYMBOL: zł
       TZ: Europe/Warsaw
+      OCR_API_KEY: ${OCR_API_KEY:-}
+      OCR_BASE_URL: ${OCR_BASE_URL:-}
+      OCR_MODEL: ${OCR_MODEL:-gpt-4o-mini}
     volumes:
       - bulkly-data:/data
 

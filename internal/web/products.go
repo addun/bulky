@@ -3,6 +3,7 @@ package web
 import (
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -17,9 +18,12 @@ func (s *Server) index(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "could not load products")
 		return
 	}
+	errMsg := c.Query("error")
+	imported, _ := strconv.Atoi(c.Query("imported"))
 	c.HTML(http.StatusOK, "index.html", gin.H{
-		"Page":     s.page("Products", q, ""),
+		"Page":     s.page("Products", q, errMsg),
 		"Products": items,
+		"Imported": imported,
 	})
 }
 
