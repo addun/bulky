@@ -121,17 +121,17 @@ func (s *Server) ocrReview(c *gin.Context) {
 		s.renderOCR(c, http.StatusUnprocessableEntity, "This scan has no product list yet. Upload the bill again.")
 		return
 	}
-	products, units, err := s.ocrLookups()
+	products, units, companies, err := s.ocrLookups()
 	if err != nil {
 		c.String(http.StatusInternalServerError, "could not load the catalog")
 		return
 	}
-	view, err := recipeToView(recipe, products, units)
+	view, err := recipeToView(recipe, products, units, companies)
 	if err != nil {
 		s.renderOCR(c, http.StatusInternalServerError, "Could not read the saved AI response.")
 		return
 	}
-	s.renderOCRReview(c, http.StatusOK, view, products, units, c.Query("error"))
+	s.renderOCRReview(c, http.StatusOK, view, products, units, companies, c.Query("error"))
 }
 
 func (s *Server) ocrConfirm(c *gin.Context) {
@@ -150,7 +150,7 @@ func (s *Server) ocrConfirm(c *gin.Context) {
 		return
 	}
 
-	products, units, err := s.ocrLookups()
+	products, units, companies, err := s.ocrLookups()
 	if err != nil {
 		c.String(http.StatusInternalServerError, "could not load the catalog")
 		return
@@ -160,20 +160,26 @@ func (s *Server) ocrConfirm(c *gin.Context) {
 	view.RecipeID = id
 	view.ImagePath = recipe.ImagePath
 	view.Status = recipe.Status
+	view.CompanyID = knownCompanyID(view.CompanyID, companies)
+	in.CompanyID = view.CompanyID
 	rawJSON, jsonErr := viewToRawJSON(view)
 	if jsonErr == nil {
 		_ = s.store.UpdateRecipeJSON(id, string(rawJSON))
 	}
 	if recipe.Status == store.RecipeMigrated {
-		s.renderOCRReview(c, http.StatusConflict, view, products, units, "This bill is already saved as purchases.")
+		s.renderOCRReview(c, http.StatusConflict, view, products, units, companies, "This bill is already saved as purchases.")
+		return
+	}
+	if view.CompanyID == 0 && formInt(c.PostForm("company_id")) > 0 {
+		s.renderOCRReview(c, http.StatusUnprocessableEntity, view, products, units, companies, "Choose a company.")
 		return
 	}
 	if msg != "" {
-		s.renderOCRReview(c, http.StatusUnprocessableEntity, view, products, units, msg)
+		s.renderOCRReview(c, http.StatusUnprocessableEntity, view, products, units, companies, msg)
 		return
 	}
 	if jsonErr != nil {
-		s.renderOCRReview(c, http.StatusInternalServerError, view, products, units, "Could not save the product list.")
+		s.renderOCRReview(c, http.StatusInternalServerError, view, products, units, companies, "Could not save the product list.")
 		return
 	}
 	res, err := s.store.MigrateRecipe(id, in, string(rawJSON))
@@ -187,12 +193,14 @@ func (s *Server) ocrConfirm(c *gin.Context) {
 			msg = "Choose a unit for each new product."
 		} else if errors.Is(err, store.ErrNotFound) {
 			msg = "A selected product is gone. Refresh and try again."
+		} else if errors.Is(err, store.ErrInvalidCompany) {
+			msg = "Choose a company."
 		} else if err.Error() == "product name is required" || err.Error() == "name is required" {
 			msg = "Name is required for each new product."
 		} else if err.Error() == "no products to import" {
 			msg = "Tick at least one product."
 		}
-		s.renderOCRReview(c, http.StatusUnprocessableEntity, view, products, units, msg)
+		s.renderOCRReview(c, http.StatusUnprocessableEntity, view, products, units, companies, msg)
 		return
 	}
 	c.Redirect(http.StatusSeeOther, "/?imported="+itoa(int64(res.Purchases)))
@@ -220,29 +228,34 @@ func (s *Server) renderOCR(c *gin.Context, status int, errMsg string) {
 	})
 }
 
-func (s *Server) renderOCRReview(c *gin.Context, status int, view ocrView, products []store.ProductListItem, units []store.Unit, errMsg string) {
+func (s *Server) renderOCRReview(c *gin.Context, status int, view ocrView, products []store.ProductListItem, units []store.Unit, companies []store.Company, errMsg string) {
 	c.HTML(status, "ocr_review.html", gin.H{
-		"Page":     s.page("Confirm bill", "", errMsg),
-		"View":     view,
-		"Products": products,
-		"Units":    units,
+		"Page":      s.page("Confirm bill", "", errMsg),
+		"View":      view,
+		"Products":  products,
+		"Units":     units,
+		"Companies": companies,
 	})
 }
 
-func (s *Server) ocrLookups() ([]store.ProductListItem, []store.Unit, error) {
+func (s *Server) ocrLookups() ([]store.ProductListItem, []store.Unit, []store.Company, error) {
 	products, err := s.store.ListProducts("")
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	units, err := s.store.ListUnits()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	return products, units, nil
+	companies, err := s.store.ListCompanies()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return products, units, companies, nil
 }
 
 func (s *Server) ocrCatalog() (ocr.Catalog, []store.ProductListItem, []store.Unit, error) {
-	products, units, err := s.ocrLookups()
+	products, units, _, err := s.ocrLookups()
 	if err != nil {
 		return ocr.Catalog{}, nil, nil, err
 	}

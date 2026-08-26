@@ -44,10 +44,11 @@ type CatalogUnit struct {
 }
 
 type Bill struct {
-	BoughtOn string `json:"bought_on"`
-	Notes    string `json:"notes"`
-	NotABill bool   `json:"not_a_bill"`
-	Lines    []Line `json:"lines"`
+	BoughtOn  string `json:"bought_on"`
+	Notes     string `json:"notes"`
+	NotABill  bool   `json:"not_a_bill"`
+	CompanyID int64  `json:"company_id,omitempty"`
+	Lines     []Line `json:"lines"`
 }
 
 type Line struct {

@@ -78,6 +78,22 @@ func TestParseOCRForm(t *testing.T) {
 		t.Fatalf("line1: %#v", in.Lines[1])
 	}
 
+	in, view, msg := parseOCRForm(get(map[string]string{
+		"bought_on":        "2026-08-20",
+		"company_id":       "7",
+		"line_count":       "1",
+		"include_0":        "1",
+		"product_choice_0": "4",
+		"quantity_0":       "1",
+		"amount_0":         "1",
+	}))
+	if msg != "" {
+		t.Fatal(msg)
+	}
+	if in.CompanyID != 7 || view.CompanyID != 7 {
+		t.Fatalf("company_id: in=%d view=%d", in.CompanyID, view.CompanyID)
+	}
+
 	_, _, msg = parseOCRForm(get(map[string]string{
 		"bought_on":        "2026-08-20",
 		"line_count":       "1",
@@ -116,8 +132,9 @@ func TestOCRReviewTemplateExecutes(t *testing.T) {
 				Include: true, ProductName: "Rice", UnitID: 1, Quantity: "10", Amount: "40.00", ReceiptName: "RYZ",
 			}},
 		},
-		"Products": []store.ProductListItem{},
-		"Units":    []store.Unit{{ID: 1, Name: "kg"}},
+		"Products":  []store.ProductListItem{},
+		"Units":     []store.Unit{{ID: 1, Name: "kg"}},
+		"Companies": []store.Company{{ID: 2, Name: "Local Mill"}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -129,7 +146,10 @@ func TestOCRReviewTemplateExecutes(t *testing.T) {
 	if !strings.Contains(body, `name="recipe_id"`) {
 		t.Fatal("missing recipe id")
 	}
-	if strings.Contains(body, "company_choice") || strings.Contains(body, "Street name") {
+	if !strings.Contains(body, `name="company_id"`) || !strings.Contains(body, "Local Mill") {
+		t.Fatal("review form should let you pick a company")
+	}
+	if strings.Contains(body, "Street name") {
 		t.Fatal("review form should not ask for company address")
 	}
 }
@@ -203,5 +223,8 @@ func TestOCRReviewLoadsRecipeJSON(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "Rice") {
 		t.Fatal("review should show the saved product")
+	}
+	if !strings.Contains(rec.Body.String(), `name="company_id"`) {
+		t.Fatal("review should include a company picker")
 	}
 }
