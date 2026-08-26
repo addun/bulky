@@ -28,12 +28,17 @@ func (s *Server) createPurchase(c *gin.Context) {
 		c.Redirect(http.StatusSeeOther, "/products/"+itoa(id)+"?error="+url.QueryEscape(msg))
 		return
 	}
+	kind, msg := parseKind(c)
+	if msg != "" {
+		c.Redirect(http.StatusSeeOther, "/products/"+itoa(id)+"?error="+url.QueryEscape(msg))
+		return
+	}
 	companyID, msg := s.resolveCompanyForm(c)
 	if msg != "" {
 		c.Redirect(http.StatusSeeOther, "/products/"+itoa(id)+"?error="+url.QueryEscape(msg))
 		return
 	}
-	if _, err := s.store.CreatePurchase(id, companyID, boughtOn, qty, amount); err != nil {
+	if _, err := s.store.CreatePurchase(id, companyID, boughtOn, qty, amount, kind); err != nil {
 		c.Redirect(http.StatusSeeOther, "/products/"+itoa(id)+"?error="+url.QueryEscape("Could not save the purchase."))
 		return
 	}
@@ -66,7 +71,7 @@ func (s *Server) editPurchase(c *gin.Context) {
 		return
 	}
 	c.HTML(http.StatusOK, "purchase_form.html", gin.H{
-		"Page":      s.page("Edit purchase", "", ""),
+		"Page":      s.page(editPurchaseTitle(p), "", ""),
 		"Product":   prod,
 		"Purchase":  p,
 		"Companies": companies,
@@ -100,7 +105,7 @@ func (s *Server) updatePurchase(c *gin.Context) {
 	}
 	renderErr := func(msg string) {
 		c.HTML(http.StatusUnprocessableEntity, "purchase_form.html", gin.H{
-			"Page":      s.page("Edit purchase", "", msg),
+			"Page":      s.page(editPurchaseTitle(p), "", msg),
 			"Product":   prod,
 			"Purchase":  p,
 			"Companies": companies,
@@ -111,12 +116,17 @@ func (s *Server) updatePurchase(c *gin.Context) {
 		renderErr(msg)
 		return
 	}
+	kind, msg := parseKind(c)
+	if msg != "" {
+		renderErr(msg)
+		return
+	}
 	companyID, msg := s.resolveCompanyForm(c)
 	if msg != "" {
 		renderErr(msg)
 		return
 	}
-	if err := s.store.UpdatePurchase(id, companyID, boughtOn, qty, amount); err != nil {
+	if err := s.store.UpdatePurchase(id, companyID, boughtOn, qty, amount, kind); err != nil {
 		renderErr("Could not save the purchase.")
 		return
 	}
@@ -143,13 +153,19 @@ func (s *Server) confirmDeletePurchase(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "could not load product")
 		return
 	}
+	noun := "purchase"
+	body := "The product stays. Only this buy is removed from the history."
+	if p.IsPrice() {
+		noun = "price"
+		body = "The product stays. Only this price is removed from the history."
+	}
 	c.HTML(http.StatusOK, "confirm.html", gin.H{
-		"Page":    s.page("Delete purchase", "", ""),
-		"Title":   "Delete this purchase of " + prod.Name + "?",
-		"Body":    "The product stays. Only this buy is removed from the history.",
+		"Page":    s.page("Delete "+noun, "", ""),
+		"Title":   "Delete this " + noun + " of " + prod.Name + "?",
+		"Body":    body,
 		"Action":  "/purchases/" + itoa(id) + "/delete",
 		"Cancel":  "/products/" + itoa(p.ProductID),
-		"Confirm": "Delete purchase",
+		"Confirm": "Delete " + noun,
 	})
 }
 
@@ -173,4 +189,19 @@ func (s *Server) deletePurchase(c *gin.Context) {
 		return
 	}
 	c.Redirect(http.StatusSeeOther, "/products/"+itoa(p.ProductID))
+}
+
+func parseKind(c *gin.Context) (store.PurchaseKind, string) {
+	k, err := store.ParsePurchaseKind(c.PostForm("kind"))
+	if err != nil {
+		return "", "Choose purchase or price."
+	}
+	return k, ""
+}
+
+func editPurchaseTitle(p store.Purchase) string {
+	if p.IsPrice() {
+		return "Edit price"
+	}
+	return "Edit purchase"
 }

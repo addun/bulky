@@ -31,7 +31,7 @@
 {{end}}
 
 <section>
-  <h2>Add a purchase</h2>
+  <h2>Log a buy or a price</h2>
   <form class="grid-form" method="post" action="/products/{{.Product.ID}}/purchases">
     <label>Date <input type="date" name="bought_on" required value="{{.Page.Today}}"></label>
     <label>Quantity ({{.Product.UnitName}}) <input name="quantity" required inputmode="decimal" placeholder="1.5"></label>
@@ -45,17 +45,20 @@
         {{end}}
       </select>
     </label>
-    <button type="submit" class="btn btn-tag">Save purchase</button>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-tag" name="kind" value="purchase">Save purchase</button>
+      <button type="submit" class="btn btn-plain" name="kind" value="price">Log price</button>
+    </div>
   </form>
   {{if not .Companies}}
-    <p class="hint">No companies yet. You can still save a purchase, or <a href="/companies">add a company</a> first.</p>
+    <p class="hint">No companies yet. You can still save, or <a href="/companies">add a company</a> first.</p>
   {{end}}
 </section>
 
 <section>
   <h2>History</h2>
   {{if not .Purchases}}
-    <p class="empty">No purchases yet.</p>
+    <p class="empty">Nothing logged yet.</p>
   {{else}}
     <table class="history">
       <thead>
@@ -70,8 +73,8 @@
       </thead>
       <tbody>
         {{range .Purchases}}
-        <tr>
-          <td>{{date .BoughtOn}}</td>
+        <tr{{if .IsPrice}} class="price-row"{{end}}>
+          <td>{{date .BoughtOn}}{{if .IsPrice}} <span class="kind">price</span>{{end}}</td>
           <td>{{if .CompanyID}}{{(index $.CompanyByID .CompanyID).Name}}{{else}}—{{end}}</td>
           <td>{{qty .Quantity}} {{$.Product.UnitName}}</td>
           <td>{{money .Amount}}</td>

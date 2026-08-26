@@ -209,7 +209,7 @@ func (s *Server) confirmDeleteProduct(c *gin.Context) {
 	c.HTML(http.StatusOK, "confirm.html", gin.H{
 		"Page":    s.page("Delete "+p.Name, "", ""),
 		"Title":   "Delete " + p.Name + "?",
-		"Body":    "This removes the product and every purchase recorded for it. The unit stays.",
+		"Body":    "This removes the product and every purchase and price recorded for it. The unit stays.",
 		"Action":  "/products/" + itoa(id) + "/delete",
 		"Cancel":  "/products/" + itoa(id),
 		"Confirm": "Delete product",
