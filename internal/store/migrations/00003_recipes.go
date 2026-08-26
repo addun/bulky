@@ -37,10 +37,7 @@ CREATE INDEX IF NOT EXISTS idx_recipes_status ON recipes(status);
 		}
 	}
 	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_purchases_recipe ON purchases(recipe_id)`)
-	if err != nil {
-		return err
-	}
-	return ensurePurchaseKindColumn(db)
+	return err
 }
 
 func down00003(context.Context, *sql.DB) error {
