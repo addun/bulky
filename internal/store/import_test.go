@@ -66,8 +66,8 @@ func TestImportBillCreatesProductsAndPurchases(t *testing.T) {
 	if len(riceBuys) != 1 || riceBuys[0].CompanyID != res.CompanyID {
 		t.Fatalf("rice: %#v", riceBuys)
 	}
-	if riceBuys[0].RecipeID != 0 {
-		t.Fatalf("recipe_id: got %d want 0", riceBuys[0].RecipeID)
+	if riceBuys[0].ReceiptID != 0 {
+		t.Fatalf("receipt_id: got %d want 0", riceBuys[0].ReceiptID)
 	}
 	if riceBuys[0].Amount.Cmp(decimal.RequireFromString("40.00")) != 0 {
 		t.Fatalf("rice amount %s", riceBuys[0].Amount)

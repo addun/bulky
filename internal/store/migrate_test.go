@@ -19,7 +19,7 @@ func TestOpenFreshSeedsAndVersions(t *testing.T) {
 	defer s.Close()
 
 	assertCurrentSchema(t, s.db)
-	assertGooseVersion(t, s.db, 4)
+	assertGooseVersion(t, s.db, 5)
 
 	units, err := s.ListUnits()
 	if err != nil {
@@ -54,7 +54,7 @@ func TestOpenSecondBootNoops(t *testing.T) {
 	defer s.Close()
 
 	assertCurrentSchema(t, s.db)
-	assertGooseVersion(t, s.db, 4)
+	assertGooseVersion(t, s.db, 5)
 
 	units, err := s.ListUnits()
 	if err != nil {
@@ -123,7 +123,7 @@ VALUES (1, '2024-01-02', '10', '20.50', '2024-01-02T00:00:00Z');
 	defer s.Close()
 
 	assertCurrentSchema(t, s.db)
-	assertGooseVersion(t, s.db, 4)
+	assertGooseVersion(t, s.db, 5)
 
 	var n int
 	if err := s.db.QueryRow(`SELECT COUNT(*) FROM purchases`).Scan(&n); err != nil {
@@ -150,7 +150,7 @@ VALUES (1, '2024-01-02', '10', '20.50', '2024-01-02T00:00:00Z');
 	}
 }
 
-func TestOpenAddsKindWhenGooseAlreadyAtRecipes(t *testing.T) {
+func TestOpenAddsKindWhenGooseAlreadyAtReceipts(t *testing.T) {
 	dir := t.TempDir()
 	s, err := Open(dir)
 	if err != nil {
@@ -185,10 +185,52 @@ func TestOpenAddsKindWhenGooseAlreadyAtRecipes(t *testing.T) {
 	if !hasColumn(t, s.db, "purchases", "kind") {
 		t.Fatal("purchases missing kind after reopen")
 	}
-	assertGooseVersion(t, s.db, 4)
+	assertGooseVersion(t, s.db, 5)
 	if _, err := s.ListProducts(""); err != nil {
 		t.Fatalf("ListProducts: %v", err)
 	}
+}
+
+func TestOpenRenamesRecipesToReceipts(t *testing.T) {
+	dir := t.TempDir()
+	s, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	db, err := sql.Open("sqlite", filepath.Join(dir, "bulkly.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{
+		`DROP INDEX IF EXISTS idx_receipts_status`,
+		`DROP INDEX IF EXISTS idx_purchases_receipt`,
+		`ALTER TABLE receipts RENAME TO recipes`,
+		`ALTER TABLE purchases RENAME COLUMN receipt_id TO recipe_id`,
+		`CREATE INDEX IF NOT EXISTS idx_recipes_status ON recipes(status)`,
+		`CREATE INDEX IF NOT EXISTS idx_purchases_recipe ON purchases(recipe_id)`,
+		`DELETE FROM goose_db_version WHERE version_id >= 5`,
+	} {
+		if _, err := db.Exec(q); err != nil {
+			db.Close()
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	s, err = Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	assertCurrentSchema(t, s.db)
+	assertGooseVersion(t, s.db, 5)
 }
 
 func TestPurchaseCompanyOptional(t *testing.T) {
@@ -214,8 +256,8 @@ func TestPurchaseCompanyOptional(t *testing.T) {
 	if buy.CompanyID != 0 {
 		t.Fatalf("CompanyID: got %d want 0", buy.CompanyID)
 	}
-	if buy.RecipeID != 0 {
-		t.Fatalf("RecipeID: got %d want 0", buy.RecipeID)
+	if buy.ReceiptID != 0 {
+		t.Fatalf("ReceiptID: got %d want 0", buy.ReceiptID)
 	}
 	if buy.Kind != KindPurchase {
 		t.Fatalf("Kind: got %q want %q", buy.Kind, KindPurchase)
@@ -311,7 +353,7 @@ func assertGooseVersion(t *testing.T, db *sql.DB, want int64) {
 
 func assertCurrentSchema(t *testing.T, db *sql.DB) {
 	t.Helper()
-	for _, table := range []string{"units", "products", "companies", "purchases", "recipes", "goose_db_version"} {
+	for _, table := range []string{"units", "products", "companies", "purchases", "receipts", "goose_db_version"} {
 		if !tableExists(t, db, table) {
 			t.Fatalf("missing table %s", table)
 		}
@@ -327,18 +369,18 @@ func assertCurrentSchema(t *testing.T, db *sql.DB) {
 	if !hasColumn(t, db, "purchases", "kind") {
 		t.Fatal("purchases missing kind")
 	}
-	if !hasColumn(t, db, "purchases", "recipe_id") {
-		t.Fatal("purchases missing recipe_id")
+	if !hasColumn(t, db, "purchases", "receipt_id") {
+		t.Fatal("purchases missing receipt_id")
 	}
-	if tableExists(t, db, "ocr_scans") || tableExists(t, db, "ocr_scan_lines") {
-		t.Fatal("ocr_scans tables should be dropped")
+	if tableExists(t, db, "ocr_scans") || tableExists(t, db, "ocr_scan_lines") || tableExists(t, db, "recipes") {
+		t.Fatal("ocr_scans and recipes tables should be gone")
 	}
 	for _, col := range []string{"image_path", "raw_response", "status", "created_at"} {
-		if !hasColumn(t, db, "recipes", col) {
-			t.Fatalf("recipes missing %s", col)
+		if !hasColumn(t, db, "receipts", col) {
+			t.Fatalf("receipts missing %s", col)
 		}
 	}
-	for _, idx := range []string{"idx_products_name", "idx_purchases_product", "idx_companies_name", "idx_purchases_company", "idx_recipes_status", "idx_purchases_recipe"} {
+	for _, idx := range []string{"idx_products_name", "idx_purchases_product", "idx_companies_name", "idx_purchases_company", "idx_receipts_status", "idx_purchases_receipt"} {
 		if !indexExists(t, db, idx) {
 			t.Fatalf("missing index %s", idx)
 		}

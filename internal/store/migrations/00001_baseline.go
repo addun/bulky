@@ -3,7 +3,6 @@ package migrations
 import (
 	"context"
 	"database/sql"
-	"strings"
 
 	"github.com/pressly/goose/v3"
 )
@@ -49,54 +48,22 @@ CREATE INDEX IF NOT EXISTS idx_companies_name ON companies(name COLLATE NOCASE);
 `); err != nil {
 		return err
 	}
-	if err := ensurePurchaseCompanyColumn(db); err != nil {
+	has, err := hasColumn(db, "purchases", "company_id")
+	if err != nil {
 		return err
+	}
+	if !has {
+		if _, err := db.Exec(`ALTER TABLE purchases ADD COLUMN company_id INTEGER REFERENCES companies(id)`); err != nil {
+			return err
+		}
 	}
 	if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_purchases_company ON purchases(company_id)`); err != nil {
 		return err
 	}
-	_, err := db.Exec(`INSERT OR IGNORE INTO units (name) VALUES ('kg'), ('g')`)
+	_, err = db.Exec(`INSERT OR IGNORE INTO units (name) VALUES ('kg'), ('g')`)
 	return err
 }
 
 func down00001(context.Context, *sql.DB) error {
 	return nil
-}
-
-func ensurePurchaseCompanyColumn(db *sql.DB) error {
-	has, err := hasColumn(db, "purchases", "company_id")
-	if err != nil || has {
-		return err
-	}
-	_, err = db.Exec(`ALTER TABLE purchases ADD COLUMN company_id INTEGER REFERENCES companies(id)`)
-	return err
-}
-
-func ensurePurchaseKindColumn(db *sql.DB) error {
-	has, err := hasColumn(db, "purchases", "kind")
-	if err != nil || has {
-		return err
-	}
-	_, err = db.Exec(`ALTER TABLE purchases ADD COLUMN kind TEXT NOT NULL DEFAULT 'purchase'`)
-	return err
-}
-
-func hasColumn(db *sql.DB, table, col string) (bool, error) {
-	rows, err := db.Query(`PRAGMA table_info(` + table + `)`)
-	if err != nil {
-		return false, err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var cid, notnull, pk int
-		var name, ctype string
-		var dflt sql.NullString
-		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
-			return false, err
-		}
-		if strings.EqualFold(name, col) {
-			return true, nil
-		}
-	}
-	return false, rows.Err()
 }

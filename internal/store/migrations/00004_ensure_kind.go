@@ -12,7 +12,12 @@ func init() {
 }
 
 func up00004(_ context.Context, db *sql.DB) error {
-	return ensurePurchaseKindColumn(db)
+	has, err := hasColumn(db, "purchases", "kind")
+	if err != nil || has {
+		return err
+	}
+	_, err = db.Exec(`ALTER TABLE purchases ADD COLUMN kind TEXT NOT NULL DEFAULT 'purchase'`)
+	return err
 }
 
 func down00004(context.Context, *sql.DB) error {

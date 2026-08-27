@@ -68,7 +68,7 @@
           <th>Qty</th>
           <th>Amount</th>
           <th>Unit price</th>
-          <th>Recipe</th>
+          <th>Receipt</th>
           <th></th>
         </tr>
       </thead>
@@ -80,7 +80,7 @@
           <td>{{qty .Quantity}} {{$.Product.UnitName}}</td>
           <td>{{money .Amount}}</td>
           <td>{{unitPrice .Amount .Quantity}}</td>
-          <td>{{if .RecipeID}}<a href="/ocr/{{.RecipeID}}">Bill {{.RecipeID}}</a>{{else}}—{{end}}</td>
+          <td>{{if .ReceiptID}}<a href="/receipts/{{.ReceiptID}}">Receipt {{.ReceiptID}}</a>{{else}}—{{end}}</td>
           <td class="tight">
             <a href="/purchases/{{.ID}}/edit">Edit</a>
             <a class="danger" href="/purchases/{{.ID}}/delete">Delete</a>
