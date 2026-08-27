@@ -11,21 +11,21 @@ import (
 	"github.com/adrian/bulkly/internal/store"
 )
 
-type ocrView struct {
-	RecipeID  int64
+type receiptView struct {
+	ReceiptID int64
 	ImagePath string
 	Status    string
 	BoughtOn  string
 	Notes     string
 	CompanyID int64
-	Lines     []ocrLineView
+	Lines     []receiptLineView
 }
 
-func (v ocrView) Migrated() bool {
-	return v.Status == store.RecipeMigrated
+func (v receiptView) Migrated() bool {
+	return v.Status == store.ReceiptMigrated
 }
 
-type ocrLineView struct {
+type receiptLineView struct {
 	Include     bool
 	ProductID   int64
 	ProductName string
@@ -86,9 +86,9 @@ func hydrateBill(bill ocr.Bill, products []store.ProductListItem, units []store.
 	return bill
 }
 
-func billToView(bill ocr.Bill, recipeID int64, imagePath, status string) ocrView {
-	view := ocrView{
-		RecipeID:  recipeID,
+func billToView(bill ocr.Bill, receiptID int64, imagePath, status string) receiptView {
+	view := receiptView{
+		ReceiptID: receiptID,
 		ImagePath: imagePath,
 		Status:    status,
 		BoughtOn:  bill.BoughtOn,
@@ -100,7 +100,7 @@ func billToView(bill ocr.Bill, recipeID int64, imagePath, status string) ocrView
 		if name == "" {
 			name = line.ReceiptName
 		}
-		view.Lines = append(view.Lines, ocrLineView{
+		view.Lines = append(view.Lines, receiptLineView{
 			Include:     true,
 			ProductID:   line.ProductID,
 			ProductName: name,
@@ -113,11 +113,11 @@ func billToView(bill ocr.Bill, recipeID int64, imagePath, status string) ocrView
 	return view
 }
 
-func recipeToView(r store.Recipe, products []store.ProductListItem, units []store.Unit, companies []store.Company) (ocrView, error) {
+func receiptToView(r store.Receipt, products []store.ProductListItem, units []store.Unit, companies []store.Company) (receiptView, error) {
 	var bill ocr.Bill
 	if strings.TrimSpace(r.RawResponse) != "" {
 		if err := json.Unmarshal([]byte(r.RawResponse), &bill); err != nil {
-			return ocrView{}, err
+			return receiptView{}, err
 		}
 		bill = hydrateBill(bill, products, units)
 	}
@@ -129,7 +129,7 @@ func recipeToView(r store.Recipe, products []store.ProductListItem, units []stor
 	return view, nil
 }
 
-func viewToRawJSON(view ocrView) (string, error) {
+func viewToRawJSON(view receiptView) (string, error) {
 	bill := ocr.Bill{
 		BoughtOn:  view.BoughtOn,
 		Notes:     view.Notes,
@@ -153,9 +153,9 @@ func viewToRawJSON(view ocrView) (string, error) {
 	return string(raw), nil
 }
 
-func parseOCRView(get func(string) string) ocrView {
-	view := ocrView{
-		RecipeID:  formInt(get("recipe_id")),
+func parseReceiptView(get func(string) string) receiptView {
+	view := receiptView{
+		ReceiptID: formInt(get("receipt_id")),
 		ImagePath: strings.TrimSpace(get("image_path")),
 		BoughtOn:  strings.TrimSpace(get("bought_on")),
 		Notes:     strings.TrimSpace(get("notes")),
@@ -175,7 +175,7 @@ func parseOCRView(get func(string) string) ocrView {
 		if choice != "" && choice != "new" {
 			productID, _ = strconv.ParseInt(choice, 10, 64)
 		}
-		view.Lines = append(view.Lines, ocrLineView{
+		view.Lines = append(view.Lines, receiptLineView{
 			Include:     get("include_"+p) == "1",
 			ProductID:   productID,
 			ProductName: strings.TrimSpace(get("product_name_" + p)),
@@ -188,8 +188,8 @@ func parseOCRView(get func(string) string) ocrView {
 	return view
 }
 
-func parseOCRForm(get func(string) string) (store.BillImport, ocrView, string) {
-	view := parseOCRView(get)
+func parseReceiptForm(get func(string) string) (store.BillImport, receiptView, string) {
+	view := parseReceiptView(get)
 	if _, err := time.Parse("2006-01-02", view.BoughtOn); err != nil {
 		return store.BillImport{}, view, "Date must be a valid day."
 	}

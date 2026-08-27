@@ -27,7 +27,7 @@ type Server struct {
 	engine *gin.Engine
 	tmpl   *template.Template
 	cfg    Config
-	ocr    *ocr.Agent
+	reader *ocr.Agent
 }
 
 type page struct {
@@ -60,7 +60,7 @@ func New(st *store.Store, cfg Config) (*Server, error) {
 	r.MaxMultipartMemory = 12 << 20
 	r.SetHTMLTemplate(tmpl)
 
-	s := &Server{store: st, engine: r, tmpl: tmpl, cfg: cfg, ocr: ocr.New(cfg.OCR)}
+	s := &Server{store: st, engine: r, tmpl: tmpl, cfg: cfg, reader: ocr.New(cfg.OCR)}
 	s.routes()
 	return s, nil
 }
@@ -79,11 +79,11 @@ func (s *Server) routes() {
 
 	s.engine.GET("/", s.index)
 
-	s.engine.GET("/ocr", s.ocrPage)
-	s.engine.POST("/ocr", s.ocrScan)
-	s.engine.GET("/ocr/preview/:id", s.ocrPreview)
-	s.engine.GET("/ocr/:id", s.ocrReview)
-	s.engine.POST("/ocr/:id", s.ocrConfirm)
+	s.engine.GET("/receipts", s.receipts)
+	s.engine.POST("/receipts", s.scanReceipt)
+	s.engine.GET("/receipts/:id/preview", s.receiptPreview)
+	s.engine.GET("/receipts/:id", s.showReceipt)
+	s.engine.POST("/receipts/:id", s.confirmReceipt)
 
 	s.engine.GET("/units", s.units)
 	s.engine.POST("/units", s.createUnit)

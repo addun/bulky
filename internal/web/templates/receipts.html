@@ -1,11 +1,11 @@
 {{template "header" .}}
-<h1>Scan a bill</h1>
-<p class="lede">Photograph a receipt. The reader stores the raw AI JSON on a recipe; you check the product list before it becomes purchases.</p>
+<h1>Receipts</h1>
+<p class="lede">Photograph a receipt. The reader stores the raw AI JSON; you check the product list before it becomes purchases.</p>
 
 {{if not .Configured}}
   <p class="banner">The reader is off until you set <code>OCR_API_KEY</code> (OpenAI) or <code>OCR_BASE_URL</code> (any OpenAI-compatible vision API, including a local server). Optional: <code>OCR_MODEL</code>, default {{.Model}}.</p>
 {{else}}
-<form class="stack" method="post" action="/ocr" enctype="multipart/form-data" id="ocr-upload">
+<form class="stack scan-form" method="post" action="/receipts" enctype="multipart/form-data" id="receipt-upload">
   <div class="scan-drop" id="scan-drop">
     <p class="scan-heading">Photo of the bill</p>
     <p class="hint">jpeg, png, webp or gif · up to 10 MB</p>
@@ -24,8 +24,7 @@
     </div>
   </div>
   <div class="actions">
-    <button type="submit" class="btn btn-tag" id="ocr-submit">Read the bill</button>
-    <a href="/">Cancel</a>
+    <button type="submit" class="btn btn-tag" id="receipt-submit">Read the bill</button>
   </div>
 </form>
 <script>
@@ -35,8 +34,8 @@
   var wrap = document.getElementById("scan-drop");
   var preview = document.getElementById("scan-preview");
   var img = document.getElementById("scan-preview-img");
-  var form = document.getElementById("ocr-upload");
-  var btn = document.getElementById("ocr-submit");
+  var form = document.getElementById("receipt-upload");
+  var btn = document.getElementById("receipt-submit");
   var url = "";
   var busy = false;
 
@@ -149,5 +148,35 @@
   });
 })();
 </script>
+{{end}}
+
+{{if not .Receipts}}
+  <p class="empty">No receipts yet.</p>
+{{else}}
+  <ul class="ledger">
+    {{range .Receipts}}
+    <li>
+      {{if or (eq .Status "ready") (eq .Status "migrated")}}
+      <a class="row" href="/receipts/{{.ID}}">
+      {{else}}
+      <div class="row">
+      {{end}}
+        {{if .ImagePath}}
+          <img class="thumb thumb-slip" src="/receipts/{{.ID}}/preview" alt="">
+        {{else}}
+          <span class="thumb thumb-empty" aria-hidden="true"></span>
+        {{end}}
+        <span class="row-main">
+          <strong>{{date .CreatedAt}}</strong>
+          <span class="meta">{{.StatusLabel}}</span>
+        </span>
+      {{if or (eq .Status "ready") (eq .Status "migrated")}}
+      </a>
+      {{else}}
+      </div>
+      {{end}}
+    </li>
+    {{end}}
+  </ul>
 {{end}}
 {{template "footer" .}}

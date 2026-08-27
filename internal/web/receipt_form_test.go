@@ -39,12 +39,12 @@ func TestHydrateBillMatchesCatalog(t *testing.T) {
 	}
 }
 
-func TestParseOCRForm(t *testing.T) {
+func TestParseReceiptForm(t *testing.T) {
 	get := func(form map[string]string) func(string) string {
 		return func(k string) string { return form[k] }
 	}
 
-	in, _, msg := parseOCRForm(get(map[string]string{
+	in, _, msg := parseReceiptForm(get(map[string]string{
 		"bought_on":        "2026-08-20",
 		"line_count":       "3",
 		"include_0":        "1",
@@ -80,7 +80,7 @@ func TestParseOCRForm(t *testing.T) {
 		t.Fatalf("line1: %#v", in.Lines[1])
 	}
 
-	in, view, msg := parseOCRForm(get(map[string]string{
+	in, view, msg := parseReceiptForm(get(map[string]string{
 		"bought_on":        "2026-08-20",
 		"company_id":       "7",
 		"line_count":       "1",
@@ -96,7 +96,7 @@ func TestParseOCRForm(t *testing.T) {
 		t.Fatalf("company_id: in=%d view=%d", in.CompanyID, view.CompanyID)
 	}
 
-	_, _, msg = parseOCRForm(get(map[string]string{
+	_, _, msg = parseReceiptForm(get(map[string]string{
 		"bought_on":        "2026-08-20",
 		"line_count":       "1",
 		"include_0":        "1",
@@ -111,7 +111,7 @@ func TestParseOCRForm(t *testing.T) {
 	}
 }
 
-func TestOCRReviewTemplateExecutes(t *testing.T) {
+func TestReceiptReviewTemplateExecutes(t *testing.T) {
 	dir := t.TempDir()
 	st, err := store.Open(dir)
 	if err != nil {
@@ -123,14 +123,14 @@ func TestOCRReviewTemplateExecutes(t *testing.T) {
 		t.Fatal(err)
 	}
 	var buf strings.Builder
-	err = srv.tmpl.ExecuteTemplate(&buf, "ocr_review.html", gin.H{
+	err = srv.tmpl.ExecuteTemplate(&buf, "receipt_review.html", gin.H{
 		"Page": page{Title: "Confirm bill", Currency: "PLN"},
-		"View": ocrView{
-			RecipeID:  3,
+		"View": receiptView{
+			ReceiptID: 3,
 			ImagePath: "aabbccddeeff00112233445566778899",
-			Status:    store.RecipeReady,
+			Status:    store.ReceiptReady,
 			BoughtOn:  "2026-08-20",
-			Lines: []ocrLineView{{
+			Lines: []receiptLineView{{
 				Include: true, ProductName: "Rice", UnitID: 1, Quantity: "10", Amount: "40.00", ReceiptName: "RYZ",
 			}},
 		},
@@ -145,8 +145,8 @@ func TestOCRReviewTemplateExecutes(t *testing.T) {
 	if !strings.Contains(body, "Save purchases") || !strings.Contains(body, "Rice") {
 		t.Fatalf("unexpected body: %s", body)
 	}
-	if !strings.Contains(body, `name="recipe_id"`) {
-		t.Fatal("missing recipe id")
+	if !strings.Contains(body, `name="receipt_id"`) {
+		t.Fatal("missing receipt id")
 	}
 	if !strings.Contains(body, `name="company_id"`) || !strings.Contains(body, "Local Mill") {
 		t.Fatal("review form should let you pick a company")
@@ -154,9 +154,12 @@ func TestOCRReviewTemplateExecutes(t *testing.T) {
 	if strings.Contains(body, "Street name") {
 		t.Fatal("review form should not ask for company address")
 	}
+	if !strings.Contains(body, `src="/receipts/3/preview"`) {
+		t.Fatal("preview should be nested under the receipt")
+	}
 }
 
-func TestOCRPageRendersWhenUnconfigured(t *testing.T) {
+func TestReceiptsPageRendersWhenUnconfigured(t *testing.T) {
 	dir := t.TempDir()
 	st, err := store.Open(dir)
 	if err != nil {
@@ -168,20 +171,23 @@ func TestOCRPageRendersWhenUnconfigured(t *testing.T) {
 		t.Fatal(err)
 	}
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/ocr", nil)
+	req := httptest.NewRequest(http.MethodGet, "/receipts", nil)
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d", rec.Code)
 	}
 	body := rec.Body.String()
-	if !strings.Contains(body, "Scan a bill") {
+	if !strings.Contains(body, "<h1>Receipts</h1>") {
 		t.Fatal("missing heading")
 	}
 	if !strings.Contains(body, "OCR_API_KEY") {
 		t.Fatal("missing setup hint")
 	}
-	if !strings.Contains(body, "Scan bill") {
-		t.Fatal("missing nav")
+	if !strings.Contains(body, `href="/receipts"`) {
+		t.Fatal("missing receipts nav")
+	}
+	if !strings.Contains(body, "No receipts yet.") {
+		t.Fatal("empty list")
 	}
 
 	srv, err = New(st, Config{OCR: ocr.Config{APIKey: "sk-test"}})
@@ -189,7 +195,7 @@ func TestOCRPageRendersWhenUnconfigured(t *testing.T) {
 		t.Fatal(err)
 	}
 	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodGet, "/ocr", nil)
+	req = httptest.NewRequest(http.MethodGet, "/receipts", nil)
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("configured status %d", rec.Code)
@@ -212,14 +218,53 @@ func TestOCRPageRendersWhenUnconfigured(t *testing.T) {
 	}
 }
 
-func TestOCRReviewLoadsRecipeJSON(t *testing.T) {
+func TestReceiptsPageListsReceipts(t *testing.T) {
 	dir := t.TempDir()
 	st, err := store.Open(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer st.Close()
-	r, err := st.CreateRecipe("aabbccddeeff00112233445566778899")
+	r, err := st.CreateReceipt("aabbccddeeff00112233445566778899")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SaveAIResponse(r.ID, `{"bought_on":"2026-08-20","lines":[]}`); err != nil {
+		t.Fatal(err)
+	}
+	srv, err := New(st, Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/receipts", nil)
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if strings.Contains(body, "No receipts yet.") {
+		t.Fatal("should list receipts")
+	}
+	if !strings.Contains(body, `href="/receipts/`+itoa(r.ID)+`"`) {
+		t.Fatal("missing receipt link")
+	}
+	if !strings.Contains(body, "To confirm") {
+		t.Fatal("missing status")
+	}
+	if !strings.Contains(body, `src="/receipts/`+itoa(r.ID)+`/preview"`) {
+		t.Fatal("preview should be nested under the receipt")
+	}
+}
+
+func TestReceiptReviewLoadsReceiptJSON(t *testing.T) {
+	dir := t.TempDir()
+	st, err := store.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	r, err := st.CreateReceipt("aabbccddeeff00112233445566778899")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -231,7 +276,7 @@ func TestOCRReviewLoadsRecipeJSON(t *testing.T) {
 		t.Fatal(err)
 	}
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/ocr/"+itoa(r.ID), nil)
+	req := httptest.NewRequest(http.MethodGet, "/receipts/"+itoa(r.ID), nil)
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
@@ -261,7 +306,7 @@ func TestPickFormFileUsesCameraField(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)
-	req := httptest.NewRequest(http.MethodPost, "/ocr", &body)
+	req := httptest.NewRequest(http.MethodPost, "/receipts", &body)
 	req.Header.Set("Content-Type", w.FormDataContentType())
 	c.Request = req
 
