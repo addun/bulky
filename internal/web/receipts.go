@@ -67,14 +67,7 @@ func (s *Server) scanReceipt(c *gin.Context) {
 		return
 	}
 
-	catalog, _, _, err := s.receiptCatalog()
-	if err != nil {
-		_ = s.store.FailReceipt(receipt.ID)
-		s.renderReceipts(c, http.StatusInternalServerError, "Could not load the catalog.")
-		return
-	}
-
-	_, rawJSON, err := s.reader.Extract(jpeg, catalog)
+	_, rawJSON, err := s.reader.Extract(jpeg)
 	if err != nil {
 		_ = s.store.FailReceipt(receipt.ID)
 		msg := "Could not read the bill: " + err.Error()
@@ -270,37 +263,6 @@ func (s *Server) receiptLookups() ([]store.ProductListItem, []store.Unit, []stor
 		return nil, nil, nil, err
 	}
 	return products, units, companies, nil
-}
-
-func (s *Server) receiptCatalog() (ocr.Catalog, []store.ProductListItem, []store.Unit, error) {
-	products, units, _, err := s.receiptLookups()
-	if err != nil {
-		return ocr.Catalog{}, nil, nil, err
-	}
-	aliases, err := s.store.ListAliases()
-	if err != nil {
-		return ocr.Catalog{}, nil, nil, err
-	}
-	byProduct := map[int64][]ocr.CatalogAlias{}
-	for _, a := range aliases {
-		byProduct[a.ProductID] = append(byProduct[a.ProductID], ocr.CatalogAlias{
-			Alias: a.Alias, CompanyID: a.CompanyID, CompanyName: a.CompanyName,
-		})
-	}
-	cat := ocr.Catalog{
-		Products: make([]ocr.CatalogProduct, 0, len(products)),
-		Units:    make([]ocr.CatalogUnit, 0, len(units)),
-	}
-	for _, p := range products {
-		cat.Products = append(cat.Products, ocr.CatalogProduct{
-			ID: p.ID, Name: p.Name, UnitID: p.UnitID, UnitName: p.UnitName,
-			Aliases: byProduct[p.ID],
-		})
-	}
-	for _, u := range units {
-		cat.Units = append(cat.Units, ocr.CatalogUnit{ID: u.ID, Name: u.Name})
-	}
-	return cat, products, units, nil
 }
 
 func (s *Server) receiptModel() string {

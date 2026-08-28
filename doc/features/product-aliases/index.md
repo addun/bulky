@@ -4,4 +4,4 @@ The same thing often has different names on the shelf and on the bill. Lidl migh
 
 Leave the company blank when the name should apply everywhere. Pick a company when a shop has its own wording, or when two shops print the same words for different products.
 
-Add aliases from **Aliases** in the header, or from a product (the Aliases link next to Edit).
+Add aliases from **Aliases** in the header, or from a product (the Aliases link next to Edit, which lists only that product). Saving a **New product** from a bill also stores the printed till name as an alias; see [Receipt matching](../receipt-matching/index.md).

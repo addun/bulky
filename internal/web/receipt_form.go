@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/adrian/bulkly/internal/match"
 	"github.com/adrian/bulkly/internal/ocr"
 	"github.com/adrian/bulkly/internal/store"
 )
@@ -37,13 +38,21 @@ type receiptLineView struct {
 
 func hydrateBill(bill ocr.Bill, products []store.ProductListItem, units []store.Unit, aliases []store.ProductAlias) ocr.Bill {
 	productByID := map[int64]store.ProductListItem{}
-	productByName := map[string]store.ProductListItem{}
+	var names []match.Label
 	for _, p := range products {
 		productByID[p.ID] = p
-		key := strings.ToLower(p.Name)
-		if _, ok := productByName[key]; !ok {
-			productByName[key] = p
+		names = append(names, match.Label{ProductID: p.ID, Text: p.Name})
+	}
+	var shop, global []match.Label
+	for _, a := range aliases {
+		lab := match.Label{ProductID: a.ProductID, Text: a.Alias}
+		if a.CompanyID > 0 {
+			if a.CompanyID == bill.CompanyID {
+				shop = append(shop, lab)
+			}
+			continue
 		}
+		global = append(global, lab)
 	}
 	unitByID := map[int64]store.Unit{}
 	unitByName := map[string]store.Unit{}
@@ -65,16 +74,7 @@ func hydrateBill(bill ocr.Bill, products []store.ProductListItem, units []store.
 			}
 		}
 		if line.ProductID == 0 {
-			if p, ok := productByName[strings.ToLower(line.ProductName)]; ok {
-				line.ProductID = p.ID
-				line.UnitID = p.UnitID
-			} else if p, ok := productByName[strings.ToLower(line.ReceiptName)]; ok {
-				line.ProductID = p.ID
-				line.UnitID = p.UnitID
-			} else if p, ok := productFromAlias(aliases, productByID, bill.CompanyID, line.ProductName); ok {
-				line.ProductID = p.ID
-				line.UnitID = p.UnitID
-			} else if p, ok := productFromAlias(aliases, productByID, bill.CompanyID, line.ReceiptName); ok {
+			if p, ok := matchLineProduct(line.ReceiptName, line.ProductName, shop, global, names, productByID); ok {
 				line.ProductID = p.ID
 				line.UnitID = p.UnitID
 			}
@@ -92,25 +92,14 @@ func hydrateBill(bill ocr.Bill, products []store.ProductListItem, units []store.
 	return bill
 }
 
-func productFromAlias(aliases []store.ProductAlias, products map[int64]store.ProductListItem, companyID int64, name string) (store.ProductListItem, bool) {
-	key := strings.ToLower(strings.TrimSpace(name))
-	if key == "" {
-		return store.ProductListItem{}, false
-	}
-	if companyID > 0 {
-		for _, a := range aliases {
-			if a.CompanyID == companyID && strings.ToLower(a.Alias) == key {
-				if p, ok := products[a.ProductID]; ok {
-					return p, true
-				}
-			}
+func matchLineProduct(receiptName, productName string, shop, global, names []match.Label, products map[int64]store.ProductListItem) (store.ProductListItem, bool) {
+	for _, q := range []string{receiptName, productName} {
+		id, ok := match.Product(q, shop, global, names)
+		if !ok {
+			continue
 		}
-	}
-	for _, a := range aliases {
-		if a.CompanyID == 0 && strings.ToLower(a.Alias) == key {
-			if p, ok := products[a.ProductID]; ok {
-				return p, true
-			}
+		if p, found := products[id]; found {
+			return p, true
 		}
 	}
 	return store.ProductListItem{}, false
@@ -249,6 +238,7 @@ func parseReceiptForm(get func(string) string) (store.BillImport, receiptView, s
 			}
 			item.ProductName = line.ProductName
 			item.UnitID = line.UnitID
+			item.ReceiptName = line.ReceiptName
 		}
 		in.Lines = append(in.Lines, item)
 	}

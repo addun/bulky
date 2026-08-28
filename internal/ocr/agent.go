@@ -3,7 +3,6 @@ package ocr
 import (
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -40,7 +39,7 @@ func (a *Agent) Configured() bool {
 	return a != nil && a.cfg.Configured()
 }
 
-func (a *Agent) Extract(image []byte, catalog Catalog) (Bill, []byte, error) {
+func (a *Agent) Extract(image []byte) (Bill, []byte, error) {
 	if a == nil || !a.cfg.Configured() {
 		return Bill{}, nil, ErrNotConfigured
 	}
@@ -48,11 +47,7 @@ func (a *Agent) Extract(image []byte, catalog Catalog) (Bill, []byte, error) {
 	if err != nil {
 		return Bill{}, nil, err
 	}
-	catalogJSON, err := json.Marshal(catalog)
-	if err != nil {
-		return Bill{}, nil, err
-	}
-	body, err := a.chat(jpeg, string(catalogJSON))
+	body, err := a.chat(jpeg)
 	if err != nil {
 		return Bill{}, nil, err
 	}
@@ -73,7 +68,7 @@ func (a *Agent) Extract(image []byte, catalog Catalog) (Bill, []byte, error) {
 	return bill, rawJSON, nil
 }
 
-func (a *Agent) chat(jpeg []byte, catalogJSON string) ([]byte, error) {
+func (a *Agent) chat(jpeg []byte) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 
@@ -88,7 +83,7 @@ func (a *Agent) chat(jpeg []byte, catalogJSON string) ([]byte, error) {
 			{
 				Role: openai.ChatMessageRoleUser,
 				MultiContent: []openai.ChatMessagePart{
-					{Type: openai.ChatMessagePartTypeText, Text: userPrompt(catalogJSON)},
+					{Type: openai.ChatMessagePartTypeText, Text: userPrompt},
 					{
 						Type: openai.ChatMessagePartTypeImageURL,
 						ImageURL: &openai.ChatMessageImageURL{

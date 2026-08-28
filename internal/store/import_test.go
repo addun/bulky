@@ -74,6 +74,149 @@ func TestImportBillCreatesProductsAndPurchases(t *testing.T) {
 	}
 }
 
+func TestImportBillCreatesAliasFromReceiptName(t *testing.T) {
+	s, kg, _, _, lidl, _ := aliasFixture(t)
+
+	res, err := s.ImportBill(BillImport{
+		CompanyID: lidl.ID,
+		BoughtOn:  "2026-08-20",
+		Lines: []BillLineInput{
+			{ProductName: "Pastry flour", ReceiptName: "MAKA TORTOWA 1KG", UnitID: kg.ID, Quantity: mustDec(t, "1"), Amount: mustDec(t, "4.50")},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Purchases != 1 {
+		t.Fatalf("purchases: %d", res.Purchases)
+	}
+	aliases, err := s.ListAliasesByProduct(res.ProductIDs[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(aliases) != 1 || aliases[0].Alias != "MAKA TORTOWA 1KG" || aliases[0].CompanyID != lidl.ID {
+		t.Fatalf("shop alias: %#v", aliases)
+	}
+
+	global, err := s.ImportBill(BillImport{
+		BoughtOn: "2026-08-21",
+		Lines: []BillLineInput{
+			{ProductName: "Sugar", ReceiptName: "CUKIER 1KG", UnitID: kg.ID, Quantity: mustDec(t, "1"), Amount: mustDec(t, "3.00")},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	galias, err := s.ListAliasesByProduct(global.ProductIDs[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(galias) != 1 || galias[0].Alias != "CUKIER 1KG" || galias[0].CompanyID != 0 {
+		t.Fatalf("global alias: %#v", galias)
+	}
+}
+
+func TestImportBillSkipsAliasWhenNamesMatch(t *testing.T) {
+	s, kg, _, _, _, _ := aliasFixture(t)
+	res, err := s.ImportBill(BillImport{
+		BoughtOn: "2026-08-20",
+		Lines: []BillLineInput{
+			{ProductName: "Oats", ReceiptName: "oats", UnitID: kg.ID, Quantity: mustDec(t, "1"), Amount: mustDec(t, "2.00")},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	aliases, err := s.ListAliasesByProduct(res.ProductIDs[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(aliases) != 0 {
+		t.Fatalf("expected no alias: %#v", aliases)
+	}
+}
+
+func TestImportBillSkipsDuplicateAlias(t *testing.T) {
+	s, kg, flour, _, _, _ := aliasFixture(t)
+	if _, err := s.CreateAlias(flour.ID, 0, "MAKA TORTOWA"); err != nil {
+		t.Fatal(err)
+	}
+	res, err := s.ImportBill(BillImport{
+		BoughtOn: "2026-08-20",
+		Lines: []BillLineInput{
+			{ProductName: "Wheat flour", ReceiptName: "MAKA TORTOWA", UnitID: kg.ID, Quantity: mustDec(t, "1"), Amount: mustDec(t, "4.00")},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Purchases != 1 {
+		t.Fatalf("purchase should still save: %#v", res)
+	}
+	aliases, err := s.ListAliasesByProduct(res.ProductIDs[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(aliases) != 0 {
+		t.Fatalf("duplicate alias should be skipped: %#v", aliases)
+	}
+}
+
+func TestImportBillTwoReceiptNamesOnNewProduct(t *testing.T) {
+	s, kg, _, _, _, _ := aliasFixture(t)
+	res, err := s.ImportBill(BillImport{
+		BoughtOn: "2026-08-20",
+		Lines: []BillLineInput{
+			{ProductName: "Pastry flour", ReceiptName: "MAKA TORTOWA", UnitID: kg.ID, Quantity: mustDec(t, "1"), Amount: mustDec(t, "4.00")},
+			{ProductName: "Pastry flour", ReceiptName: "M.TORTOWA", UnitID: kg.ID, Quantity: mustDec(t, "2"), Amount: mustDec(t, "8.00")},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Purchases != 2 || res.ProductIDs[0] != res.ProductIDs[1] {
+		t.Fatalf("same new product: %#v", res)
+	}
+	aliases, err := s.ListAliasesByProduct(res.ProductIDs[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]bool{}
+	for _, a := range aliases {
+		got[a.Alias] = true
+		if a.CompanyID != 0 {
+			t.Fatalf("expected global: %#v", a)
+		}
+	}
+	if !got["MAKA TORTOWA"] || !got["M.TORTOWA"] {
+		t.Fatalf("aliases: %#v", aliases)
+	}
+}
+
+func TestImportBillDoesNotAliasExistingProduct(t *testing.T) {
+	s, kg, flour, _, _, _ := aliasFixture(t)
+	res, err := s.ImportBill(BillImport{
+		BoughtOn: "2026-08-20",
+		Lines: []BillLineInput{
+			{ProductID: flour.ID, ReceiptName: "MAKA TORTOWA", Quantity: mustDec(t, "1"), Amount: mustDec(t, "4.00")},
+			{ProductName: "Cake flour", ReceiptName: "SHOULD NOT APPLY", UnitID: kg.ID, Quantity: mustDec(t, "1"), Amount: mustDec(t, "4.00")},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.ProductIDs[0] != flour.ID || res.ProductIDs[1] != flour.ID {
+		t.Fatalf("should reuse flour: %#v", res)
+	}
+	aliases, err := s.ListAliasesByProduct(flour.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(aliases) != 0 {
+		t.Fatalf("existing product should not gain aliases: %#v", aliases)
+	}
+}
+
 func TestImportBillEmptyRejected(t *testing.T) {
 	dir := t.TempDir()
 	s, err := Open(dir)

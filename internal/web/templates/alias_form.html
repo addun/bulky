@@ -18,9 +18,10 @@
     </select>
   </label>
   <label>Alias <input name="alias" required value="{{.Alias.Alias}}" autofocus></label>
+  {{if .FromProduct}}<input type="hidden" name="from_product" value="{{.FromProduct}}">{{end}}
   <div class="actions">
     <button type="submit" class="btn btn-tag">Save alias</button>
-    <a href="/aliases">Cancel</a>
+    <a href="{{.Cancel}}">Cancel</a>
   </div>
 </form>
 {{template "footer" .}}
