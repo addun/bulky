@@ -1,12 +1,14 @@
 {{template "header" .}}
 <h1>{{if .Purchase.IsPrice}}Edit price{{else}}Edit purchase{{end}}</h1>
 <p class="lede">{{.Product.Name}} · {{.Product.UnitName}}</p>
-<form class="stack" method="post" action="/purchases/{{.Purchase.ID}}">
+<form class="stack" method="post" action="/purchases/{{.Purchase.ID}}" data-pack-form>
   {{if .Purchase.ReceiptID}}
   <p class="meta">From <a href="/receipts/{{.Purchase.ReceiptID}}">receipt {{.Purchase.ReceiptID}}</a></p>
   {{end}}
   <label>Date <input type="date" name="bought_on" required value="{{.Purchase.BoughtOn}}"></label>
-  <label>Quantity ({{.Product.UnitName}}) <input name="quantity" required inputmode="decimal" value="{{qty .Purchase.Quantity}}"></label>
+  <label>Packages <input name="packages" required inputmode="decimal" value="{{qty .Purchase.FormPackages}}" data-pack-count></label>
+  <label>Package size ({{.Product.UnitName}}) <input name="package_size" required inputmode="decimal" value="{{qty .Purchase.FormPackSize}}" data-pack-size></label>
+  <p class="hint pack-total" data-pack-total hidden></p>
   <label>Amount ({{.Page.Currency}}) <input name="amount" required inputmode="decimal" value="{{.Purchase.Amount}}"></label>
   <label>
     Company

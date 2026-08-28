@@ -32,9 +32,12 @@
 
 <section>
   <h2>Log a buy or a price</h2>
-  <form class="grid-form" method="post" action="/products/{{.Product.ID}}/purchases">
+  <p class="lede">Enter how many packs and the size of one pack. Total {{.Product.UnitName}} is calculated for you (4 × 100&nbsp;g → 400&nbsp;g). A loose buy is 1 pack of whatever you weighed.</p>
+  <form class="grid-form" method="post" action="/products/{{.Product.ID}}/purchases" data-pack-form>
     <label>Date <input type="date" name="bought_on" required value="{{.Page.Today}}"></label>
-    <label>Quantity ({{.Product.UnitName}}) <input name="quantity" required inputmode="decimal" placeholder="1.5"></label>
+    <label>Packages <input name="packages" required inputmode="decimal" placeholder="4" data-pack-count></label>
+    <label>Package size ({{.Product.UnitName}}) <input name="package_size" required inputmode="decimal" placeholder="100" value="{{if .HasLastPack}}{{qty .LastPackSize}}{{end}}" data-pack-size></label>
+    <p class="hint pack-total" data-pack-total hidden></p>
     <label>Amount ({{.Page.Currency}}) <input name="amount" required inputmode="decimal" placeholder="12.40"></label>
     <label>
       Company
@@ -77,7 +80,14 @@
         <tr{{if .IsPrice}} class="price-row"{{end}}>
           <td>{{date .BoughtOn}}{{if .IsPrice}} <span class="kind">price</span>{{end}}</td>
           <td>{{if .CompanyID}}{{(index $.CompanyByID .CompanyID).Name}}{{else}}—{{end}}</td>
-          <td>{{qty .Quantity}} {{$.Product.UnitName}}</td>
+          <td>
+            {{if .HasPackage}}
+              {{qty .PackageCount}} × {{qty .PackageSize}} {{$.Product.UnitName}}
+              <span class="meta">({{qty .Quantity}} {{$.Product.UnitName}})</span>
+            {{else}}
+              {{qty .Quantity}} {{$.Product.UnitName}}
+            {{end}}
+          </td>
           <td>{{money .Amount}}</td>
           <td>{{unitPrice .Amount .Quantity}}</td>
           <td>{{if .ReceiptID}}<a href="/receipts/{{.ReceiptID}}">Receipt {{.ReceiptID}}</a>{{else}}—{{end}}</td>

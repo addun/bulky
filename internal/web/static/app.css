@@ -336,6 +336,15 @@ label {
   font-weight: 500;
 }
 
+.pack-total {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.pack-total[hidden] {
+  display: none;
+}
+
 label .hint {
   font-weight: 400;
 }
