@@ -27,13 +27,14 @@ func (v receiptView) Migrated() bool {
 }
 
 type receiptLineView struct {
-	Include     bool
-	ProductID   int64
-	ProductName string
-	UnitID      int64
-	Quantity    string
-	Amount      string
-	ReceiptName string
+	Include      bool
+	ProductID    int64
+	ProductName  string
+	UnitID       int64
+	PackageCount string
+	PackageSize  string
+	Amount       string
+	ReceiptName  string
 }
 
 func hydrateBill(bill ocr.Bill, products []store.ProductListItem, units []store.Unit, aliases []store.ProductAlias) ocr.Bill {
@@ -119,14 +120,16 @@ func billToView(bill ocr.Bill, receiptID int64, imagePath, status string) receip
 		if name == "" {
 			name = line.ReceiptName
 		}
+		packCount, packSize := linePackFields(line)
 		view.Lines = append(view.Lines, receiptLineView{
-			Include:     true,
-			ProductID:   line.ProductID,
-			ProductName: name,
-			UnitID:      line.UnitID,
-			Quantity:    line.Quantity,
-			Amount:      line.Amount,
-			ReceiptName: line.ReceiptName,
+			Include:      true,
+			ProductID:    line.ProductID,
+			ProductName:  name,
+			UnitID:       line.UnitID,
+			PackageCount: packCount,
+			PackageSize:  packSize,
+			Amount:       line.Amount,
+			ReceiptName:  line.ReceiptName,
 		})
 	}
 	return view
@@ -156,13 +159,14 @@ func viewToRawJSON(view receiptView) (string, error) {
 	}
 	for _, line := range view.Lines {
 		bill.Lines = append(bill.Lines, ocr.Line{
-			ReceiptName: line.ReceiptName,
-			ProductName: line.ProductName,
-			ProductID:   line.ProductID,
-			UnitID:      line.UnitID,
-			Quantity:    line.Quantity,
-			Amount:      line.Amount,
-			Skip:        !line.Include,
+			ReceiptName:  line.ReceiptName,
+			ProductName:  line.ProductName,
+			ProductID:    line.ProductID,
+			UnitID:       line.UnitID,
+			PackageCount: line.PackageCount,
+			PackageSize:  line.PackageSize,
+			Amount:       line.Amount,
+			Skip:         !line.Include,
 		})
 	}
 	raw, err := json.Marshal(bill)
@@ -195,13 +199,14 @@ func parseReceiptView(get func(string) string) receiptView {
 			productID, _ = strconv.ParseInt(choice, 10, 64)
 		}
 		view.Lines = append(view.Lines, receiptLineView{
-			Include:     get("include_"+p) == "1",
-			ProductID:   productID,
-			ProductName: strings.TrimSpace(get("product_name_" + p)),
-			UnitID:      formInt(get("unit_id_" + p)),
-			Quantity:    strings.TrimSpace(get("quantity_" + p)),
-			Amount:      strings.TrimSpace(get("amount_" + p)),
-			ReceiptName: strings.TrimSpace(get("receipt_name_" + p)),
+			Include:      get("include_"+p) == "1",
+			ProductID:    productID,
+			ProductName:  strings.TrimSpace(get("product_name_" + p)),
+			UnitID:       formInt(get("unit_id_" + p)),
+			PackageCount: strings.TrimSpace(get("packages_" + p)),
+			PackageSize:  strings.TrimSpace(get("package_size_" + p)),
+			Amount:       strings.TrimSpace(get("amount_" + p)),
+			ReceiptName:  strings.TrimSpace(get("receipt_name_" + p)),
 		})
 	}
 	return view
@@ -218,15 +223,20 @@ func parseReceiptForm(get func(string) string) (store.BillImport, receiptView, s
 		if !line.Include {
 			continue
 		}
-		qty, err := parseDecimal(line.Quantity, 8, false)
+		packages, err := parseDecimal(line.PackageCount, 8, false)
 		if err != nil {
-			return store.BillImport{}, view, fmt.Sprintf("Line %d: quantity %s.", i+1, err.Error())
+			return store.BillImport{}, view, fmt.Sprintf("Line %d: packages %s.", i+1, err.Error())
 		}
+		packSize, err := parseDecimal(line.PackageSize, 8, false)
+		if err != nil {
+			return store.BillImport{}, view, fmt.Sprintf("Line %d: package size %s.", i+1, err.Error())
+		}
+		qty := packages.Mul(packSize)
 		amount, err := parseDecimal(line.Amount, 2, true)
 		if err != nil {
 			return store.BillImport{}, view, fmt.Sprintf("Line %d: amount %s.", i+1, err.Error())
 		}
-		item := store.BillLineInput{Quantity: qty, Amount: amount}
+		item := store.BillLineInput{Quantity: qty, PackageCount: packages, PackageSize: packSize, Amount: amount}
 		if line.ProductID > 0 {
 			item.ProductID = line.ProductID
 		} else {
@@ -269,4 +279,21 @@ func unitKey(s string) string {
 	s = strings.ToLower(strings.TrimSpace(s))
 	s = strings.TrimSuffix(s, ".")
 	return s
+}
+
+func linePackFields(line ocr.Line) (count, size string) {
+	count = strings.TrimSpace(line.PackageCount)
+	size = strings.TrimSpace(line.PackageSize)
+	if count != "" && size != "" {
+		return count, size
+	}
+	if q := strings.TrimSpace(line.Quantity); q != "" {
+		if count == "" {
+			count = "1"
+		}
+		if size == "" {
+			size = q
+		}
+	}
+	return count, size
 }

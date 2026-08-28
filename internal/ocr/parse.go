@@ -28,6 +28,8 @@ func parseBill(raw []byte) (Bill, error) {
 			bill.Lines[i].ProductName = bill.Lines[i].ReceiptName
 		}
 		bill.Lines[i].UnitName = strings.TrimSpace(bill.Lines[i].UnitName)
+		bill.Lines[i].PackageCount = normalizeNumber(bill.Lines[i].PackageCount)
+		bill.Lines[i].PackageSize = normalizeNumber(bill.Lines[i].PackageSize)
 		bill.Lines[i].Quantity = normalizeNumber(bill.Lines[i].Quantity)
 		bill.Lines[i].Amount = normalizeNumber(bill.Lines[i].Amount)
 		bill.Lines[i].SkipReason = strings.TrimSpace(bill.Lines[i].SkipReason)
@@ -164,15 +166,17 @@ type rawBill struct {
 }
 
 type rawLine struct {
-	ReceiptName string  `json:"receipt_name"`
-	ProductName string  `json:"product_name"`
-	ProductID   flexInt `json:"product_id"`
-	UnitID      flexInt `json:"unit_id"`
-	UnitName    string  `json:"unit_name"`
-	Quantity    flexNum `json:"quantity"`
-	Amount      flexNum `json:"amount"`
-	Skip        bool    `json:"skip"`
-	SkipReason  string  `json:"skip_reason"`
+	ReceiptName  string  `json:"receipt_name"`
+	ProductName  string  `json:"product_name"`
+	ProductID    flexInt `json:"product_id"`
+	UnitID       flexInt `json:"unit_id"`
+	UnitName     string  `json:"unit_name"`
+	PackageCount flexNum `json:"package_count"`
+	PackageSize  flexNum `json:"package_size"`
+	Quantity     flexNum `json:"quantity"`
+	Amount       flexNum `json:"amount"`
+	Skip         bool    `json:"skip"`
+	SkipReason   string  `json:"skip_reason"`
 }
 
 func (b *Bill) UnmarshalJSON(data []byte) error {
@@ -186,15 +190,17 @@ func (b *Bill) UnmarshalJSON(data []byte) error {
 	b.Lines = make([]Line, len(raw.Lines))
 	for i, line := range raw.Lines {
 		b.Lines[i] = Line{
-			ReceiptName: line.ReceiptName,
-			ProductName: line.ProductName,
-			ProductID:   int64(line.ProductID),
-			UnitID:      int64(line.UnitID),
-			UnitName:    line.UnitName,
-			Quantity:    string(line.Quantity),
-			Amount:      string(line.Amount),
-			Skip:        line.Skip,
-			SkipReason:  line.SkipReason,
+			ReceiptName:  line.ReceiptName,
+			ProductName:  line.ProductName,
+			ProductID:    int64(line.ProductID),
+			UnitID:       int64(line.UnitID),
+			UnitName:     line.UnitName,
+			PackageCount: string(line.PackageCount),
+			PackageSize:  string(line.PackageSize),
+			Quantity:     string(line.Quantity),
+			Amount:       string(line.Amount),
+			Skip:         line.Skip,
+			SkipReason:   line.SkipReason,
 		}
 	}
 	return nil

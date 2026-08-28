@@ -228,3 +228,35 @@ func TestImportBillEmptyRejected(t *testing.T) {
 		t.Fatal("expected error")
 	}
 }
+
+func TestImportBillStoresPackages(t *testing.T) {
+	dir := t.TempDir()
+	s, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	units, err := s.ListUnits()
+	if err != nil || len(units) == 0 {
+		t.Fatalf("units: %v", err)
+	}
+	res, err := s.ImportBill(BillImport{
+		BoughtOn: "2026-08-20",
+		Lines: []BillLineInput{
+			{ProductName: "Oats", UnitID: units[0].ID, Quantity: mustDec(t, "400"), PackageCount: mustDec(t, "4"), PackageSize: mustDec(t, "100"), Amount: mustDec(t, "8.00")},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	buys, err := s.ListPurchases(res.ProductIDs[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(buys) != 1 {
+		t.Fatalf("buys: %d", len(buys))
+	}
+	if buys[0].Quantity.String() != "400" || buys[0].PackageCount.String() != "4" || buys[0].PackageSize.String() != "100" {
+		t.Fatalf("pack: %#v", buys[0])
+	}
+}

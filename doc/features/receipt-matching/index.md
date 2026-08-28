@@ -1,6 +1,6 @@
 # Receipt matching
 
-A bill photo is only used to read the printed lines: the till name, quantity, amount, and unit. Bulkly does not send your product list to the reader. The rest of photographing and confirming a bill is in [Reading bills](../ocr/index.md).
+A bill photo is only used to read the printed lines: the till name, packs, pack size, amount, and unit. Bulkly does not send your product list to the reader. The rest of photographing and confirming a bill is in [Reading bills](../ocr/index.md).
 
 On the confirm screen, each printed name is compared with catalog names and [product aliases](../product-aliases/index.md). Close wording still counts (abbreviations, Polish diacritics, a trailing size like `1kg`, a small typo). A shop-specific alias wins when the bill already has a company; otherwise a global alias or the catalog name is used.
 

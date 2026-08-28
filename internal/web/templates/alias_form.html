@@ -1,26 +1,40 @@
 {{template "header" .}}
-<h1>Edit alias</h1>
-<form class="stack" method="post" action="/aliases/{{.Alias.ID}}">
-  <label>Product
-    <select name="product_id" required>
-      <option value="">Select…</option>
-      {{range .Products}}
-      <option value="{{.ID}}" {{if eq .ID $.Alias.ProductID}}selected{{end}}>{{.Name}}</option>
-      {{end}}
-    </select>
-  </label>
-  <label>Company
-    <select name="company_id">
-      <option value="">Any shop</option>
-      {{range .Companies}}
-      <option value="{{.ID}}" {{if eq .ID $.Alias.CompanyID}}selected{{end}}>{{.Label}}</option>
-      {{end}}
-    </select>
-  </label>
-  <label>Alias <input name="alias" required value="{{.Alias.Alias}}" autofocus></label>
+<h1>{{if .New}}Add alias{{else}}Edit alias{{end}}</h1>
+<form class="stack" method="post" action="{{if .New}}/aliases{{else}}/aliases/{{.Alias.ID}}{{end}}">
   {{if .FromProduct}}<input type="hidden" name="from_product" value="{{.FromProduct}}">{{end}}
-  <div class="actions">
-    <button type="submit" class="btn btn-tag">Save alias</button>
+  <fieldset class="form-group">
+    <legend>For</legend>
+    {{if and .New .LockedProduct}}
+    <input type="hidden" name="product_id" value="{{.Alias.ProductID}}">
+    <p class="meta">Product {{.LockedProduct.Name}}</p>
+    {{else}}
+    <label>Product
+      <select name="product_id" required>
+        <option value="">Select…</option>
+        {{range .Products}}
+        <option value="{{.ID}}" {{if eq .ID $.Alias.ProductID}}selected{{end}}>{{.Name}}</option>
+        {{end}}
+      </select>
+    </label>
+    {{end}}
+    <label>Company
+      <select name="company_id">
+        <option value="">Any shop</option>
+        {{range .Companies}}
+        <option value="{{.ID}}" {{if eq .ID $.Alias.CompanyID}}selected{{end}}>{{.Label}}</option>
+        {{end}}
+      </select>
+    </label>
+  </fieldset>
+  <fieldset class="form-group">
+    <legend>Name on the bill</legend>
+    <label>Alias <input name="alias" required placeholder="Mąka tortowa 1kg" value="{{.Alias.Alias}}" autofocus></label>
+  </fieldset>
+  {{if not .Products}}
+    <p class="hint">No products yet. <a href="/products/new">Add a product</a> first.</p>
+  {{end}}
+  <div class="form-actions">
+    <button type="submit" class="btn btn-tag">{{if .New}}Add alias{{else}}Save alias{{end}}</button>
     <a href="{{.Cancel}}">Cancel</a>
   </div>
 </form>

@@ -23,14 +23,20 @@ func (s *Server) companies(c *gin.Context) {
 	})
 }
 
+func (s *Server) newCompany(c *gin.Context) {
+	s.renderCompanyForm(c, http.StatusOK, store.Company{}, true, "")
+}
+
 func (s *Server) createCompany(c *gin.Context) {
-	_, err := s.store.CreateCompany(companyFields(c))
+	name, street, building, apartment, postal, city := companyFields(c)
+	form := store.Company{Name: name, StreetName: street, BuildingNumber: building, ApartmentNumber: apartment, PostalCode: postal, City: city}
+	_, err := s.store.CreateCompany(name, street, building, apartment, postal, city)
 	if msg := companyFormError(err); msg != "" {
-		c.Redirect(http.StatusSeeOther, "/companies?error="+url.QueryEscape(msg))
+		s.renderCompanyForm(c, http.StatusUnprocessableEntity, form, true, msg)
 		return
 	}
 	if err != nil {
-		c.Redirect(http.StatusSeeOther, "/companies?error="+url.QueryEscape("Could not save the company."))
+		s.renderCompanyForm(c, http.StatusUnprocessableEntity, form, true, "Could not save the company.")
 		return
 	}
 	c.Redirect(http.StatusSeeOther, "/companies")
@@ -54,6 +60,7 @@ func (s *Server) editCompany(c *gin.Context) {
 	c.HTML(http.StatusOK, "company_form.html", gin.H{
 		"Page":    s.page("Edit company", "", ""),
 		"Company": co,
+		"New":     false,
 	})
 }
 
@@ -74,6 +81,7 @@ func (s *Server) updateCompany(c *gin.Context) {
 		c.HTML(http.StatusUnprocessableEntity, "company_form.html", gin.H{
 			"Page":    s.page("Edit company", "", msg),
 			"Company": form,
+			"New":     false,
 		})
 		return
 	}
@@ -182,4 +190,16 @@ func companiesByID(list []store.Company) map[int64]store.Company {
 		m[c.ID] = c
 	}
 	return m
+}
+
+func (s *Server) renderCompanyForm(c *gin.Context, status int, co store.Company, isNew bool, errMsg string) {
+	title := "Edit company"
+	if isNew {
+		title = "Add company"
+	}
+	c.HTML(status, "company_form.html", gin.H{
+		"Page":    s.page(title, "", errMsg),
+		"Company": co,
+		"New":     isNew,
+	})
 }

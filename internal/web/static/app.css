@@ -28,16 +28,36 @@ body {
     var(--paper);
   line-height: 1.45;
   min-height: 100vh;
+  display: grid;
+  grid-template-columns: 15.5rem minmax(0, 1fr);
+  grid-template-rows: auto 1fr;
+  column-gap: 1.5rem;
 }
 
-.mast {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 1.1rem 1.5rem;
+.nav-open {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.topbar {
+  display: none;
+}
+
+.nav-backdrop {
+  display: none;
+}
+
+.rail {
+  grid-row: 1 / -1;
   background: var(--ink);
   color: #f6f3ea;
+  padding: 1.2rem 0.85rem 1.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.3rem;
 }
 
 .wordmark {
@@ -49,25 +69,57 @@ body {
   text-transform: uppercase;
 }
 
-.mast nav {
-  display: flex;
-  gap: 1rem;
-  align-items: center;
+.rail .wordmark {
+  padding: 0 0.55rem;
 }
 
-.mast nav a {
+.rail nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.rail nav a {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
   color: #f6f3ea;
   text-decoration: none;
   font-weight: 500;
+  padding: 0.55rem 0.65rem;
 }
 
-.mast nav a:hover {
+.rail nav a:hover,
+.rail nav a.is-current {
+  background: rgba(255, 212, 0, 0.14);
   color: var(--tag);
 }
 
+.rail nav a.nav-add {
+  margin-top: 0.85rem;
+  background: var(--tag);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.rail nav a.nav-add:hover,
+.rail nav a.nav-add.is-current {
+  background: #ffe45c;
+  color: var(--ink);
+}
+
+.nav-icon,
+.nav-toggle svg {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+}
+
 .sheet {
+  width: 100%;
   max-width: 920px;
   margin: 1.5rem auto 3rem;
+  justify-self: center;
   padding: 1.5rem 1.6rem 2rem;
   background: var(--sheet);
   border: 1px solid var(--line);
@@ -172,7 +224,66 @@ label textarea {
   display: flex;
   gap: 0.7rem;
   flex-wrap: wrap;
+  align-items: center;
   grid-column: 1 / -1;
+}
+
+.page-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.page-head h1 {
+  margin-bottom: 0.2rem;
+}
+
+.page-head .hint {
+  margin: 0.35rem 0 0;
+}
+
+.page-head .btn {
+  flex-shrink: 0;
+  align-self: center;
+}
+
+.form-group {
+  margin: 0;
+  padding: 0.85rem 1rem 1rem;
+  border: 1px solid var(--line);
+  background: #fff;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.form-group legend {
+  padding: 0 0.3rem;
+  font-weight: 600;
+}
+
+.form-row {
+  display: grid;
+  gap: 0.7rem;
+  grid-template-columns: 1fr 1fr;
+}
+
+.product-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  margin: 0.7rem 0 0;
+}
+
+.product-actions a:not(.btn) {
+  font-weight: 500;
+}
+
+.danger-zone {
+  margin-top: 2.4rem;
+  text-align: right;
 }
 
 .kind-pick {
@@ -257,11 +368,6 @@ label textarea {
   color: var(--muted);
 }
 
-.add-company {
-  margin: 1rem 0 1.6rem;
-  max-width: 36rem;
-}
-
 .street-row,
 .city-row {
   display: grid;
@@ -319,15 +425,9 @@ label textarea {
   margin-bottom: 1.5rem;
 }
 
-.stack,
-.grid-form {
+.stack {
   display: grid;
   gap: 0.9rem;
-}
-
-.grid-form {
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  align-items: end;
 }
 
 label {
@@ -552,7 +652,7 @@ code {
 
 .receipt-nums {
   display: grid;
-  grid-template-columns: minmax(6rem, 1fr) 1fr 1fr;
+  grid-template-columns: minmax(6rem, 1fr) 1fr 1fr 1fr;
   gap: 0.7rem;
 }
 
@@ -575,17 +675,62 @@ code {
   clip: rect(0 0 0 0);
 }
 
-@media (max-width: 640px) {
-  .mast {
-    flex-direction: column;
-    align-items: flex-start;
+@media (max-width: 800px) {
+  body {
+    grid-template-columns: 1fr;
+  }
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    background: var(--ink);
+    color: #f6f3ea;
+    position: sticky;
+    top: 0;
+    z-index: 20;
+  }
+
+  .nav-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.4rem;
+    height: 2.4rem;
+    color: var(--tag);
+    cursor: pointer;
+  }
+
+  .rail {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: min(18rem, 88vw);
+    z-index: 30;
+    transform: translateX(-105%);
+    transition: transform 0.18s ease;
+    overflow: auto;
+  }
+
+  .nav-open:checked ~ .rail {
+    transform: none;
+  }
+
+  .nav-open:checked ~ .nav-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(16, 32, 51, 0.45);
+    z-index: 25;
   }
 
   .sheet {
     margin: 0;
     border: 0;
   }
+}
 
+@media (max-width: 640px) {
   .row {
     grid-template-columns: 44px 1fr;
   }
@@ -603,10 +748,16 @@ code {
     gap: 0.2rem;
   }
 
+  .page-head,
   .receipt-layout,
   .receipt-nums,
+  .form-row,
   .street-row,
   .city-row {
     grid-template-columns: 1fr;
+  }
+
+  .page-head {
+    display: grid;
   }
 }

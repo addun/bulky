@@ -35,15 +35,17 @@ type Bill struct {
 }
 
 type Line struct {
-	ReceiptName string `json:"receipt_name"`
-	ProductName string `json:"product_name"`
-	ProductID   int64  `json:"product_id"`
-	UnitID      int64  `json:"unit_id"`
-	UnitName    string `json:"unit_name"`
-	Quantity    string `json:"quantity"`
-	Amount      string `json:"amount"`
-	Skip        bool   `json:"skip"`
-	SkipReason  string `json:"skip_reason"`
+	ReceiptName  string `json:"receipt_name"`
+	ProductName  string `json:"product_name"`
+	ProductID    int64  `json:"product_id"`
+	UnitID       int64  `json:"unit_id"`
+	UnitName     string `json:"unit_name"`
+	PackageCount string `json:"package_count"`
+	PackageSize  string `json:"package_size"`
+	Quantity     string `json:"quantity"`
+	Amount       string `json:"amount"`
+	Skip         bool   `json:"skip"`
+	SkipReason   string `json:"skip_reason"`
 }
 
 func (b Bill) ProductLines() []Line {

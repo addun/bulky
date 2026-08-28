@@ -10,7 +10,7 @@ import (
 )
 
 func TestParseBillFromFencedJSON(t *testing.T) {
-	raw := []byte("Here you go:\n```json\n{\n  \"bought_on\": \"26.08.2026\",\n  \"lines\": [\n    {\"receipt_name\": \"Maka 5kg\", \"product_name\": \"Mąka pszenna\", \"quantity\": 2, \"amount\": \"18,90\", \"skip\": false},\n    {\"receipt_name\": \"PTU A\", \"skip\": true, \"skip_reason\": \"VAT\"}\n  ]\n}\n```\n")
+	raw := []byte("Here you go:\n```json\n{\n  \"bought_on\": \"26.08.2026\",\n  \"lines\": [\n    {\"receipt_name\": \"Maka 5kg\", \"product_name\": \"Mąka pszenna\", \"package_count\": 2, \"package_size\": \"1,5\", \"unit_name\": \"kg\", \"amount\": \"18,90\", \"skip\": false},\n    {\"receipt_name\": \"PTU A\", \"skip\": true, \"skip_reason\": \"VAT\"}\n  ]\n}\n```\n")
 	bill, err := parseBill(raw)
 	if err != nil {
 		t.Fatal(err)
@@ -21,8 +21,8 @@ func TestParseBillFromFencedJSON(t *testing.T) {
 	if len(bill.Lines) != 2 {
 		t.Fatalf("lines: %d", len(bill.Lines))
 	}
-	if bill.Lines[0].Quantity != "2" || bill.Lines[0].Amount != "18.90" {
-		t.Fatalf("qty/amount: %#v", bill.Lines[0])
+	if bill.Lines[0].PackageCount != "2" || bill.Lines[0].PackageSize != "1.5" || bill.Lines[0].Amount != "18.90" {
+		t.Fatalf("pack/amount: %#v", bill.Lines[0])
 	}
 	if bill.Lines[0].ProductName != "Mąka pszenna" {
 		t.Fatalf("product_name: %q", bill.Lines[0].ProductName)

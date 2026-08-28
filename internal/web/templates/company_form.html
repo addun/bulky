@@ -1,18 +1,24 @@
 {{template "header" .}}
-<h1>Edit company</h1>
-<form class="stack" method="post" action="/companies/{{.Company.ID}}">
-  <label>Name <input name="name" required value="{{.Company.Name}}" autofocus></label>
-  <label>Street name <input name="street_name" required value="{{.Company.StreetName}}" autocomplete="street-address"></label>
-  <div class="street-row">
-    <label>Building number <input name="building_number" required value="{{.Company.BuildingNumber}}"></label>
-    <label><span>Apartment number <span class="hint">optional</span></span> <input name="apartment_number" value="{{.Company.ApartmentNumber}}"></label>
-  </div>
-  <div class="city-row">
-    <label>Postal code <input name="postal_code" required value="{{.Company.PostalCode}}" autocomplete="postal-code"></label>
-    <label>City <input name="city" required value="{{.Company.City}}"></label>
-  </div>
-  <div class="actions">
-    <button type="submit" class="btn btn-tag">Save company</button>
+<h1>{{if .New}}Add company{{else}}Edit company{{end}}</h1>
+<form class="stack" method="post" action="{{if .New}}/companies{{else}}/companies/{{.Company.ID}}{{end}}">
+  <fieldset class="form-group">
+    <legend>Name</legend>
+    <label>Name <input name="name" required placeholder="Makro, local mill…" value="{{.Company.Name}}" autofocus></label>
+  </fieldset>
+  <fieldset class="form-group">
+    <legend>Address</legend>
+    <label>Street name <input name="street_name" required placeholder="Al. Jerozolimskie" value="{{.Company.StreetName}}" autocomplete="street-address"></label>
+    <div class="form-row">
+      <label>Building number <input name="building_number" required placeholder="179" value="{{.Company.BuildingNumber}}"></label>
+      <label><span>Apartment number <span class="hint">optional</span></span> <input name="apartment_number" placeholder="12" value="{{.Company.ApartmentNumber}}"></label>
+    </div>
+    <div class="city-row">
+      <label>Postal code <input name="postal_code" required placeholder="00-001" value="{{.Company.PostalCode}}" autocomplete="postal-code"></label>
+      <label>City <input name="city" required placeholder="Warszawa" value="{{.Company.City}}"></label>
+    </div>
+  </fieldset>
+  <div class="form-actions">
+    <button type="submit" class="btn btn-tag">{{if .New}}Add company{{else}}Save company{{end}}</button>
     <a href="/companies">Cancel</a>
   </div>
 </form>

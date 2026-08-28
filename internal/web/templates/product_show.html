@@ -6,12 +6,11 @@
     <span class="hero hero-empty" aria-hidden="true"></span>
   {{end}}
   <div>
-    <p class="eyebrow">{{.Product.UnitName}}</p>
     <h1>{{.Product.Name}}</h1>
-    <p class="actions">
+    <p class="product-actions">
+      <a class="btn btn-tag" href="/products/{{.Product.ID}}/purchases/new">Add</a>
       <a href="/products/{{.Product.ID}}/edit">Edit</a>
       <a href="/aliases?product={{.Product.ID}}">Aliases</a>
-      <a class="danger" href="/products/{{.Product.ID}}/delete">Delete</a>
     </p>
   </div>
 </article>
@@ -30,34 +29,6 @@
   </ul>
 </section>
 {{end}}
-
-<section>
-  <h2>Log a buy or a price</h2>
-  <p class="lede">Enter how many packs and the size of one pack. Total {{.Product.UnitName}} is calculated for you (4 × 100&nbsp;g → 400&nbsp;g). A loose buy is 1 pack of whatever you weighed.</p>
-  <form class="grid-form" method="post" action="/products/{{.Product.ID}}/purchases" data-pack-form>
-    <label>Date <input type="date" name="bought_on" required value="{{.Page.Today}}"></label>
-    <label>Packages <input name="packages" required inputmode="decimal" placeholder="4" data-pack-count></label>
-    <label>Package size ({{.Product.UnitName}}) <input name="package_size" required inputmode="decimal" placeholder="100" value="{{if .HasLastPack}}{{qty .LastPackSize}}{{end}}" data-pack-size></label>
-    <p class="hint pack-total" data-pack-total hidden></p>
-    <label>Amount ({{.Page.Currency}}) <input name="amount" required inputmode="decimal" placeholder="12.40"></label>
-    <label>
-      Company
-      <select name="company_id">
-        <option value="">None</option>
-        {{range .Companies}}
-        <option value="{{.ID}}">{{.Label}}</option>
-        {{end}}
-      </select>
-    </label>
-    <div class="form-actions">
-      <button type="submit" class="btn btn-tag" name="kind" value="purchase">Save purchase</button>
-      <button type="submit" class="btn btn-plain" name="kind" value="price">Log price</button>
-    </div>
-  </form>
-  {{if not .Companies}}
-    <p class="hint">No companies yet. You can still save, or <a href="/companies">add a company</a> first.</p>
-  {{end}}
-</section>
 
 <section>
   <h2>History</h2>
@@ -102,4 +73,8 @@
     </table>
   {{end}}
 </section>
+
+<p class="danger-zone">
+  <a class="danger" href="/products/{{.Product.ID}}/delete">Delete product</a>
+</p>
 {{template "footer" .}}

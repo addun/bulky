@@ -1,32 +1,58 @@
 {{template "header" .}}
-<h1>{{if .Purchase.IsPrice}}Edit price{{else}}Edit purchase{{end}}</h1>
-<p class="lede">{{.Product.Name}} · {{.Product.UnitName}}</p>
-<form class="stack" method="post" action="/purchases/{{.Purchase.ID}}" data-pack-form>
-  {{if .Purchase.ReceiptID}}
+<h1>{{if .New}}Add new purchase{{else if .Purchase.IsPrice}}Edit price{{else}}Edit purchase{{end}}</h1>
+<p class="lede">{{.Product.Name}}</p>
+<form class="stack" method="post" action="{{if .New}}/products/{{.Product.ID}}/purchases{{else}}/purchases/{{.Purchase.ID}}{{end}}" data-pack-form data-pack-unit="{{.Product.UnitName}}">
+  {{if and (not .New) .Purchase.ReceiptID}}
   <p class="meta">From <a href="/receipts/{{.Purchase.ReceiptID}}">receipt {{.Purchase.ReceiptID}}</a></p>
   {{end}}
-  <label>Date <input type="date" name="bought_on" required value="{{.Purchase.BoughtOn}}"></label>
-  <label>Packages <input name="packages" required inputmode="decimal" value="{{qty .Purchase.FormPackages}}" data-pack-count></label>
-  <label>Package size ({{.Product.UnitName}}) <input name="package_size" required inputmode="decimal" value="{{qty .Purchase.FormPackSize}}" data-pack-size></label>
-  <p class="hint pack-total" data-pack-total hidden></p>
-  <label>Amount ({{.Page.Currency}}) <input name="amount" required inputmode="decimal" value="{{.Purchase.Amount}}"></label>
-  <label>
-    Company
-    <select name="company_id">
-      <option value="">None</option>
-      {{range .Companies}}
-      <option value="{{.ID}}" {{if eq .ID $.Purchase.CompanyID}}selected{{end}}>{{.Label}}</option>
-      {{end}}
-    </select>
-  </label>
-  <fieldset class="kind-pick">
+
+  <fieldset class="form-group">
+    <legend>When</legend>
+    <label>Date <input type="date" name="bought_on" required value="{{.Purchase.BoughtOn}}"></label>
+  </fieldset>
+
+  <fieldset class="form-group">
+    <legend>Packs</legend>
+    <div class="form-row">
+      <label>Packages <input name="packages" required inputmode="decimal" placeholder="4" value="{{if or (not .New) .Purchase.HasPackage}}{{qty .Purchase.FormPackages}}{{end}}" data-pack-count></label>
+      <label>Package size ({{.Product.UnitName}}) <input name="package_size" required inputmode="decimal" placeholder="100" value="{{if or (not .New) .Purchase.HasPackage}}{{qty .Purchase.FormPackSize}}{{end}}" data-pack-size></label>
+    </div>
+    <p class="hint pack-total" data-pack-total hidden></p>
+  </fieldset>
+
+  <fieldset class="form-group">
+    <legend>Paid</legend>
+    <label>Amount ({{.Page.Currency}}) <input name="amount" required inputmode="decimal" placeholder="12.40" value="{{if not .Purchase.Amount.IsZero}}{{.Purchase.Amount}}{{end}}"></label>
+    <label>
+      Company
+      <select name="company_id">
+        <option value="">None</option>
+        {{range .Companies}}
+        <option value="{{.ID}}" {{if eq .ID $.Purchase.CompanyID}}selected{{end}}>{{.Label}}</option>
+        {{end}}
+      </select>
+    </label>
+    {{if not .Companies}}
+      <p class="hint">No companies yet. You can still save, or <a href="/companies/new">add a company</a> first.</p>
+    {{end}}
+  </fieldset>
+
+  {{if .New}}
+  <div class="form-actions">
+    <button type="submit" class="btn btn-tag" name="kind" value="purchase">Save purchase</button>
+    <button type="submit" class="btn btn-plain" name="kind" value="price">Log price</button>
+    <a href="/products/{{.Product.ID}}">Cancel</a>
+  </div>
+  {{else}}
+  <fieldset class="form-group">
     <legend>Kind</legend>
     <label class="check"><input type="radio" name="kind" value="purchase" {{if .Purchase.IsPurchase}}checked{{end}}> Purchase</label>
     <label class="check"><input type="radio" name="kind" value="price" {{if .Purchase.IsPrice}}checked{{end}}> Price only</label>
   </fieldset>
-  <div class="actions">
+  <div class="form-actions">
     <button type="submit" class="btn btn-tag">Save</button>
     <a href="/products/{{.Product.ID}}">Cancel</a>
   </div>
+  {{end}}
 </form>
 {{template "footer" .}}
