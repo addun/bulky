@@ -23,7 +23,7 @@ func (s *Server) createPurchase(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "could not load product")
 		return
 	}
-	boughtOn, qty, amount, msg := s.parsePurchase(c)
+	boughtOn, qty, amount, packages, packSize, msg := s.parsePurchase(c)
 	if msg != "" {
 		c.Redirect(http.StatusSeeOther, "/products/"+itoa(id)+"?error="+url.QueryEscape(msg))
 		return
@@ -38,8 +38,8 @@ func (s *Server) createPurchase(c *gin.Context) {
 		c.Redirect(http.StatusSeeOther, "/products/"+itoa(id)+"?error="+url.QueryEscape(msg))
 		return
 	}
-	if _, err := s.store.CreatePurchase(id, companyID, boughtOn, qty, amount, kind); err != nil {
-		c.Redirect(http.StatusSeeOther, "/products/"+itoa(id)+"?error="+url.QueryEscape("Could not save the purchase."))
+	if _, err := s.store.CreatePurchase(id, companyID, boughtOn, qty, amount, kind, packages, packSize); err != nil {
+		c.Redirect(http.StatusSeeOther, "/products/"+itoa(id)+"?error="+url.QueryEscape(purchaseSaveError(err)))
 		return
 	}
 	c.Redirect(http.StatusSeeOther, "/products/"+itoa(id))
@@ -111,7 +111,7 @@ func (s *Server) updatePurchase(c *gin.Context) {
 			"Companies": companies,
 		})
 	}
-	boughtOn, qty, amount, msg := s.parsePurchase(c)
+	boughtOn, qty, amount, packages, packSize, msg := s.parsePurchase(c)
 	if msg != "" {
 		renderErr(msg)
 		return
@@ -126,8 +126,8 @@ func (s *Server) updatePurchase(c *gin.Context) {
 		renderErr(msg)
 		return
 	}
-	if err := s.store.UpdatePurchase(id, companyID, boughtOn, qty, amount, kind); err != nil {
-		renderErr("Could not save the purchase.")
+	if err := s.store.UpdatePurchase(id, companyID, boughtOn, qty, amount, kind, packages, packSize); err != nil {
+		renderErr(purchaseSaveError(err))
 		return
 	}
 	c.Redirect(http.StatusSeeOther, "/products/"+itoa(p.ProductID))

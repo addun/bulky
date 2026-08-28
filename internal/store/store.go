@@ -14,19 +14,26 @@ import (
 )
 
 var (
-	ErrNotFound        = errors.New("not found")
-	ErrUnitInUse       = errors.New("unit is in use")
-	ErrCompanyInUse    = errors.New("company is in use")
-	ErrDuplicate       = errors.New("already exists")
-	ErrInvalidUnit     = errors.New("invalid unit")
-	ErrInvalidCompany  = errors.New("invalid company")
-	ErrCompanyName     = errors.New("company name required")
-	ErrCompanyStreet   = errors.New("company street name required")
-	ErrCompanyBuilding = errors.New("company building number required")
-	ErrCompanyPostal   = errors.New("company postal code required")
-	ErrCompanyCity     = errors.New("company city required")
-	ErrInvalidKind     = errors.New("invalid purchase kind")
+	ErrNotFound          = errors.New("not found")
+	ErrUnitInUse         = errors.New("unit is in use")
+	ErrCompanyInUse      = errors.New("company is in use")
+	ErrDuplicate         = errors.New("already exists")
+	ErrInvalidUnit       = errors.New("invalid unit")
+	ErrInvalidCompany    = errors.New("invalid company")
+	ErrCompanyName       = errors.New("company name required")
+	ErrCompanyStreet     = errors.New("company street name required")
+	ErrCompanyBuilding   = errors.New("company building number required")
+	ErrCompanyPostal     = errors.New("company postal code required")
+	ErrCompanyCity       = errors.New("company city required")
+	ErrInvalidKind       = errors.New("invalid purchase kind")
+	ErrIncompletePackage = errors.New("packages and package size are both required")
+	ErrInvalidPackage    = errors.New("packages and package size must be greater than zero")
 )
+
+const purchaseSelect = `
+SELECT p.id, p.product_id, p.company_id, p.kind, p.receipt_id, p.bought_on, p.quantity, p.amount, p.created_at,
+       p.package_count, p.package_size
+FROM purchases p`
 
 type PurchaseKind string
 
@@ -114,19 +121,39 @@ func (c Company) Label() string {
 }
 
 type Purchase struct {
-	ID        int64
-	ProductID int64
-	CompanyID int64
-	Kind      PurchaseKind
-	ReceiptID int64
-	BoughtOn  string
-	Quantity  decimal.Decimal
-	Amount    decimal.Decimal
-	CreatedAt string
+	ID           int64
+	ProductID    int64
+	CompanyID    int64
+	Kind         PurchaseKind
+	ReceiptID    int64
+	BoughtOn     string
+	Quantity     decimal.Decimal
+	PackageCount decimal.Decimal
+	PackageSize  decimal.Decimal
+	Amount       decimal.Decimal
+	CreatedAt    string
 }
 
 func (p Purchase) IsPurchase() bool { return p.Kind == KindPurchase }
 func (p Purchase) IsPrice() bool    { return p.Kind == KindPrice }
+func (p Purchase) HasPackage() bool { return !p.PackageCount.IsZero() && !p.PackageSize.IsZero() }
+
+func (p Purchase) FormPackages() decimal.Decimal {
+	if p.HasPackage() {
+		return p.PackageCount
+	}
+	if p.Quantity.IsZero() {
+		return decimal.Zero
+	}
+	return decimal.NewFromInt(1)
+}
+
+func (p Purchase) FormPackSize() decimal.Decimal {
+	if p.HasPackage() {
+		return p.PackageSize
+	}
+	return p.Quantity
+}
 
 type YearSummary struct {
 	Year     string
@@ -553,11 +580,9 @@ func (s *Store) DeleteProduct(id int64) (imageName string, err error) {
 }
 
 func (s *Store) ListPurchases(productID int64) ([]Purchase, error) {
-	rows, err := s.db.Query(`
-SELECT id, product_id, company_id, kind, receipt_id, bought_on, quantity, amount, created_at
-FROM purchases
-WHERE product_id = ?
-ORDER BY bought_on DESC, id DESC`, productID)
+	rows, err := s.db.Query(purchaseSelect+`
+WHERE p.product_id = ?
+ORDER BY p.bought_on DESC, p.id DESC`, productID)
 	if err != nil {
 		return nil, err
 	}
@@ -574,9 +599,7 @@ ORDER BY bought_on DESC, id DESC`, productID)
 }
 
 func (s *Store) GetPurchase(id int64) (Purchase, error) {
-	row := s.db.QueryRow(`
-SELECT id, product_id, company_id, kind, receipt_id, bought_on, quantity, amount, created_at
-FROM purchases WHERE id = ?`, id)
+	row := s.db.QueryRow(purchaseSelect+` WHERE p.id = ?`, id)
 	p, err := scanPurchase(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Purchase{}, ErrNotFound
@@ -584,7 +607,7 @@ FROM purchases WHERE id = ?`, id)
 	return p, err
 }
 
-func (s *Store) CreatePurchase(productID, companyID int64, boughtOn string, quantity, amount decimal.Decimal, kind PurchaseKind) (Purchase, error) {
+func (s *Store) CreatePurchase(productID, companyID int64, boughtOn string, quantity, amount decimal.Decimal, kind PurchaseKind, packages, packSize decimal.Decimal) (Purchase, error) {
 	if _, err := s.GetProduct(productID); err != nil {
 		return Purchase{}, err
 	}
@@ -595,9 +618,13 @@ func (s *Store) CreatePurchase(productID, companyID int64, boughtOn string, quan
 	if err != nil {
 		return Purchase{}, err
 	}
+	qty, packCount, packSizeVal, err := packedQuantity(quantity, packages, packSize)
+	if err != nil {
+		return Purchase{}, err
+	}
 	res, err := s.db.Exec(
-		`INSERT INTO purchases (product_id, company_id, kind, receipt_id, bought_on, quantity, amount, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		productID, company, kind, nil, boughtOn, quantity.String(), amount.String(), nowRFC3339(),
+		`INSERT INTO purchases (product_id, company_id, kind, receipt_id, bought_on, quantity, package_count, package_size, amount, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		productID, company, kind, nil, boughtOn, qty.String(), packCount, packSizeVal, amount.String(), nowRFC3339(),
 	)
 	if err != nil {
 		return Purchase{}, err
@@ -609,7 +636,7 @@ func (s *Store) CreatePurchase(productID, companyID int64, boughtOn string, quan
 	return s.GetPurchase(id)
 }
 
-func (s *Store) UpdatePurchase(id, companyID int64, boughtOn string, quantity, amount decimal.Decimal, kind PurchaseKind) error {
+func (s *Store) UpdatePurchase(id, companyID int64, boughtOn string, quantity, amount decimal.Decimal, kind PurchaseKind, packages, packSize decimal.Decimal) error {
 	if _, err := ParsePurchaseKind(string(kind)); err != nil {
 		return err
 	}
@@ -617,9 +644,13 @@ func (s *Store) UpdatePurchase(id, companyID int64, boughtOn string, quantity, a
 	if err != nil {
 		return err
 	}
+	qty, packCount, packSizeVal, err := packedQuantity(quantity, packages, packSize)
+	if err != nil {
+		return err
+	}
 	res, err := s.db.Exec(
-		`UPDATE purchases SET company_id = ?, kind = ?, bought_on = ?, quantity = ?, amount = ? WHERE id = ?`,
-		company, kind, boughtOn, quantity.String(), amount.String(), id,
+		`UPDATE purchases SET company_id = ?, kind = ?, bought_on = ?, quantity = ?, package_count = ?, package_size = ?, amount = ? WHERE id = ?`,
+		company, kind, boughtOn, qty.String(), packCount, packSizeVal, amount.String(), id,
 	)
 	if err != nil {
 		return err
@@ -686,11 +717,48 @@ type rowScanner interface {
 	Scan(dest ...any) error
 }
 
+func packedQuantity(quantity, packages, packSize decimal.Decimal) (qty decimal.Decimal, packCount, packSizeVal any, err error) {
+	if packages.IsZero() {
+		return quantity, nil, nil, nil
+	}
+	if packSize.IsZero() {
+		return decimal.Zero, nil, nil, ErrIncompletePackage
+	}
+	if packages.IsNegative() || packSize.IsNegative() {
+		return decimal.Zero, nil, nil, ErrInvalidPackage
+	}
+	return packages.Mul(packSize), packages.String(), packSize.String(), nil
+}
+
+func (s *Store) LastPackageSize(productID int64) (decimal.Decimal, bool, error) {
+	var size sql.NullString
+	err := s.db.QueryRow(`
+SELECT package_size FROM purchases
+WHERE product_id = ? AND package_size IS NOT NULL AND TRIM(package_size) != ''
+ORDER BY bought_on DESC, id DESC
+LIMIT 1`, productID).Scan(&size)
+	if errors.Is(err, sql.ErrNoRows) {
+		return decimal.Zero, false, nil
+	}
+	if err != nil {
+		return decimal.Zero, false, err
+	}
+	if !size.Valid || size.String == "" {
+		return decimal.Zero, false, nil
+	}
+	d, err := decimal.NewFromString(size.String)
+	if err != nil {
+		return decimal.Zero, false, err
+	}
+	return d, true, nil
+}
+
 func scanPurchase(row rowScanner) (Purchase, error) {
 	var p Purchase
 	var companyID, receiptID sql.NullInt64
 	var qty, amt, kind string
-	if err := row.Scan(&p.ID, &p.ProductID, &companyID, &kind, &receiptID, &p.BoughtOn, &qty, &amt, &p.CreatedAt); err != nil {
+	var packCount, packSize sql.NullString
+	if err := row.Scan(&p.ID, &p.ProductID, &companyID, &kind, &receiptID, &p.BoughtOn, &qty, &amt, &p.CreatedAt, &packCount, &packSize); err != nil {
 		return Purchase{}, err
 	}
 	p.CompanyID = companyID.Int64
@@ -706,6 +774,20 @@ func scanPurchase(row rowScanner) (Purchase, error) {
 	}
 	p.Quantity = q
 	p.Amount = a
+	if packCount.Valid && packCount.String != "" {
+		n, err := decimal.NewFromString(packCount.String)
+		if err != nil {
+			return Purchase{}, err
+		}
+		p.PackageCount = n
+	}
+	if packSize.Valid && packSize.String != "" {
+		n, err := decimal.NewFromString(packSize.String)
+		if err != nil {
+			return Purchase{}, err
+		}
+		p.PackageSize = n
+	}
 	return p, nil
 }
 

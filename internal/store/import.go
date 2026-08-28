@@ -244,8 +244,6 @@ func createPurchaseTx(tx *sql.Tx, productID, companyID, receiptID int64, boughtO
 	if err != nil {
 		return Purchase{}, err
 	}
-	row := tx.QueryRow(`
-SELECT id, product_id, company_id, kind, receipt_id, bought_on, quantity, amount, created_at
-FROM purchases WHERE id = ?`, id)
+	row := tx.QueryRow(purchaseSelect+` WHERE p.id = ?`, id)
 	return scanPurchase(row)
 }

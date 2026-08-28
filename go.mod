@@ -3,6 +3,7 @@ module github.com/adrian/bulkly
 go 1.23.0
 
 require (
+	github.com/brianvoe/gofakeit/v7 v7.16.0
 	github.com/disintegration/imaging v1.6.2
 	github.com/gin-gonic/gin v1.10.0
 	github.com/pressly/goose/v3 v3.24.3
