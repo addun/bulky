@@ -1,6 +1,6 @@
 {{template "header" .}}
 <h1>Receipts</h1>
-<p class="lede">Photograph a receipt. The reader stores the raw AI JSON; you check the product list before it becomes purchases.</p>
+<p class="lede">Shop bills you photographed. Each one is a visit’s products and prices, waiting to be saved into your log.</p>
 
 {{if not .Configured}}
   <p class="banner">The reader is off until you set <code>OCR_API_KEY</code> (OpenAI) or <code>OCR_BASE_URL</code> (any OpenAI-compatible vision API, including a local server). Optional: <code>OCR_MODEL</code>, default {{.Model}}.</p>
@@ -27,127 +27,6 @@
     <button type="submit" class="btn btn-tag" id="receipt-submit">Read the bill</button>
   </div>
 </form>
-<script>
-(function () {
-  var camera = document.getElementById("bill-camera");
-  var file = document.getElementById("bill");
-  var wrap = document.getElementById("scan-drop");
-  var preview = document.getElementById("scan-preview");
-  var img = document.getElementById("scan-preview-img");
-  var form = document.getElementById("receipt-upload");
-  var btn = document.getElementById("receipt-submit");
-  var url = "";
-  var busy = false;
-
-  function picked() {
-    if (camera.files && camera.files[0]) return camera.files[0];
-    if (file.files && file.files[0]) return file.files[0];
-    return null;
-  }
-
-  function show(f) {
-    if (url) URL.revokeObjectURL(url);
-    if (!f) {
-      preview.hidden = true;
-      wrap.classList.remove("has-file");
-      return;
-    }
-    url = URL.createObjectURL(f);
-    img.src = url;
-    preview.hidden = false;
-    wrap.classList.add("has-file");
-  }
-
-  function onPick(which) {
-    return function () {
-      if (which === camera) file.value = "";
-      else camera.value = "";
-      show(picked());
-    };
-  }
-  camera.addEventListener("change", onPick(camera));
-  file.addEventListener("change", onPick(file));
-
-  function putFile(input, f) {
-    if (!f || typeof DataTransfer === "undefined") return false;
-    try {
-      var dt = new DataTransfer();
-      dt.items.add(f);
-      input.files = dt.files;
-      return input.files && input.files[0];
-    } catch (err) {
-      return false;
-    }
-  }
-
-  function compress(f) {
-    if (!f || typeof createImageBitmap !== "function") return Promise.resolve(f);
-    if (f.size < 2 * 1024 * 1024 && (f.type === "image/jpeg" || f.type === "image/jpg")) {
-      return Promise.resolve(f);
-    }
-    var opts = { imageOrientation: "from-image" };
-    return createImageBitmap(f, opts).catch(function () {
-      return createImageBitmap(f);
-    }).then(function (bmp) {
-      var max = 1920;
-      var w = bmp.width;
-      var h = bmp.height;
-      if (w > max || h > max) {
-        if (w >= h) {
-          h = Math.round(h * max / w);
-          w = max;
-        } else {
-          w = Math.round(w * max / h);
-          h = max;
-        }
-      }
-      var canvas = document.createElement("canvas");
-      canvas.width = w;
-      canvas.height = h;
-      var ctx = canvas.getContext("2d");
-      ctx.fillStyle = "#fff";
-      ctx.fillRect(0, 0, w, h);
-      ctx.drawImage(bmp, 0, 0, w, h);
-      if (bmp.close) bmp.close();
-      return new Promise(function (resolve, reject) {
-        canvas.toBlob(function (blob) {
-          if (!blob) {
-            reject(new Error("compress"));
-            return;
-          }
-          resolve(new File([blob], "bill.jpg", { type: "image/jpeg" }));
-        }, "image/jpeg", 0.82);
-      });
-    });
-  }
-
-  form.addEventListener("submit", function (e) {
-    var f = picked();
-    if (!f) {
-      file.setCustomValidity("Choose a photo of the bill.");
-      file.reportValidity();
-      e.preventDefault();
-      return;
-    }
-    file.setCustomValidity("");
-    if (busy) {
-      e.preventDefault();
-      return;
-    }
-    busy = true;
-    btn.disabled = true;
-    btn.textContent = "Reading the bill…";
-    e.preventDefault();
-    compress(f).then(function (out) {
-      var target = (camera.files && camera.files[0]) ? camera : file;
-      putFile(target, out);
-      HTMLFormElement.prototype.submit.call(form);
-    }).catch(function () {
-      HTMLFormElement.prototype.submit.call(form);
-    });
-  });
-})();
-</script>
 {{end}}
 
 {{if not .Receipts}}

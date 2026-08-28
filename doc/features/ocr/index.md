@@ -19,13 +19,17 @@ The reader is for a receipt, invoice, or till bill. A photo that is not a bill, 
 The model copies what is printed:
 
 - the sale date
-- each goods line: the till name, a cleaned name, quantity, line total, and unit (kg, g, l, szt, and so on)
+- each goods line: the till name, a cleaned name, how many packs, the size of one pack, the unit (kg, g, l, szt, and so on), and the **final** line total after promotions
 
 It does not read the shop, company, or address. Your catalog is not sent to the model. VAT lines, NIP, payment method, change, fiscal footer, and similar non-goods are dropped.
 
+Polish tills often print a shelf price, a promo on the next row, then the amount actually paid. The reader uses that last figure, not the pre-promo price.
+
+Quantity in the log is packs × pack size. A weighed loose buy is one pack of whatever was on the scale. If a printed name includes a size (`Mąka 1kg`) and the qty column is 2, that is two 1 kg packs.
+
 ## Confirm
 
-Open a scan that is **To confirm**. Check the date, pick a company if you want one, and go through every line: include it or not, keep **New product** or choose an existing one, and fix name, unit, quantity, and amount.
+Open a scan that is **To confirm**. Check the date, pick a company if you want one, and go through every line: include it or not, keep **New product** or choose an existing one, and fix name, unit, packs, pack size, and amount.
 
 How printed names are matched to your catalog, and how a new product remembers the till wording, is in [Receipt matching](../receipt-matching/index.md). Aliases themselves are in [Product aliases](../product-aliases/index.md).
 

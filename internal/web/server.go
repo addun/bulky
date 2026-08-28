@@ -94,6 +94,7 @@ func (s *Server) routes() {
 	s.engine.POST("/units/:id/delete", s.deleteUnit)
 
 	s.engine.GET("/companies", s.companies)
+	s.engine.GET("/companies/new", s.newCompany)
 	s.engine.POST("/companies", s.createCompany)
 	s.engine.GET("/companies/:id/edit", s.editCompany)
 	s.engine.POST("/companies/:id", s.updateCompany)
@@ -101,6 +102,7 @@ func (s *Server) routes() {
 	s.engine.POST("/companies/:id/delete", s.deleteCompany)
 
 	s.engine.GET("/aliases", s.aliases)
+	s.engine.GET("/aliases/new", s.newAlias)
 	s.engine.POST("/aliases", s.createAlias)
 	s.engine.GET("/aliases/:id/edit", s.editAlias)
 	s.engine.POST("/aliases/:id", s.updateAlias)
@@ -114,6 +116,7 @@ func (s *Server) routes() {
 	s.engine.POST("/products/:id", s.updateProduct)
 	s.engine.GET("/products/:id/delete", s.confirmDeleteProduct)
 	s.engine.POST("/products/:id/delete", s.deleteProduct)
+	s.engine.GET("/products/:id/purchases/new", s.newPurchase)
 	s.engine.POST("/products/:id/purchases", s.createPurchase)
 
 	s.engine.GET("/purchases/:id/edit", s.editPurchase)

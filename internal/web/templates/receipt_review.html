@@ -1,6 +1,6 @@
 {{template "header" .}}
 <h1>Confirm the bill</h1>
-<p class="lede">The AI response is saved on this receipt. Check every line, then save as purchases.</p>
+<p class="lede">Products from this bill. Check each line, then save as purchases.</p>
 
 {{if .View.Migrated}}<p class="banner">This bill is already saved as purchases.</p>{{end}}
 {{if .View.Notes}}<p class="banner">{{.View.Notes}}</p>{{end}}
@@ -19,22 +19,25 @@
     <input type="hidden" name="notes" value="{{.View.Notes}}">
     <input type="hidden" name="line_count" id="line-count" value="{{len .View.Lines}}">
 
-    <label>Date <input type="date" name="bought_on" required value="{{.View.BoughtOn}}"></label>
-    <label>
-      Company
-      <select name="company_id">
-        <option value="">None</option>
-        {{range .Companies}}
-        <option value="{{.ID}}" {{if eq .ID $.View.CompanyID}}selected{{end}}>{{.Label}}</option>
-        {{end}}
-      </select>
-    </label>
-    {{if not .Companies}}<p class="hint">No companies yet. You can still save, or <a href="/companies">add a company</a> first.</p>{{end}}
+    <fieldset class="form-group">
+      <legend>Visit</legend>
+      <label>Date <input type="date" name="bought_on" required value="{{.View.BoughtOn}}"></label>
+      <label>
+        Company
+        <select name="company_id">
+          <option value="">None</option>
+          {{range .Companies}}
+          <option value="{{.ID}}" {{if eq .ID $.View.CompanyID}}selected{{end}}>{{.Label}}</option>
+          {{end}}
+        </select>
+      </label>
+      {{if not .Companies}}<p class="hint">No companies yet. You can still save, or <a href="/companies/new">add a company</a> first.</p>{{end}}
+    </fieldset>
 
     <h2>Products</h2>
     <div id="receipt-lines">
       {{range $i, $line := .View.Lines}}
-      <fieldset class="receipt-line{{if not $line.Include}} is-off{{end}}">
+      <fieldset class="receipt-line{{if not $line.Include}} is-off{{end}}" data-pack-form>
         <legend class="sr">Line {{add $i 1}}</legend>
         <input type="hidden" name="receipt_name_{{$i}}" value="{{$line.ReceiptName}}">
         <label class="check receipt-include">
@@ -55,16 +58,18 @@
         <div class="receipt-nums">
           <label>
             Unit
-            <select name="unit_id_{{$i}}">
+            <select name="unit_id_{{$i}}" data-pack-unit-select>
               <option value="">Select…</option>
               {{range $.Units}}
               <option value="{{.ID}}" {{if eq .ID $line.UnitID}}selected{{end}}>{{.Name}}</option>
               {{end}}
             </select>
           </label>
-          <label>Quantity <input name="quantity_{{$i}}" inputmode="decimal" value="{{$line.Quantity}}"></label>
+          <label>Packages <input name="packages_{{$i}}" inputmode="decimal" value="{{$line.PackageCount}}" data-pack-count></label>
+          <label>Package size <input name="package_size_{{$i}}" inputmode="decimal" value="{{$line.PackageSize}}" data-pack-size></label>
           <label>Amount ({{$.Page.Currency}}) <input name="amount_{{$i}}" inputmode="decimal" value="{{$line.Amount}}"></label>
         </div>
+        <p class="hint pack-total" data-pack-total hidden></p>
       </fieldset>
       {{end}}
     </div>
@@ -77,7 +82,7 @@
 </div>
 
 <template id="receipt-line-template">
-  <fieldset class="receipt-line">
+  <fieldset class="receipt-line" data-pack-form>
     <legend class="sr">New line</legend>
     <input type="hidden" name="receipt_name___I__" value="">
     <label class="check receipt-include">
@@ -97,40 +102,18 @@
     <div class="receipt-nums">
       <label>
         Unit
-        <select name="unit_id___I__">
+        <select name="unit_id___I__" data-pack-unit-select>
           <option value="">Select…</option>
           {{range .Units}}
           <option value="{{.ID}}">{{.Name}}</option>
           {{end}}
         </select>
       </label>
-      <label>Quantity <input name="quantity___I__" inputmode="decimal" value=""></label>
+      <label>Packages <input name="packages___I__" inputmode="decimal" value="" data-pack-count></label>
+      <label>Package size <input name="package_size___I__" inputmode="decimal" value="" data-pack-size></label>
       <label>Amount ({{.Page.Currency}}) <input name="amount___I__" inputmode="decimal" value=""></label>
     </div>
+    <p class="hint pack-total" data-pack-total hidden></p>
   </fieldset>
 </template>
-<script>
-(function () {
-  var lines = document.getElementById("receipt-lines");
-  lines.addEventListener("change", function (e) {
-    if (e.target && e.target.name && e.target.name.indexOf("include_") === 0) {
-      var field = e.target.closest(".receipt-line");
-      if (field) field.classList.toggle("is-off", !e.target.checked);
-    }
-  });
-
-  var add = document.getElementById("add-line");
-  if (!add) return;
-  var count = document.getElementById("line-count");
-  var tmpl = document.getElementById("receipt-line-template");
-  add.addEventListener("click", function () {
-    var i = parseInt(count.value, 10) || 0;
-    var html = tmpl.innerHTML.split("__I__").join(String(i));
-    var wrap = document.createElement("div");
-    wrap.innerHTML = html.trim();
-    lines.appendChild(wrap.firstElementChild);
-    count.value = String(i + 1);
-  });
-})();
-</script>
 {{template "footer" .}}

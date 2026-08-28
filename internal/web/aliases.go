@@ -3,8 +3,6 @@ package web
 import (
 	"errors"
 	"net/http"
-	"net/url"
-	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -38,11 +36,6 @@ func (s *Server) aliases(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "could not load aliases")
 		return
 	}
-	products, companies, err := s.aliasLookups()
-	if err != nil {
-		c.String(http.StatusInternalServerError, "could not load the catalog")
-		return
-	}
 	formID := int64(0)
 	if filter != nil {
 		formID = filter.ID
@@ -50,30 +43,64 @@ func (s *Server) aliases(c *gin.Context) {
 	c.HTML(http.StatusOK, "aliases.html", gin.H{
 		"Page":         s.page("Aliases", "", c.Query("error")),
 		"Aliases":      list,
-		"Products":     products,
-		"Companies":    companies,
 		"Filter":       filter,
 		"ProductQuery": aliasesQuerySuffix(formID),
-		"Form":         store.ProductAlias{ProductID: formID},
 	})
+}
+
+func (s *Server) newAlias(c *gin.Context) {
+	products, companies, err := s.aliasLookups()
+	if err != nil {
+		c.String(http.StatusInternalServerError, "could not load the catalog")
+		return
+	}
+	from := formInt64Query(c, "product")
+	form := store.ProductAlias{ProductID: from}
+	var locked *store.Product
+	if from > 0 {
+		p, err := s.store.GetProduct(from)
+		if errors.Is(err, store.ErrNotFound) {
+			c.String(http.StatusNotFound, "not found")
+			return
+		}
+		if err != nil {
+			c.String(http.StatusInternalServerError, "could not load product")
+			return
+		}
+		locked = &p
+		form.ProductID = p.ID
+	}
+	s.renderAliasForm(c, http.StatusOK, form, products, companies, from, locked, true, "")
 }
 
 func (s *Server) createAlias(c *gin.Context) {
 	from := formInt64(c, "from_product")
-	redirect := aliasRedirect(c.PostForm("redirect"))
-	if strings.TrimSpace(c.PostForm("redirect")) == "" {
-		redirect = aliasesPath(from)
+	form := store.ProductAlias{
+		ProductID: formInt64(c, "product_id"),
+		CompanyID: formInt64(c, "company_id"),
+		Alias:     strings.TrimSpace(c.PostForm("alias")),
 	}
 	_, err := s.saveAliasFromForm(c, 0)
-	if msg := aliasFormError(err); msg != "" {
-		c.Redirect(http.StatusSeeOther, aliasesPathError(redirect, msg))
+	if err == nil {
+		c.Redirect(http.StatusSeeOther, aliasesPath(from))
 		return
 	}
-	if err != nil {
-		c.Redirect(http.StatusSeeOther, aliasesPathError(redirect, "Could not save the alias."))
+	products, companies, lookupErr := s.aliasLookups()
+	if lookupErr != nil {
+		c.String(http.StatusInternalServerError, "could not load the catalog")
 		return
 	}
-	c.Redirect(http.StatusSeeOther, redirect)
+	locked := (*store.Product)(nil)
+	if from > 0 {
+		if p, perr := s.store.GetProduct(from); perr == nil {
+			locked = &p
+		}
+	}
+	msg := aliasFormError(err)
+	if msg == "" {
+		msg = "Could not save the alias."
+	}
+	s.renderAliasForm(c, http.StatusUnprocessableEntity, form, products, companies, from, locked, true, msg)
 }
 
 func (s *Server) editAlias(c *gin.Context) {
@@ -97,14 +124,7 @@ func (s *Server) editAlias(c *gin.Context) {
 		return
 	}
 	from := formInt64Query(c, "product")
-	c.HTML(http.StatusOK, "alias_form.html", gin.H{
-		"Page":        s.page("Edit alias", "", ""),
-		"Alias":       a,
-		"Products":    products,
-		"Companies":   companies,
-		"FromProduct": from,
-		"Cancel":      aliasesPath(from),
-	})
+	s.renderAliasForm(c, http.StatusOK, a, products, companies, from, nil, false, "")
 }
 
 func (s *Server) updateAlias(c *gin.Context) {
@@ -134,14 +154,7 @@ func (s *Server) updateAlias(c *gin.Context) {
 		Alias:     strings.TrimSpace(c.PostForm("alias")),
 	}
 	if msg := aliasFormError(err); msg != "" {
-		c.HTML(http.StatusUnprocessableEntity, "alias_form.html", gin.H{
-			"Page":        s.page("Edit alias", "", msg),
-			"Alias":       form,
-			"Products":    products,
-			"Companies":   companies,
-			"FromProduct": from,
-			"Cancel":      aliasesPath(from),
-		})
+		s.renderAliasForm(c, http.StatusUnprocessableEntity, form, products, companies, from, nil, false, msg)
 		return
 	}
 	if err != nil {
@@ -236,17 +249,21 @@ func aliasFormError(err error) string {
 	}
 }
 
-func aliasRedirect(raw string) string {
-	r := strings.TrimSpace(raw)
-	rest, ok := strings.CutPrefix(r, "/products/")
-	if !ok {
-		return "/aliases"
+func (s *Server) renderAliasForm(c *gin.Context, status int, a store.ProductAlias, products []store.ProductListItem, companies []store.Company, from int64, locked *store.Product, isNew bool, errMsg string) {
+	title := "Edit alias"
+	if isNew {
+		title = "Add alias"
 	}
-	id, err := strconv.ParseInt(rest, 10, 64)
-	if err != nil || id <= 0 || rest != strconv.FormatInt(id, 10) {
-		return "/aliases"
-	}
-	return r
+	c.HTML(status, "alias_form.html", gin.H{
+		"Page":          s.page(title, "", errMsg),
+		"Alias":         a,
+		"Products":      products,
+		"Companies":     companies,
+		"FromProduct":   from,
+		"LockedProduct": locked,
+		"Cancel":        aliasesPath(from),
+		"New":           isNew,
+	})
 }
 
 func aliasesPath(productID int64) string {
@@ -261,12 +278,4 @@ func aliasesQuerySuffix(productID int64) string {
 		return ""
 	}
 	return "?product=" + itoa(productID)
-}
-
-func aliasesPathError(path, msg string) string {
-	sep := "?"
-	if strings.Contains(path, "?") {
-		sep = "&"
-	}
-	return path + sep + "error=" + url.QueryEscape(msg)
 }

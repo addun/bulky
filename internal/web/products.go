@@ -192,21 +192,13 @@ func (s *Server) showProduct(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "could not load companies")
 		return
 	}
-	lastSize, hasLast, err := s.store.LastPackageSize(id)
-	if err != nil {
-		c.String(http.StatusInternalServerError, "could not load pack size")
-		return
-	}
 	errMsg := c.Query("error")
 	c.HTML(http.StatusOK, "product_show.html", gin.H{
-		"Page":         s.page(p.Name, "", errMsg),
-		"Product":      p,
-		"Purchases":    purchases,
-		"Companies":    companies,
-		"CompanyByID":  companiesByID(companies),
-		"Years":        store.YearlySummaries(purchases),
-		"LastPackSize": lastSize,
-		"HasLastPack":  hasLast,
+		"Page":        s.page(p.Name, "", errMsg),
+		"Product":     p,
+		"Purchases":   purchases,
+		"CompanyByID": companiesByID(companies),
+		"Years":       store.YearlySummaries(purchases),
 	})
 }
 

@@ -1,44 +1,16 @@
 {{template "header" .}}
-{{if .Filter}}
-<h1>Aliases for {{.Filter.Name}}</h1>
-<p class="lede">Alternate names for this product on bills. Leave company blank for a name that applies at every shop, or pick a shop when the printed name is specific to that place.</p>
-<p class="hint"><a href="/aliases">All aliases</a></p>
-{{else}}
-<h1>Aliases</h1>
-<p class="lede">Alternate names for a product. Leave company blank for a name that applies at every shop, or pick a shop when the printed name is specific to that place.</p>
-{{end}}
-
-<form class="stack" method="post" action="/aliases">
+<div class="page-head">
   {{if .Filter}}
-  <input type="hidden" name="from_product" value="{{.Filter.ID}}">
-  <input type="hidden" name="product_id" value="{{.Filter.ID}}">
-  <p class="meta">Product {{.Filter.Name}}</p>
-  {{else}}
-  <label>Product
-    <select name="product_id" required>
-      <option value="">Select…</option>
-      {{range .Products}}
-      <option value="{{.ID}}" {{if eq .ID $.Form.ProductID}}selected{{end}}>{{.Name}}</option>
-      {{end}}
-    </select>
-  </label>
-  {{end}}
-  <label>Company
-    <select name="company_id">
-      <option value="">Any shop</option>
-      {{range .Companies}}
-      <option value="{{.ID}}">{{.Label}}</option>
-      {{end}}
-    </select>
-  </label>
-  <label>Alias <input name="alias" required placeholder="Mąka tortowa 1kg"></label>
-  <div class="actions">
-    <button type="submit" class="btn btn-tag">Add alias</button>
+  <div>
+    <h1>Aliases for {{.Filter.Name}}</h1>
+    <p class="hint"><a href="/aliases">All aliases</a></p>
   </div>
-</form>
-{{if not .Products}}
-  <p class="hint">No products yet. <a href="/products/new">Add a product</a> first.</p>
-{{end}}
+  <a class="btn btn-tag" href="/aliases/new?product={{.Filter.ID}}">Add alias</a>
+  {{else}}
+  <h1>Aliases</h1>
+  <a class="btn btn-tag" href="/aliases/new">Add alias</a>
+  {{end}}
+</div>
 
 {{if not .Aliases}}
   <p class="empty">{{if .Filter}}No aliases for this product.{{else}}No aliases yet.{{end}}</p>

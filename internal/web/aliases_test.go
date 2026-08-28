@@ -42,6 +42,12 @@ func TestAliasesPageFiltersByProduct(t *testing.T) {
 	if !strings.Contains(body, `href="/aliases"`) || !strings.Contains(body, "All aliases") {
 		t.Fatal("expected link back to the full list")
 	}
+	if !strings.Contains(body, `href="/aliases/new?product=`+itoa(flour.ID)+`"`) {
+		t.Fatal("filtered page should link to a new alias for this product")
+	}
+	if strings.Contains(body, `name="alias"`) {
+		t.Fatal("list page should not include the add form")
+	}
 
 	rec = httptest.NewRecorder()
 	req = httptest.NewRequest(http.MethodGet, "/aliases", nil)

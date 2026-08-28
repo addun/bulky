@@ -121,20 +121,23 @@ func TestParseReceiptForm(t *testing.T) {
 		"line_count":       "3",
 		"include_0":        "1",
 		"product_choice_0": "4",
-		"quantity_0":       "10",
+		"packages_0":       "1",
+		"package_size_0":   "10",
 		"amount_0":         "40,00",
 		"include_1":        "1",
 		"product_choice_1": "new",
 		"product_name_1":   "Flour",
 		"receipt_name_1":   "MAKA 5KG",
 		"unit_id_1":        "1",
-		"quantity_1":       "5",
+		"packages_1":       "1",
+		"package_size_1":   "5",
 		"amount_1":         "18.50",
 		"include_2":        "",
 		"product_choice_2": "new",
 		"product_name_2":   "Skip me",
 		"unit_id_2":        "1",
-		"quantity_2":       "1",
+		"packages_2":       "1",
+		"package_size_2":   "1",
 		"amount_2":         "1",
 	}))
 	if msg != "" {
@@ -152,6 +155,9 @@ func TestParseReceiptForm(t *testing.T) {
 	if in.Lines[1].ProductName != "Flour" || in.Lines[1].UnitID != 1 || in.Lines[1].ReceiptName != "MAKA 5KG" {
 		t.Fatalf("line1: %#v", in.Lines[1])
 	}
+	if in.Lines[0].Quantity.String() != "10" || in.Lines[0].PackageCount.String() != "1" || in.Lines[0].PackageSize.String() != "10" {
+		t.Fatalf("line0 pack: %#v", in.Lines[0])
+	}
 
 	in, view, msg := parseReceiptForm(get(map[string]string{
 		"bought_on":        "2026-08-20",
@@ -159,7 +165,8 @@ func TestParseReceiptForm(t *testing.T) {
 		"line_count":       "1",
 		"include_0":        "1",
 		"product_choice_0": "4",
-		"quantity_0":       "1",
+		"packages_0":       "1",
+		"package_size_0":   "1",
 		"amount_0":         "1",
 	}))
 	if msg != "" {
@@ -176,7 +183,8 @@ func TestParseReceiptForm(t *testing.T) {
 		"product_choice_0": "new",
 		"product_name_0":   "",
 		"unit_id_0":        "1",
-		"quantity_0":       "1",
+		"packages_0":       "1",
+		"package_size_0":   "1",
 		"amount_0":         "1",
 	}))
 	if msg == "" {
@@ -204,7 +212,7 @@ func TestReceiptReviewTemplateExecutes(t *testing.T) {
 			Status:    store.ReceiptReady,
 			BoughtOn:  "2026-08-20",
 			Lines: []receiptLineView{{
-				Include: true, ProductName: "Rice", UnitID: 1, Quantity: "10", Amount: "40.00", ReceiptName: "RYZ",
+				Include: true, ProductName: "Rice", UnitID: 1, PackageCount: "1", PackageSize: "10", Amount: "40.00", ReceiptName: "RYZ",
 			}},
 		},
 		"Products":  []store.ProductListItem{},
@@ -224,8 +232,11 @@ func TestReceiptReviewTemplateExecutes(t *testing.T) {
 	if !strings.Contains(body, `name="company_id"`) || !strings.Contains(body, "Local Mill") {
 		t.Fatal("review form should let you pick a company")
 	}
-	if strings.Contains(body, "Street name") {
-		t.Fatal("review form should not ask for company address")
+	if !strings.Contains(body, `name="packages_0"`) || !strings.Contains(body, `name="package_size_0"`) {
+		t.Fatal("review form should ask for packs, not a raw quantity")
+	}
+	if strings.Contains(body, `name="quantity_0"`) {
+		t.Fatal("quantity should be calculated from packs")
 	}
 	if !strings.Contains(body, `src="/receipts/3/preview"`) {
 		t.Fatal("preview should be nested under the receipt")
@@ -356,6 +367,12 @@ func TestReceiptReviewLoadsReceiptJSON(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "Rice") {
 		t.Fatal("review should show the saved product")
+	}
+	if !strings.Contains(rec.Body.String(), `name="packages_0" inputmode="decimal" value="1"`) {
+		t.Fatal("legacy quantity should become 1 pack")
+	}
+	if !strings.Contains(rec.Body.String(), `name="package_size_0" inputmode="decimal" value="10"`) {
+		t.Fatal("legacy quantity should fill package size")
 	}
 	if !strings.Contains(rec.Body.String(), `name="company_id"`) {
 		t.Fatal("review should include a company picker")

@@ -1,22 +1,8 @@
 {{template "header" .}}
-<h1>Companies</h1>
-<p class="lede">Optional suppliers you buy from. Pick one when you log a purchase or a price, or leave it blank — older buys may have no company.</p>
-
-<form class="stack add-company" method="post" action="/companies">
-  <label>Name <input name="name" required placeholder="Makro, local mill…"></label>
-  <label>Street name <input name="street_name" required placeholder="Al. Jerozolimskie" autocomplete="street-address"></label>
-  <div class="street-row">
-    <label>Building number <input name="building_number" required placeholder="179"></label>
-    <label><span>Apartment number <span class="hint">optional</span></span> <input name="apartment_number" placeholder="12"></label>
-  </div>
-  <div class="city-row">
-    <label>Postal code <input name="postal_code" required placeholder="00-001" autocomplete="postal-code"></label>
-    <label>City <input name="city" required placeholder="Warszawa"></label>
-  </div>
-  <div class="actions">
-    <button type="submit" class="btn btn-tag">Add company</button>
-  </div>
-</form>
+<div class="page-head">
+  <h1>Companies</h1>
+  <a class="btn btn-tag" href="/companies/new">Add company</a>
+</div>
 
 {{if not .Companies}}
   <p class="empty">No companies yet.</p>
