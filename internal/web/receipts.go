@@ -123,7 +123,12 @@ func (s *Server) showReceipt(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "could not load the catalog")
 		return
 	}
-	view, err := receiptToView(receipt, products, units, companies)
+	aliases, err := s.store.ListAliases()
+	if err != nil {
+		c.String(http.StatusInternalServerError, "could not load aliases")
+		return
+	}
+	view, err := receiptToView(receipt, products, units, companies, aliases)
 	if err != nil {
 		s.renderReceipts(c, http.StatusInternalServerError, "Could not read the saved AI response.")
 		return
@@ -272,6 +277,16 @@ func (s *Server) receiptCatalog() (ocr.Catalog, []store.ProductListItem, []store
 	if err != nil {
 		return ocr.Catalog{}, nil, nil, err
 	}
+	aliases, err := s.store.ListAliases()
+	if err != nil {
+		return ocr.Catalog{}, nil, nil, err
+	}
+	byProduct := map[int64][]ocr.CatalogAlias{}
+	for _, a := range aliases {
+		byProduct[a.ProductID] = append(byProduct[a.ProductID], ocr.CatalogAlias{
+			Alias: a.Alias, CompanyID: a.CompanyID, CompanyName: a.CompanyName,
+		})
+	}
 	cat := ocr.Catalog{
 		Products: make([]ocr.CatalogProduct, 0, len(products)),
 		Units:    make([]ocr.CatalogUnit, 0, len(units)),
@@ -279,6 +294,7 @@ func (s *Server) receiptCatalog() (ocr.Catalog, []store.ProductListItem, []store
 	for _, p := range products {
 		cat.Products = append(cat.Products, ocr.CatalogProduct{
 			ID: p.ID, Name: p.Name, UnitID: p.UnitID, UnitName: p.UnitName,
+			Aliases: byProduct[p.ID],
 		})
 	}
 	for _, u := range units {

@@ -28,6 +28,7 @@ var (
 	ErrInvalidKind       = errors.New("invalid purchase kind")
 	ErrIncompletePackage = errors.New("packages and package size are both required")
 	ErrInvalidPackage    = errors.New("packages and package size must be greater than zero")
+	ErrInvalidAlias      = errors.New("alias is required")
 )
 
 const purchaseSelect = `
@@ -426,12 +427,17 @@ FROM products p
 JOIN units u ON u.id = p.unit_id
 ORDER BY p.name COLLATE NOCASE`)
 	} else {
+		pat := likeContains(q)
 		rows, err = s.db.Query(`
 SELECT p.id, p.name, p.unit_id, u.name, p.image_path, p.created_at
 FROM products p
 JOIN units u ON u.id = p.unit_id
 WHERE p.name LIKE ? ESCAPE '\'
-ORDER BY p.name COLLATE NOCASE`, likeContains(q))
+   OR EXISTS (
+     SELECT 1 FROM product_aliases a
+     WHERE a.product_id = p.id AND a.alias LIKE ? ESCAPE '\'
+   )
+ORDER BY p.name COLLATE NOCASE`, pat, pat)
 	}
 	if err != nil {
 		return nil, err
@@ -508,6 +514,13 @@ func (s *Store) CreateProduct(name string, unitID int64, imagePath *string) (Pro
 		}
 		return Product{}, err
 	}
+	taken, err := s.aliasExists(name)
+	if err != nil {
+		return Product{}, err
+	}
+	if taken {
+		return Product{}, ErrDuplicate
+	}
 	res, err := s.db.Exec(
 		`INSERT INTO products (name, unit_id, image_path, created_at) VALUES (?, ?, ?, ?)`,
 		name, unitID, imagePath, nowRFC3339(),
@@ -532,6 +545,13 @@ func (s *Store) UpdateProduct(id int64, name string, unitID int64, imagePath *st
 			return ErrInvalidUnit
 		}
 		return err
+	}
+	taken, err := s.aliasExists(name)
+	if err != nil {
+		return err
+	}
+	if taken {
+		return ErrDuplicate
 	}
 	cur, err := s.GetProduct(id)
 	if err != nil {

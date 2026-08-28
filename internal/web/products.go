@@ -122,6 +122,10 @@ func (s *Server) saveProduct(c *gin.Context, id int64) {
 		p, err := s.store.CreateProduct(name, unitID, path)
 		if err != nil {
 			s.deleteImage(imgName)
+			if errors.Is(err, store.ErrDuplicate) {
+				renderErr("That name is already used as an alias.", store.Product{Name: name, UnitID: unitID})
+				return
+			}
 			renderErr("Could not save the product.", store.Product{Name: name, UnitID: unitID})
 			return
 		}
@@ -147,6 +151,10 @@ func (s *Server) saveProduct(c *gin.Context, id int64) {
 	}
 	if err := s.store.UpdateProduct(id, name, unitID, newPath, clearImage && imgName == ""); err != nil {
 		s.deleteImage(imgName)
+		if errors.Is(err, store.ErrDuplicate) {
+			renderErr("That name is already used as an alias.", cur)
+			return
+		}
 		renderErr("Could not save the product.", cur)
 		return
 	}

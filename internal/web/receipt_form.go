@@ -35,7 +35,7 @@ type receiptLineView struct {
 	ReceiptName string
 }
 
-func hydrateBill(bill ocr.Bill, products []store.ProductListItem, units []store.Unit) ocr.Bill {
+func hydrateBill(bill ocr.Bill, products []store.ProductListItem, units []store.Unit, aliases []store.ProductAlias) ocr.Bill {
 	productByID := map[int64]store.ProductListItem{}
 	productByName := map[string]store.ProductListItem{}
 	for _, p := range products {
@@ -71,6 +71,12 @@ func hydrateBill(bill ocr.Bill, products []store.ProductListItem, units []store.
 			} else if p, ok := productByName[strings.ToLower(line.ReceiptName)]; ok {
 				line.ProductID = p.ID
 				line.UnitID = p.UnitID
+			} else if p, ok := productFromAlias(aliases, productByID, bill.CompanyID, line.ProductName); ok {
+				line.ProductID = p.ID
+				line.UnitID = p.UnitID
+			} else if p, ok := productFromAlias(aliases, productByID, bill.CompanyID, line.ReceiptName); ok {
+				line.ProductID = p.ID
+				line.UnitID = p.UnitID
 			}
 		}
 		if line.ProductID == 0 {
@@ -84,6 +90,30 @@ func hydrateBill(bill ocr.Bill, products []store.ProductListItem, units []store.
 		bill.Lines[i] = line
 	}
 	return bill
+}
+
+func productFromAlias(aliases []store.ProductAlias, products map[int64]store.ProductListItem, companyID int64, name string) (store.ProductListItem, bool) {
+	key := strings.ToLower(strings.TrimSpace(name))
+	if key == "" {
+		return store.ProductListItem{}, false
+	}
+	if companyID > 0 {
+		for _, a := range aliases {
+			if a.CompanyID == companyID && strings.ToLower(a.Alias) == key {
+				if p, ok := products[a.ProductID]; ok {
+					return p, true
+				}
+			}
+		}
+	}
+	for _, a := range aliases {
+		if a.CompanyID == 0 && strings.ToLower(a.Alias) == key {
+			if p, ok := products[a.ProductID]; ok {
+				return p, true
+			}
+		}
+	}
+	return store.ProductListItem{}, false
 }
 
 func billToView(bill ocr.Bill, receiptID int64, imagePath, status string) receiptView {
@@ -113,13 +143,13 @@ func billToView(bill ocr.Bill, receiptID int64, imagePath, status string) receip
 	return view
 }
 
-func receiptToView(r store.Receipt, products []store.ProductListItem, units []store.Unit, companies []store.Company) (receiptView, error) {
+func receiptToView(r store.Receipt, products []store.ProductListItem, units []store.Unit, companies []store.Company, aliases []store.ProductAlias) (receiptView, error) {
 	var bill ocr.Bill
 	if strings.TrimSpace(r.RawResponse) != "" {
 		if err := json.Unmarshal([]byte(r.RawResponse), &bill); err != nil {
 			return receiptView{}, err
 		}
-		bill = hydrateBill(bill, products, units)
+		bill = hydrateBill(bill, products, units, aliases)
 	}
 	view := billToView(bill, r.ID, r.ImagePath, r.Status)
 	view.CompanyID = knownCompanyID(view.CompanyID, companies)

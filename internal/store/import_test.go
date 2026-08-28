@@ -48,7 +48,7 @@ func TestImportBillCreatesProductsAndPurchases(t *testing.T) {
 	if res.CompanyID == 0 {
 		t.Fatal("expected company")
 	}
-	flour, err := s.FindProductByName("flour")
+	flour, err := s.FindProductByName("flour", 0)
 	if err != nil {
 		t.Fatal(err)
 	}

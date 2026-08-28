@@ -30,23 +30,12 @@ type BillImportResult struct {
 	Purchases  int
 }
 
-func (s *Store) FindProductByName(name string) (Product, error) {
-	name = strings.TrimSpace(name)
-	if name == "" {
-		return Product{}, ErrNotFound
-	}
-	var p Product
-	err := s.db.QueryRow(`
-SELECT p.id, p.name, p.unit_id, u.name, p.image_path, p.created_at
-FROM products p
-JOIN units u ON u.id = p.unit_id
-WHERE p.name = ? COLLATE NOCASE
-ORDER BY p.id
-LIMIT 1`, name).Scan(&p.ID, &p.Name, &p.UnitID, &p.UnitName, &p.ImagePath, &p.CreatedAt)
-	if errors.Is(err, sql.ErrNoRows) {
-		return Product{}, ErrNotFound
-	}
-	return p, err
+type queryRower interface {
+	QueryRow(query string, args ...any) *sql.Row
+}
+
+func (s *Store) FindProductByName(name string, companyID int64) (Product, error) {
+	return findProductByNameTx(s.db, name, companyID)
 }
 
 func (s *Store) ImportBill(in BillImport) (BillImportResult, error) {
@@ -90,7 +79,7 @@ func importBillTx(tx *sql.Tx, in BillImport) (BillImportResult, error) {
 	var result BillImportResult
 	result.CompanyID = companyID
 	for _, line := range in.Lines {
-		pid, err := resolveImportProduct(tx, line, created)
+		pid, err := resolveImportProduct(tx, line, created, companyID)
 		if err != nil {
 			return BillImportResult{}, err
 		}
@@ -107,7 +96,7 @@ func fmtNoLines() error {
 	return errors.New("no products to import")
 }
 
-func resolveImportProduct(tx *sql.Tx, line BillLineInput, created map[string]int64) (int64, error) {
+func resolveImportProduct(tx *sql.Tx, line BillLineInput, created map[string]int64, companyID int64) (int64, error) {
 	if line.ProductID > 0 {
 		if _, err := getProductTx(tx, line.ProductID); err != nil {
 			return 0, err
@@ -121,7 +110,7 @@ func resolveImportProduct(tx *sql.Tx, line BillLineInput, created map[string]int
 	if id, ok := created[key]; ok {
 		return id, nil
 	}
-	existing, err := findProductByNameTx(tx, line.ProductName)
+	existing, err := findProductByNameTx(tx, line.ProductName, companyID)
 	if err == nil {
 		created[key] = existing.ID
 		return existing.ID, nil
@@ -164,19 +153,34 @@ GROUP BY c.id`, id).Scan(&c.ID, &c.Name, &c.StreetName, &c.BuildingNumber, &c.Ap
 	return c, err
 }
 
-func findProductByNameTx(tx *sql.Tx, name string) (Product, error) {
-	var p Product
-	err := tx.QueryRow(`
+func findProductByNameTx(q queryRower, name string, companyID int64) (Product, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return Product{}, ErrNotFound
+	}
+	if companyID > 0 {
+		p, err := productByAliasTx(q, name, companyID)
+		if err == nil {
+			return p, nil
+		}
+		if !errors.Is(err, ErrNotFound) {
+			return Product{}, err
+		}
+	}
+	p, err := productByAliasTx(q, name, 0)
+	if err == nil {
+		return p, nil
+	}
+	if !errors.Is(err, ErrNotFound) {
+		return Product{}, err
+	}
+	return scanProductRow(q.QueryRow(`
 SELECT p.id, p.name, p.unit_id, u.name, p.image_path, p.created_at
 FROM products p
 JOIN units u ON u.id = p.unit_id
 WHERE p.name = ? COLLATE NOCASE
 ORDER BY p.id
-LIMIT 1`, strings.TrimSpace(name)).Scan(&p.ID, &p.Name, &p.UnitID, &p.UnitName, &p.ImagePath, &p.CreatedAt)
-	if errors.Is(err, sql.ErrNoRows) {
-		return Product{}, ErrNotFound
-	}
-	return p, err
+LIMIT 1`, name))
 }
 
 func createProductTx(tx *sql.Tx, name string, unitID int64) (Product, error) {
@@ -190,6 +194,13 @@ func createProductTx(tx *sql.Tx, name string, unitID int64) (Product, error) {
 	}
 	if n == 0 {
 		return Product{}, ErrInvalidUnit
+	}
+	var aliasCount int
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM product_aliases WHERE alias = ? COLLATE NOCASE`, name).Scan(&aliasCount); err != nil {
+		return Product{}, err
+	}
+	if aliasCount > 0 {
+		return Product{}, ErrDuplicate
 	}
 	res, err := tx.Exec(
 		`INSERT INTO products (name, unit_id, image_path, created_at) VALUES (?, ?, ?, ?)`,

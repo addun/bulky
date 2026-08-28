@@ -1,0 +1,26 @@
+{{template "header" .}}
+<h1>Edit alias</h1>
+<form class="stack" method="post" action="/aliases/{{.Alias.ID}}">
+  <label>Product
+    <select name="product_id" required>
+      <option value="">Select…</option>
+      {{range .Products}}
+      <option value="{{.ID}}" {{if eq .ID $.Alias.ProductID}}selected{{end}}>{{.Name}}</option>
+      {{end}}
+    </select>
+  </label>
+  <label>Company
+    <select name="company_id">
+      <option value="">Any shop</option>
+      {{range .Companies}}
+      <option value="{{.ID}}" {{if eq .ID $.Alias.CompanyID}}selected{{end}}>{{.Label}}</option>
+      {{end}}
+    </select>
+  </label>
+  <label>Alias <input name="alias" required value="{{.Alias.Alias}}" autofocus></label>
+  <div class="actions">
+    <button type="submit" class="btn btn-tag">Save alias</button>
+    <a href="/aliases">Cancel</a>
+  </div>
+</form>
+{{template "footer" .}}

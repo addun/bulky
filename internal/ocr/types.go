@@ -32,10 +32,17 @@ type Catalog struct {
 }
 
 type CatalogProduct struct {
-	ID       int64  `json:"id"`
-	Name     string `json:"name"`
-	UnitID   int64  `json:"unit_id"`
-	UnitName string `json:"unit_name"`
+	ID       int64          `json:"id"`
+	Name     string         `json:"name"`
+	UnitID   int64          `json:"unit_id"`
+	UnitName string         `json:"unit_name"`
+	Aliases  []CatalogAlias `json:"aliases,omitempty"`
+}
+
+type CatalogAlias struct {
+	Alias       string `json:"alias"`
+	CompanyID   int64  `json:"company_id,omitempty"`
+	CompanyName string `json:"company_name,omitempty"`
 }
 
 type CatalogUnit struct {
