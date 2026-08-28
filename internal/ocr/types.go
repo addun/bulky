@@ -26,30 +26,6 @@ func (c Config) Configured() bool {
 	return base != "" && base != DefaultBaseURL
 }
 
-type Catalog struct {
-	Products []CatalogProduct `json:"products"`
-	Units    []CatalogUnit    `json:"units"`
-}
-
-type CatalogProduct struct {
-	ID       int64          `json:"id"`
-	Name     string         `json:"name"`
-	UnitID   int64          `json:"unit_id"`
-	UnitName string         `json:"unit_name"`
-	Aliases  []CatalogAlias `json:"aliases,omitempty"`
-}
-
-type CatalogAlias struct {
-	Alias       string `json:"alias"`
-	CompanyID   int64  `json:"company_id,omitempty"`
-	CompanyName string `json:"company_name,omitempty"`
-}
-
-type CatalogUnit struct {
-	ID   int64  `json:"id"`
-	Name string `json:"name"`
-}
-
 type Bill struct {
 	BoughtOn  string `json:"bought_on"`
 	Notes     string `json:"notes"`

@@ -13,7 +13,27 @@ import (
 )
 
 func (s *Server) aliases(c *gin.Context) {
-	list, err := s.store.ListAliases()
+	productID := formInt64Query(c, "product")
+	var filter *store.Product
+	if productID > 0 {
+		p, err := s.store.GetProduct(productID)
+		if errors.Is(err, store.ErrNotFound) {
+			c.String(http.StatusNotFound, "not found")
+			return
+		}
+		if err != nil {
+			c.String(http.StatusInternalServerError, "could not load product")
+			return
+		}
+		filter = &p
+	}
+	var list []store.ProductAlias
+	var err error
+	if filter != nil {
+		list, err = s.store.ListAliasesByProduct(filter.ID)
+	} else {
+		list, err = s.store.ListAliases()
+	}
 	if err != nil {
 		c.String(http.StatusInternalServerError, "could not load aliases")
 		return
@@ -23,24 +43,34 @@ func (s *Server) aliases(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "could not load the catalog")
 		return
 	}
+	formID := int64(0)
+	if filter != nil {
+		formID = filter.ID
+	}
 	c.HTML(http.StatusOK, "aliases.html", gin.H{
-		"Page":      s.page("Aliases", "", c.Query("error")),
-		"Aliases":   list,
-		"Products":  products,
-		"Companies": companies,
-		"Form":      store.ProductAlias{ProductID: formInt64Query(c, "product")},
+		"Page":         s.page("Aliases", "", c.Query("error")),
+		"Aliases":      list,
+		"Products":     products,
+		"Companies":    companies,
+		"Filter":       filter,
+		"ProductQuery": aliasesQuerySuffix(formID),
+		"Form":         store.ProductAlias{ProductID: formID},
 	})
 }
 
 func (s *Server) createAlias(c *gin.Context) {
+	from := formInt64(c, "from_product")
 	redirect := aliasRedirect(c.PostForm("redirect"))
+	if strings.TrimSpace(c.PostForm("redirect")) == "" {
+		redirect = aliasesPath(from)
+	}
 	_, err := s.saveAliasFromForm(c, 0)
 	if msg := aliasFormError(err); msg != "" {
-		c.Redirect(http.StatusSeeOther, redirect+"?error="+url.QueryEscape(msg))
+		c.Redirect(http.StatusSeeOther, aliasesPathError(redirect, msg))
 		return
 	}
 	if err != nil {
-		c.Redirect(http.StatusSeeOther, redirect+"?error="+url.QueryEscape("Could not save the alias."))
+		c.Redirect(http.StatusSeeOther, aliasesPathError(redirect, "Could not save the alias."))
 		return
 	}
 	c.Redirect(http.StatusSeeOther, redirect)
@@ -66,11 +96,14 @@ func (s *Server) editAlias(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "could not load the catalog")
 		return
 	}
+	from := formInt64Query(c, "product")
 	c.HTML(http.StatusOK, "alias_form.html", gin.H{
-		"Page":      s.page("Edit alias", "", ""),
-		"Alias":     a,
-		"Products":  products,
-		"Companies": companies,
+		"Page":        s.page("Edit alias", "", ""),
+		"Alias":       a,
+		"Products":    products,
+		"Companies":   companies,
+		"FromProduct": from,
+		"Cancel":      aliasesPath(from),
 	})
 }
 
@@ -93,6 +126,7 @@ func (s *Server) updateAlias(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "could not load the catalog")
 		return
 	}
+	from := formInt64(c, "from_product")
 	form := store.ProductAlias{
 		ID:        id,
 		ProductID: formInt64(c, "product_id"),
@@ -101,10 +135,12 @@ func (s *Server) updateAlias(c *gin.Context) {
 	}
 	if msg := aliasFormError(err); msg != "" {
 		c.HTML(http.StatusUnprocessableEntity, "alias_form.html", gin.H{
-			"Page":      s.page("Edit alias", "", msg),
-			"Alias":     form,
-			"Products":  products,
-			"Companies": companies,
+			"Page":        s.page("Edit alias", "", msg),
+			"Alias":       form,
+			"Products":    products,
+			"Companies":   companies,
+			"FromProduct": from,
+			"Cancel":      aliasesPath(from),
 		})
 		return
 	}
@@ -112,7 +148,7 @@ func (s *Server) updateAlias(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "could not save alias")
 		return
 	}
-	c.Redirect(http.StatusSeeOther, "/aliases")
+	c.Redirect(http.StatusSeeOther, aliasesPath(from))
 }
 
 func (s *Server) confirmDeleteAlias(c *gin.Context) {
@@ -130,12 +166,17 @@ func (s *Server) confirmDeleteAlias(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "could not load alias")
 		return
 	}
+	from := formInt64Query(c, "product")
+	action := "/aliases/" + itoa(id) + "/delete"
+	if q := aliasesQuerySuffix(from); q != "" {
+		action += q
+	}
 	c.HTML(http.StatusOK, "confirm.html", gin.H{
 		"Page":    s.page("Delete alias", "", ""),
 		"Title":   "Delete alias “" + a.Alias + "”?",
 		"Body":    "This only removes the alternate name. The product stays.",
-		"Action":  "/aliases/" + itoa(id) + "/delete",
-		"Cancel":  "/aliases",
+		"Action":  action,
+		"Cancel":  aliasesPath(from),
 		"Confirm": "Delete alias",
 	})
 }
@@ -155,7 +196,7 @@ func (s *Server) deleteAlias(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "could not delete alias")
 		return
 	}
-	c.Redirect(http.StatusSeeOther, "/aliases")
+	c.Redirect(http.StatusSeeOther, aliasesPath(formInt64Query(c, "product")))
 }
 
 func (s *Server) saveAliasFromForm(c *gin.Context, id int64) (store.ProductAlias, error) {
@@ -206,4 +247,26 @@ func aliasRedirect(raw string) string {
 		return "/aliases"
 	}
 	return r
+}
+
+func aliasesPath(productID int64) string {
+	if productID <= 0 {
+		return "/aliases"
+	}
+	return "/aliases?product=" + itoa(productID)
+}
+
+func aliasesQuerySuffix(productID int64) string {
+	if productID <= 0 {
+		return ""
+	}
+	return "?product=" + itoa(productID)
+}
+
+func aliasesPathError(path, msg string) string {
+	sep := "?"
+	if strings.Contains(path, "?") {
+		sep = "&"
+	}
+	return path + sep + "error=" + url.QueryEscape(msg)
 }

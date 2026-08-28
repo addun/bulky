@@ -74,6 +74,43 @@ func TestHydrateBillMatchesAlias(t *testing.T) {
 	}
 }
 
+func TestHydrateBillFuzzyAlias(t *testing.T) {
+	products := []store.ProductListItem{
+		{Product: store.Product{ID: 4, Name: "Cake flour", UnitID: 1, UnitName: "kg"}},
+		{Product: store.Product{ID: 5, Name: "Rice", UnitID: 1, UnitName: "kg"}},
+	}
+	units := []store.Unit{{ID: 1, Name: "kg"}}
+	aliases := []store.ProductAlias{
+		{ProductID: 4, CompanyID: 0, Alias: "Mąka tortowa"},
+	}
+
+	got := hydrateBill(ocr.Bill{
+		Lines: []ocr.Line{{ReceiptName: "MAKA TORTOWA 1KG", ProductName: "", ProductID: 0, UnitName: "kg"}},
+	}, products, units, aliases)
+	if got.Lines[0].ProductID != 4 {
+		t.Fatalf("fuzzy alias: %#v", got.Lines[0])
+	}
+}
+
+func TestHydrateBillAmbiguousAlias(t *testing.T) {
+	products := []store.ProductListItem{
+		{Product: store.Product{ID: 4, Name: "Wheat flour", UnitID: 1, UnitName: "kg"}},
+		{Product: store.Product{ID: 6, Name: "Rye flour", UnitID: 1, UnitName: "kg"}},
+	}
+	units := []store.Unit{{ID: 1, Name: "kg"}}
+	aliases := []store.ProductAlias{
+		{ProductID: 4, CompanyID: 0, Alias: "Mąka pszenna"},
+		{ProductID: 6, CompanyID: 0, Alias: "Mąka żytnia"},
+	}
+
+	got := hydrateBill(ocr.Bill{
+		Lines: []ocr.Line{{ReceiptName: "Mąka", ProductName: "", ProductID: 0, UnitName: "kg"}},
+	}, products, units, aliases)
+	if got.Lines[0].ProductID != 0 {
+		t.Fatalf("ambiguous should stay unmatched: %#v", got.Lines[0])
+	}
+}
+
 func TestParseReceiptForm(t *testing.T) {
 	get := func(form map[string]string) func(string) string {
 		return func(k string) string { return form[k] }
@@ -89,6 +126,7 @@ func TestParseReceiptForm(t *testing.T) {
 		"include_1":        "1",
 		"product_choice_1": "new",
 		"product_name_1":   "Flour",
+		"receipt_name_1":   "MAKA 5KG",
 		"unit_id_1":        "1",
 		"quantity_1":       "5",
 		"amount_1":         "18.50",
@@ -111,7 +149,7 @@ func TestParseReceiptForm(t *testing.T) {
 	if in.Lines[0].ProductID != 4 || in.Lines[0].Amount.StringFixed(2) != "40.00" {
 		t.Fatalf("line0: %#v", in.Lines[0])
 	}
-	if in.Lines[1].ProductName != "Flour" || in.Lines[1].UnitID != 1 {
+	if in.Lines[1].ProductName != "Flour" || in.Lines[1].UnitID != 1 || in.Lines[1].ReceiptName != "MAKA 5KG" {
 		t.Fatalf("line1: %#v", in.Lines[1])
 	}
 

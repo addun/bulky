@@ -11,6 +11,7 @@ import (
 type BillLineInput struct {
 	ProductID   int64
 	ProductName string
+	ReceiptName string
 	UnitID      int64
 	Quantity    decimal.Decimal
 	Amount      decimal.Decimal
@@ -32,6 +33,11 @@ type BillImportResult struct {
 
 type queryRower interface {
 	QueryRow(query string, args ...any) *sql.Row
+}
+
+type execRower interface {
+	queryRower
+	Exec(query string, args ...any) (sql.Result, error)
 }
 
 func (s *Store) FindProductByName(name string, companyID int64) (Product, error) {
@@ -76,10 +82,11 @@ func importBillTx(tx *sql.Tx, in BillImport) (BillImportResult, error) {
 	}
 
 	created := map[string]int64{}
+	newIDs := map[int64]struct{}{}
 	var result BillImportResult
 	result.CompanyID = companyID
 	for _, line := range in.Lines {
-		pid, err := resolveImportProduct(tx, line, created, companyID)
+		pid, err := resolveImportProduct(tx, line, created, newIDs, companyID)
 		if err != nil {
 			return BillImportResult{}, err
 		}
@@ -96,7 +103,7 @@ func fmtNoLines() error {
 	return errors.New("no products to import")
 }
 
-func resolveImportProduct(tx *sql.Tx, line BillLineInput, created map[string]int64, companyID int64) (int64, error) {
+func resolveImportProduct(tx *sql.Tx, line BillLineInput, created map[string]int64, newIDs map[int64]struct{}, companyID int64) (int64, error) {
 	if line.ProductID > 0 {
 		if _, err := getProductTx(tx, line.ProductID); err != nil {
 			return 0, err
@@ -108,6 +115,11 @@ func resolveImportProduct(tx *sql.Tx, line BillLineInput, created map[string]int
 		return 0, errors.New("product name is required")
 	}
 	if id, ok := created[key]; ok {
+		if _, isNew := newIDs[id]; isNew {
+			if err := maybeAliasFromReceipt(tx, id, companyID, line.ReceiptName, line.ProductName); err != nil {
+				return 0, err
+			}
+		}
 		return id, nil
 	}
 	existing, err := findProductByNameTx(tx, line.ProductName, companyID)
@@ -123,7 +135,26 @@ func resolveImportProduct(tx *sql.Tx, line BillLineInput, created map[string]int
 		return 0, err
 	}
 	created[key] = p.ID
+	newIDs[p.ID] = struct{}{}
+	if err := maybeAliasFromReceipt(tx, p.ID, companyID, line.ReceiptName, line.ProductName); err != nil {
+		return 0, err
+	}
 	return p.ID, nil
+}
+
+func maybeAliasFromReceipt(tx *sql.Tx, productID, companyID int64, receiptName, productName string) error {
+	receiptName = strings.TrimSpace(receiptName)
+	if receiptName == "" {
+		return nil
+	}
+	if strings.EqualFold(receiptName, strings.TrimSpace(productName)) {
+		return nil
+	}
+	_, err := createAliasTx(tx, productID, companyID, receiptName)
+	if err == nil || errors.Is(err, ErrDuplicate) || errors.Is(err, ErrInvalidAlias) {
+		return nil
+	}
+	return err
 }
 
 func getProductTx(tx *sql.Tx, id int64) (Product, error) {

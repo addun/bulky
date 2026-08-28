@@ -47,32 +47,14 @@ func (s *Store) GetAlias(id int64) (ProductAlias, error) {
 }
 
 func (s *Store) CreateAlias(productID, companyID int64, alias string) (ProductAlias, error) {
-	alias, company, err := s.prepareAlias(productID, companyID, alias)
-	if err != nil {
-		return ProductAlias{}, err
-	}
-	res, err := s.db.Exec(
-		`INSERT INTO product_aliases (product_id, company_id, alias) VALUES (?, ?, ?)`,
-		productID, company, alias,
-	)
-	if err != nil {
-		if isUniqueErr(err) {
-			return ProductAlias{}, ErrDuplicate
-		}
-		return ProductAlias{}, err
-	}
-	id, err := res.LastInsertId()
-	if err != nil {
-		return ProductAlias{}, err
-	}
-	return s.GetAlias(id)
+	return createAliasTx(s.db, productID, companyID, alias)
 }
 
 func (s *Store) UpdateAlias(id, productID, companyID int64, alias string) error {
 	if _, err := s.GetAlias(id); err != nil {
 		return err
 	}
-	alias, company, err := s.prepareAlias(productID, companyID, alias)
+	alias, company, err := prepareAliasTx(s.db, productID, companyID, alias)
 	if err != nil {
 		return err
 	}
@@ -111,29 +93,65 @@ func (s *Store) DeleteAlias(id int64) error {
 	return nil
 }
 
-func (s *Store) prepareAlias(productID, companyID int64, alias string) (string, any, error) {
+func prepareAliasTx(q queryRower, productID, companyID int64, alias string) (string, any, error) {
 	alias = strings.TrimSpace(alias)
 	if alias == "" {
 		return "", nil, ErrInvalidAlias
 	}
-	if _, err := s.GetProduct(productID); err != nil {
-		if errors.Is(err, ErrNotFound) {
-			return "", nil, ErrNotFound
-		}
+	var n int
+	if err := q.QueryRow(`SELECT COUNT(*) FROM products WHERE id = ?`, productID).Scan(&n); err != nil {
 		return "", nil, err
 	}
-	company, err := s.optionalCompanyArg(companyID)
+	if n == 0 {
+		return "", nil, ErrNotFound
+	}
+	company, err := optionalCompanyArgTx(q, companyID)
 	if err != nil {
 		return "", nil, err
 	}
-	taken, err := s.catalogNameExists(alias)
-	if err != nil {
+	if err := q.QueryRow(`SELECT COUNT(*) FROM products WHERE name = ? COLLATE NOCASE`, alias).Scan(&n); err != nil {
 		return "", nil, err
 	}
-	if taken {
+	if n > 0 {
 		return "", nil, ErrDuplicate
 	}
 	return alias, company, nil
+}
+
+func optionalCompanyArgTx(q queryRower, id int64) (any, error) {
+	if id == 0 {
+		return nil, nil
+	}
+	var n int
+	if err := q.QueryRow(`SELECT COUNT(*) FROM companies WHERE id = ?`, id).Scan(&n); err != nil {
+		return nil, err
+	}
+	if n == 0 {
+		return nil, ErrInvalidCompany
+	}
+	return id, nil
+}
+
+func createAliasTx(db execRower, productID, companyID int64, alias string) (ProductAlias, error) {
+	alias, company, err := prepareAliasTx(db, productID, companyID, alias)
+	if err != nil {
+		return ProductAlias{}, err
+	}
+	res, err := db.Exec(
+		`INSERT INTO product_aliases (product_id, company_id, alias) VALUES (?, ?, ?)`,
+		productID, company, alias,
+	)
+	if err != nil {
+		if isUniqueErr(err) {
+			return ProductAlias{}, ErrDuplicate
+		}
+		return ProductAlias{}, err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return ProductAlias{}, err
+	}
+	return scanAlias(db.QueryRow(aliasSelect+` WHERE a.id = ?`, id))
 }
 
 func (s *Store) catalogNameExists(name string) (bool, error) {

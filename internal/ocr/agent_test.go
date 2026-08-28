@@ -18,6 +18,7 @@ func TestExtractFromMockAPI(t *testing.T) {
 			{"receipt_name": "Rice 10kg", "product_name": "Rice", "quantity": "10", "amount": "40.00", "unit_name": "kg"},
 		},
 	})
+	var reqBody []byte
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/chat/completions" {
 			t.Errorf("path %s", r.URL.Path)
@@ -29,6 +30,7 @@ func TestExtractFromMockAPI(t *testing.T) {
 		if !json.Valid(body) {
 			t.Error("request body is not JSON")
 		}
+		reqBody = body
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"choices": []map[string]any{
@@ -41,9 +43,7 @@ func TestExtractFromMockAPI(t *testing.T) {
 	a := New(Config{APIKey: "sk-test", BaseURL: srv.URL, Model: "test-model"})
 
 	png := tinyPNG(t)
-	bill, raw, err := a.Extract(png, Catalog{
-		Units: []CatalogUnit{{ID: 1, Name: "kg"}},
-	})
+	bill, raw, err := a.Extract(png)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,6 +55,9 @@ func TestExtractFromMockAPI(t *testing.T) {
 	}
 	if !json.Valid(raw) || !bytes.Contains(raw, []byte("Rice")) {
 		t.Fatalf("raw %s", raw)
+	}
+	if bytes.Contains(reqBody, []byte(`"products"`)) {
+		t.Fatalf("request should not send a product catalog: %s", reqBody)
 	}
 }
 
@@ -68,7 +71,7 @@ func TestExtractNotABill(t *testing.T) {
 	}))
 	defer srv.Close()
 	a := New(Config{APIKey: "x", BaseURL: srv.URL})
-	_, _, err := a.Extract(tinyPNG(t), Catalog{})
+	_, _, err := a.Extract(tinyPNG(t))
 	if err != ErrNotABill {
 		t.Fatalf("got %v", err)
 	}
