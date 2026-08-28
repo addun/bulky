@@ -100,6 +100,13 @@ func (s *Server) routes() {
 	s.engine.GET("/companies/:id/delete", s.confirmDeleteCompany)
 	s.engine.POST("/companies/:id/delete", s.deleteCompany)
 
+	s.engine.GET("/aliases", s.aliases)
+	s.engine.POST("/aliases", s.createAlias)
+	s.engine.GET("/aliases/:id/edit", s.editAlias)
+	s.engine.POST("/aliases/:id", s.updateAlias)
+	s.engine.GET("/aliases/:id/delete", s.confirmDeleteAlias)
+	s.engine.POST("/aliases/:id/delete", s.deleteAlias)
+
 	s.engine.GET("/products/new", s.newProduct)
 	s.engine.POST("/products", s.createProduct)
 	s.engine.GET("/products/:id", s.showProduct)
@@ -140,6 +147,11 @@ func paramID(c *gin.Context, name string) (int64, bool) {
 
 func formInt64(c *gin.Context, name string) int64 {
 	v, _ := strconv.ParseInt(strings.TrimSpace(c.PostForm(name)), 10, 64)
+	return v
+}
+
+func formInt64Query(c *gin.Context, name string) int64 {
+	v, _ := strconv.ParseInt(strings.TrimSpace(c.Query(name)), 10, 64)
 	return v
 }
 

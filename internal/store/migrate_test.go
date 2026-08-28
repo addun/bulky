@@ -19,7 +19,7 @@ func TestOpenFreshSeedsAndVersions(t *testing.T) {
 	defer s.Close()
 
 	assertCurrentSchema(t, s.db)
-	assertGooseVersion(t, s.db, 6)
+	assertGooseVersion(t, s.db, 7)
 
 	units, err := s.ListUnits()
 	if err != nil {
@@ -54,7 +54,7 @@ func TestOpenSecondBootNoops(t *testing.T) {
 	defer s.Close()
 
 	assertCurrentSchema(t, s.db)
-	assertGooseVersion(t, s.db, 6)
+	assertGooseVersion(t, s.db, 7)
 
 	units, err := s.ListUnits()
 	if err != nil {
@@ -123,7 +123,7 @@ VALUES (1, '2024-01-02', '10', '20.50', '2024-01-02T00:00:00Z');
 	defer s.Close()
 
 	assertCurrentSchema(t, s.db)
-	assertGooseVersion(t, s.db, 6)
+	assertGooseVersion(t, s.db, 7)
 
 	var n int
 	if err := s.db.QueryRow(`SELECT COUNT(*) FROM purchases`).Scan(&n); err != nil {
@@ -185,7 +185,7 @@ func TestOpenAddsKindWhenGooseAlreadyAtReceipts(t *testing.T) {
 	if !hasColumn(t, s.db, "purchases", "kind") {
 		t.Fatal("purchases missing kind after reopen")
 	}
-	assertGooseVersion(t, s.db, 6)
+	assertGooseVersion(t, s.db, 7)
 	if _, err := s.ListProducts(""); err != nil {
 		t.Fatalf("ListProducts: %v", err)
 	}
@@ -230,7 +230,7 @@ func TestOpenRenamesRecipesToReceipts(t *testing.T) {
 	defer s.Close()
 
 	assertCurrentSchema(t, s.db)
-	assertGooseVersion(t, s.db, 6)
+	assertGooseVersion(t, s.db, 7)
 }
 
 func TestPurchaseCompanyOptional(t *testing.T) {
@@ -353,7 +353,7 @@ func assertGooseVersion(t *testing.T, db *sql.DB, want int64) {
 
 func assertCurrentSchema(t *testing.T, db *sql.DB) {
 	t.Helper()
-	for _, table := range []string{"units", "products", "companies", "purchases", "receipts", "goose_db_version"} {
+	for _, table := range []string{"units", "products", "companies", "purchases", "receipts", "product_aliases", "goose_db_version"} {
 		if !tableExists(t, db, table) {
 			t.Fatalf("missing table %s", table)
 		}
@@ -386,7 +386,10 @@ func assertCurrentSchema(t *testing.T, db *sql.DB) {
 			t.Fatalf("receipts missing %s", col)
 		}
 	}
-	for _, idx := range []string{"idx_products_name", "idx_purchases_product", "idx_companies_name", "idx_purchases_company", "idx_receipts_status", "idx_purchases_receipt"} {
+	if !hasColumn(t, db, "product_aliases", "alias") {
+		t.Fatal("product_aliases missing alias")
+	}
+	for _, idx := range []string{"idx_products_name", "idx_purchases_product", "idx_companies_name", "idx_purchases_company", "idx_receipts_status", "idx_purchases_receipt", "idx_product_aliases_shop", "idx_product_aliases_global", "idx_product_aliases_product"} {
 		if !indexExists(t, db, idx) {
 			t.Fatalf("missing index %s", idx)
 		}

@@ -77,7 +77,7 @@ func TestReceiptAIThenMigrate(t *testing.T) {
 		t.Fatalf("second migrate: %v", err)
 	}
 
-	rice, err := s.FindProductByName("Rice")
+	rice, err := s.FindProductByName("Rice", 0)
 	if err != nil {
 		t.Fatal(err)
 	}

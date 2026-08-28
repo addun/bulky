@@ -27,7 +27,7 @@ func TestHydrateBillMatchesCatalog(t *testing.T) {
 			{ReceiptName: "Ghost", ProductName: "Ghost", ProductID: 123, Skip: true},
 		},
 	}
-	got := hydrateBill(bill, products, units)
+	got := hydrateBill(bill, products, units, nil)
 	if got.Lines[0].ProductID != 4 || got.Lines[0].UnitID != 1 {
 		t.Fatalf("rice: %#v", got.Lines[0])
 	}
@@ -36,6 +36,41 @@ func TestHydrateBillMatchesCatalog(t *testing.T) {
 	}
 	if got.Lines[2].ProductID != 0 {
 		t.Fatalf("invalid product id should clear: %#v", got.Lines[2])
+	}
+}
+
+func TestHydrateBillMatchesAlias(t *testing.T) {
+	products := []store.ProductListItem{
+		{Product: store.Product{ID: 4, Name: "Cake flour", UnitID: 1, UnitName: "kg"}},
+		{Product: store.Product{ID: 5, Name: "Rice", UnitID: 1, UnitName: "kg"}},
+	}
+	units := []store.Unit{{ID: 1, Name: "kg"}}
+	aliases := []store.ProductAlias{
+		{ProductID: 4, CompanyID: 0, Alias: "Tortowa"},
+		{ProductID: 5, CompanyID: 9, Alias: "Mąka"},
+		{ProductID: 4, CompanyID: 0, Alias: "Mąka"},
+	}
+
+	shop := hydrateBill(ocr.Bill{
+		CompanyID: 9,
+		Lines:     []ocr.Line{{ReceiptName: "MĄKA", ProductName: "", ProductID: 0, UnitName: "kg"}},
+	}, products, units, aliases)
+	if shop.Lines[0].ProductID != 5 {
+		t.Fatalf("shop alias should win: %#v", shop.Lines[0])
+	}
+
+	global := hydrateBill(ocr.Bill{
+		Lines: []ocr.Line{{ReceiptName: "Tortowa", ProductName: "", ProductID: 0, UnitName: "kg"}},
+	}, products, units, aliases)
+	if global.Lines[0].ProductID != 4 {
+		t.Fatalf("global: %#v", global.Lines[0])
+	}
+
+	unknownShop := hydrateBill(ocr.Bill{
+		Lines: []ocr.Line{{ReceiptName: "Mąka", ProductName: "", ProductID: 0, UnitName: "kg"}},
+	}, products, units, aliases)
+	if unknownShop.Lines[0].ProductID != 4 {
+		t.Fatalf("no company uses global only: %#v", unknownShop.Lines[0])
 	}
 }
 
