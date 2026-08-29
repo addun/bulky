@@ -617,6 +617,8 @@ code {
   background: #fff;
   border: 1px solid var(--line);
   padding: 0.45rem 0.45rem 0.7rem;
+  position: sticky;
+  top: 10px;
 }
 
 .receipt-slip img {

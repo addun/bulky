@@ -28,7 +28,7 @@ func New(cfg Config) *Agent {
 	cfg.APIKey = strings.TrimSpace(cfg.APIKey)
 	oai := openai.DefaultConfig(cfg.APIKey)
 	oai.BaseURL = cfg.BaseURL
-	oai.HTTPClient = &http.Client{Timeout: 90 * time.Second}
+	oai.HTTPClient = &http.Client{Timeout: 3 * time.Minute}
 	return &Agent{
 		cfg:    cfg,
 		client: openai.NewClientWithConfig(oai),
@@ -47,7 +47,13 @@ func (a *Agent) Extract(image []byte) (Bill, []byte, error) {
 	if err != nil {
 		return Bill{}, nil, err
 	}
-	body, err := a.chat(jpeg)
+	tiles, err := splitReceipt(jpeg)
+	if err != nil {
+		return Bill{}, nil, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+	body, err := a.chat(ctx, tiles)
 	if err != nil {
 		return Bill{}, nil, err
 	}
@@ -68,10 +74,25 @@ func (a *Agent) Extract(image []byte) (Bill, []byte, error) {
 	return bill, rawJSON, nil
 }
 
-func (a *Agent) chat(jpeg []byte) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
-	defer cancel()
-
+func (a *Agent) chat(ctx context.Context, tiles [][]byte) ([]byte, error) {
+	parts := []openai.ChatMessagePart{
+		{Type: openai.ChatMessagePartTypeText, Text: chunkUserPrompt(len(tiles))},
+	}
+	for i, tile := range tiles {
+		if len(tiles) > 1 {
+			parts = append(parts, openai.ChatMessagePart{
+				Type: openai.ChatMessagePartTypeText,
+				Text: sliceCaption(i, len(tiles)),
+			})
+		}
+		parts = append(parts, openai.ChatMessagePart{
+			Type: openai.ChatMessagePartTypeImageURL,
+			ImageURL: &openai.ChatMessageImageURL{
+				URL:    "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(tile),
+				Detail: openai.ImageURLDetailHigh,
+			},
+		})
+	}
 	resp, err := a.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
 		Model:       a.cfg.Model,
 		Temperature: 0,
@@ -80,19 +101,7 @@ func (a *Agent) chat(jpeg []byte) ([]byte, error) {
 		},
 		Messages: []openai.ChatCompletionMessage{
 			{Role: openai.ChatMessageRoleSystem, Content: systemPrompt},
-			{
-				Role: openai.ChatMessageRoleUser,
-				MultiContent: []openai.ChatMessagePart{
-					{Type: openai.ChatMessagePartTypeText, Text: userPrompt},
-					{
-						Type: openai.ChatMessagePartTypeImageURL,
-						ImageURL: &openai.ChatMessageImageURL{
-							URL:    "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(jpeg),
-							Detail: openai.ImageURLDetailHigh,
-						},
-					},
-				},
-			},
+			{Role: openai.ChatMessageRoleUser, MultiContent: parts},
 		},
 	})
 	if err != nil {

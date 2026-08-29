@@ -8,6 +8,7 @@ import (
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
+	"math"
 	"net/http"
 
 	"github.com/disintegration/imaging"
@@ -16,10 +17,11 @@ import (
 
 const (
 	MaxImageBytes = 10 << 20
-	// modelEdge is the long side sent to the vision model. Receipts stay
-	// readable, payloads stay small, and every photo lands at the same scale.
-	modelEdge   = 1536
-	jpegQuality = 82
+	// maxPreparedBytes is the cap after JPEG quality. Dimensions stay as
+	// photographed unless the file is still over this size.
+	maxPreparedBytes = 3 << 19 // 1.5 MiB
+	jpegQuality      = 82
+	shrinkAttempts   = 16
 )
 
 func PrepareJPEG(raw []byte) ([]byte, error) {
@@ -36,10 +38,16 @@ func PrepareJPEG(raw []byte) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("could not read the image")
 	}
-	img = normalizeLongEdge(img, modelEdge)
-	flat := imaging.New(img.Bounds().Dx(), img.Bounds().Dy(), color.White)
-	img = imaging.OverlayCenter(flat, img, 1)
+	img = flattenWhite(img)
+	return fitJPEG(img, maxPreparedBytes)
+}
 
+func flattenWhite(img image.Image) image.Image {
+	flat := imaging.New(img.Bounds().Dx(), img.Bounds().Dy(), color.White)
+	return imaging.OverlayCenter(flat, img, 1)
+}
+
+func encodeJPEG(img image.Image) ([]byte, error) {
 	var buf bytes.Buffer
 	if err := imaging.Encode(&buf, img, imaging.JPEG, imaging.JPEGQuality(jpegQuality)); err != nil {
 		return nil, err
@@ -47,23 +55,41 @@ func PrepareJPEG(raw []byte) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func normalizeLongEdge(img image.Image, edge int) image.Image {
-	b := img.Bounds()
-	w, h := b.Dx(), b.Dy()
-	if w <= 0 || h <= 0 || edge <= 0 {
-		return img
+func fitJPEG(img image.Image, maxBytes int) ([]byte, error) {
+	out, err := encodeJPEG(img)
+	if err != nil {
+		return nil, err
 	}
-	long := w
-	if h > w {
-		long = h
+	if len(out) <= maxBytes {
+		return out, nil
 	}
-	if long == edge {
-		return img
+
+	origW := img.Bounds().Dx()
+	origH := img.Bounds().Dy()
+	scale := 1.0
+	for i := 0; i < shrinkAttempts && len(out) > maxBytes; i++ {
+		ratio := math.Sqrt(float64(maxBytes) / float64(len(out)))
+		if ratio > 0.95 {
+			ratio = 0.95
+		}
+		scale *= ratio
+		w := int(math.Round(float64(origW) * scale))
+		h := int(math.Round(float64(origH) * scale))
+		if w < 1 {
+			w = 1
+		}
+		if h < 1 {
+			h = 1
+		}
+		out, err = encodeJPEG(imaging.Resize(img, w, h, imaging.Lanczos))
+		if err != nil {
+			return nil, err
+		}
 	}
-	if w >= h {
-		return imaging.Resize(img, edge, 0, imaging.Lanczos)
+	if len(out) > maxBytes {
+		return nil, fmt.Errorf("could not compress the image under 1.5 MB")
 	}
-	return imaging.Resize(img, 0, edge, imaging.Lanczos)
+	return out, nil
 }
 
 func sniffImage(b []byte) bool {

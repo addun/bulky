@@ -10,7 +10,7 @@ var (
 )
 
 const DefaultBaseURL = "https://api.openai.com/v1"
-const DefaultModel = "gpt-4o-mini"
+const DefaultModel = "gpt-4o"
 
 type Config struct {
 	APIKey  string
