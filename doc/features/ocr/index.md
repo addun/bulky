@@ -8,7 +8,7 @@ The reader needs a vision model. Set `OCR_API_KEY` (or `OPENAI_API_KEY`) for Ope
 
 ## Photograph
 
-Open **Receipts**, take a photo or choose a file (jpeg, png, webp, or gif, up to 10 MB), and choose **Read the bill**. The photo is stored; a vision model reads it. That does not yet create purchases.
+Open **Receipts**, take a photo or choose a file (jpeg, png, webp, or gif, up to 10 MB), and choose **Read the bill**. The photo is stored; a vision model reads it. Tall receipts are split into overlapping slices (about 1417×1500 px) and sent together in one request. That does not yet create purchases.
 
 The list shows each scan as pending, to confirm, failed, or saved. Failed and pending scans have no product list — photograph the bill again.
 

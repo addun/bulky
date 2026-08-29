@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 )
 
@@ -58,6 +59,60 @@ func TestExtractFromMockAPI(t *testing.T) {
 	}
 	if bytes.Contains(reqBody, []byte(`"products"`)) {
 		t.Fatalf("request should not send a product catalog: %s", reqBody)
+	}
+}
+
+func TestExtractTallReceiptChunksInOneRequest(t *testing.T) {
+	billJSON, _ := json.Marshal(map[string]any{
+		"bought_on": "2026-08-18",
+		"lines": []map[string]any{
+			{"receipt_name": "Mleko", "product_name": "Mleko", "amount": "3.29"},
+			{"receipt_name": "Chleb", "product_name": "Chleb", "amount": "4.50"},
+			{"receipt_name": "Maslo", "product_name": "Masło", "amount": "8.00"},
+		},
+	})
+	var n atomic.Int32
+	var reqBody []byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n.Add(1)
+		reqBody, _ = io.ReadAll(r.Body)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{
+				{"message": map[string]any{"content": string(billJSON)}},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	img := image.NewRGBA(image.Rect(0, 0, 1417, 4000))
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatal(err)
+	}
+	a := New(Config{APIKey: "sk-test", BaseURL: srv.URL, Model: "test-model"})
+	bill, raw, err := a.Extract(buf.Bytes())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n.Load() != 1 {
+		t.Fatalf("requests %d, want 1", n.Load())
+	}
+	wantTiles := len(tileRects(1417, 4000))
+	if wantTiles < 2 {
+		t.Fatal("fixture should split")
+	}
+	if got := bytes.Count(reqBody, []byte(`"type":"image_url"`)); got != wantTiles {
+		t.Fatalf("images in request %d, want %d", got, wantTiles)
+	}
+	if !bytes.Contains(reqBody, []byte("overlapping slices")) {
+		t.Fatalf("prompt should describe slices: %s", reqBody)
+	}
+	if bill.BoughtOn != "2026-08-18" || len(bill.ProductLines()) != 3 {
+		t.Fatalf("bill %#v", bill)
+	}
+	if !json.Valid(raw) || !bytes.Contains(raw, []byte("Maslo")) {
+		t.Fatalf("raw %s", raw)
 	}
 }
 

@@ -2,11 +2,14 @@ package ocr
 
 import (
 	"bytes"
+	"crypto/rand"
 	"image"
 	"image/jpeg"
 	"image/png"
 	"strings"
 	"testing"
+
+	"github.com/disintegration/imaging"
 )
 
 func TestParseBillFromFencedJSON(t *testing.T) {
@@ -67,44 +70,64 @@ func TestPrepareJPEGAcceptsPNG(t *testing.T) {
 	}
 }
 
-func TestPrepareJPEGNormalizesLongEdge(t *testing.T) {
-	cases := []struct {
-		w, h int
-	}{
-		{4000, 3000},
-		{3000, 4000},
-		{400, 800},
-		{1536, 1024},
+func TestPrepareJPEGKeepsDimensionsWhenUnderCap(t *testing.T) {
+	img := image.NewRGBA(image.Rect(0, 0, 400, 1200))
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatal(err)
 	}
-	for _, tc := range cases {
-		img := image.NewRGBA(image.Rect(0, 0, tc.w, tc.h))
-		var buf bytes.Buffer
-		if err := png.Encode(&buf, img); err != nil {
-			t.Fatal(err)
-		}
-		out, err := PrepareJPEG(buf.Bytes())
-		if err != nil {
-			t.Fatalf("%dx%d: %v", tc.w, tc.h, err)
-		}
-		got, err := jpeg.Decode(bytes.NewReader(out))
-		if err != nil {
-			t.Fatalf("%dx%d decode: %v", tc.w, tc.h, err)
-		}
-		w, h := got.Bounds().Dx(), got.Bounds().Dy()
-		long, short := w, h
-		if h > w {
-			long, short = h, w
-		}
-		if long != modelEdge {
-			t.Fatalf("%dx%d → %dx%d, long edge want %d", tc.w, tc.h, w, h, modelEdge)
-		}
-		wantShort := tc.h * modelEdge / tc.w
-		if tc.h > tc.w {
-			wantShort = tc.w * modelEdge / tc.h
-		}
-		if abs(short-wantShort) > 1 {
-			t.Fatalf("%dx%d → %dx%d, short edge want ~%d", tc.w, tc.h, w, h, wantShort)
-		}
+	out, err := PrepareJPEG(buf.Bytes())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out) > maxPreparedBytes {
+		t.Fatalf("size %d over cap %d", len(out), maxPreparedBytes)
+	}
+	got, err := jpeg.Decode(bytes.NewReader(out))
+	if err != nil {
+		t.Fatal(err)
+	}
+	w, h := got.Bounds().Dx(), got.Bounds().Dy()
+	if w != 400 || h != 1200 {
+		t.Fatalf("got %dx%d, want 400x1200", w, h)
+	}
+}
+
+func TestPrepareJPEGShrinksWhenOverCap(t *testing.T) {
+	img := incompressibleImage(1800, 2400)
+	var qbuf bytes.Buffer
+	if err := imaging.Encode(&qbuf, flattenWhite(img), imaging.JPEG, imaging.JPEGQuality(jpegQuality)); err != nil {
+		t.Fatal(err)
+	}
+	if qbuf.Len() <= maxPreparedBytes {
+		t.Fatalf("fixture too compressible after quality: %d", qbuf.Len())
+	}
+
+	var src bytes.Buffer
+	if err := jpeg.Encode(&src, img, &jpeg.Options{Quality: 95}); err != nil {
+		t.Fatal(err)
+	}
+	if src.Len() > MaxImageBytes {
+		t.Fatalf("fixture over upload limit: %d", src.Len())
+	}
+
+	out, err := PrepareJPEG(src.Bytes())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out) > maxPreparedBytes {
+		t.Fatalf("size %d over cap %d", len(out), maxPreparedBytes)
+	}
+	got, err := jpeg.Decode(bytes.NewReader(out))
+	if err != nil {
+		t.Fatal(err)
+	}
+	w, h := got.Bounds().Dx(), got.Bounds().Dy()
+	if w >= 1800 && h >= 2400 {
+		t.Fatalf("expected shrink, still %dx%d", w, h)
+	}
+	if w*h == 0 {
+		t.Fatal("empty image")
 	}
 }
 
@@ -140,9 +163,13 @@ func TestExtractJSONStripsFence(t *testing.T) {
 	}
 }
 
-func abs(n int) int {
-	if n < 0 {
-		return -n
+func incompressibleImage(w, h int) *image.NRGBA {
+	img := image.NewNRGBA(image.Rect(0, 0, w, h))
+	if _, err := rand.Read(img.Pix); err != nil {
+		panic(err)
 	}
-	return n
+	for i := 3; i < len(img.Pix); i += 4 {
+		img.Pix[i] = 255
+	}
+	return img
 }
