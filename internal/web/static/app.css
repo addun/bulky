@@ -534,7 +534,8 @@ code {
 }
 
 .thumb-slip {
-  object-fit: contain;
+  object-fit: cover;
+  object-position: top center;
   background: var(--paper);
 }
 
@@ -629,6 +630,8 @@ code {
   padding: 0.45rem 0.45rem 0.7rem;
   position: sticky;
   top: 10px;
+  max-height: calc(100vh - 1.5rem);
+  overflow: auto;
 }
 
 .receipt-slip img {
@@ -771,5 +774,10 @@ code {
 
   .page-head {
     display: grid;
+  }
+
+  .receipt-slip {
+    position: static;
+    max-height: 24rem;
   }
 }

@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"image"
+	"image/jpeg"
+	"image/png"
 	"os"
 	"strings"
 	"testing"
@@ -72,6 +75,59 @@ func TestPreviewJPEGAcceptsPDF(t *testing.T) {
 	if sniffFile(out) != fileImage {
 		t.Fatal("preview should be a jpeg")
 	}
+}
+
+func TestStackPagesJoinsVertically(t *testing.T) {
+	a := image.NewRGBA(image.Rect(0, 0, 10, 20))
+	b := image.NewRGBA(image.Rect(0, 0, 8, 15))
+	got := stackPages([]image.Image{a, b})
+	if got.Bounds().Dx() != 10 {
+		t.Fatalf("width %d", got.Bounds().Dx())
+	}
+	if got.Bounds().Dy() != 20+previewPageGap+15 {
+		t.Fatalf("height %d", got.Bounds().Dy())
+	}
+}
+
+func TestStackPreviewJPEGJoinsPages(t *testing.T) {
+	a := image.NewRGBA(image.Rect(0, 0, 40, 30))
+	b := image.NewRGBA(image.Rect(0, 0, 40, 50))
+	jpegBytes, err := stackPreviewJPEG([][]byte{pngBytes(t, a), pngBytes(t, b)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := jpeg.Decode(bytes.NewReader(jpegBytes))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Bounds().Dy() != 30+previewPageGap+50 {
+		t.Fatalf("height %d", got.Bounds().Dy())
+	}
+}
+
+func TestExtractPDFTextFromMultiplePages(t *testing.T) {
+	raw := textPDFPages(
+		[]string{"Faktura VAT 1/2026 Maka pszenna 5kg 18.90"},
+		[]string{"Ryza 1kg 4.50 Suma PLN 23.40 extra letters"},
+	)
+	got, err := extractPDFText(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"Maka", "Ryza", "23.40"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q in %q", want, got)
+		}
+	}
+}
+
+func pngBytes(t *testing.T, img image.Image) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
 }
 
 func TestExtractFromPDFSendsTextNotImages(t *testing.T) {
@@ -178,6 +234,36 @@ func TestExtractLocalAPIUsesConfiguredModelForPDF(t *testing.T) {
 }
 
 func textPDF(lines ...string) []byte {
+	return textPDFPages(lines)
+}
+
+func textPDFPages(pages ...[]string) []byte {
+	if len(pages) == 0 {
+		pages = [][]string{nil}
+	}
+	n := len(pages)
+	fontObj := 3 + 2*n
+	kids := make([]string, n)
+	objects := []string{
+		"<< /Type /Catalog /Pages 2 0 R >>",
+		"", // Pages dict filled below
+	}
+	for i, lines := range pages {
+		pageObj := 3 + 2*i
+		contentObj := pageObj + 1
+		kids[i] = fmt.Sprintf("%d 0 R", pageObj)
+		stream := pageStream(lines)
+		objects = append(objects,
+			fmt.Sprintf("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents %d 0 R /Resources << /Font << /F1 %d 0 R >> >> >>", contentObj, fontObj),
+			fmt.Sprintf("<< /Length %d >>\nstream\n%s\nendstream", len(stream), stream),
+		)
+	}
+	objects[1] = fmt.Sprintf("<< /Type /Pages /Kids [%s] /Count %d >>", strings.Join(kids, " "), n)
+	objects = append(objects, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
+	return pdfObjects(objects)
+}
+
+func pageStream(lines []string) string {
 	var ops strings.Builder
 	ops.WriteString("BT /F1 12 Tf 50 800 Td\n")
 	for i, line := range lines {
@@ -188,7 +274,7 @@ func textPDF(lines ...string) []byte {
 		ops.WriteString(" Tj\n")
 	}
 	ops.WriteString("ET")
-	return pdfWithStream(ops.String())
+	return ops.String()
 }
 
 func pdfLiteral(s string) string {
@@ -198,14 +284,7 @@ func pdfLiteral(s string) string {
 	return "(" + s + ")"
 }
 
-func pdfWithStream(stream string) []byte {
-	objects := []string{
-		"<< /Type /Catalog /Pages 2 0 R >>",
-		"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-		"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
-		fmt.Sprintf("<< /Length %d >>\nstream\n%s\nendstream", len(stream), stream),
-		"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-	}
+func pdfObjects(objects []string) []byte {
 	var buf bytes.Buffer
 	buf.WriteString("%PDF-1.4\n")
 	offs := make([]int, len(objects)+1)

@@ -36,8 +36,9 @@ func isPDF(b []byte) bool {
 }
 
 // PreviewJPEG turns an uploaded bill into a JPEG for the receipts list
-// and confirm screen. Photos are compressed as before. A PDF uses the
-// first rasterized page when pdftoppm is available, otherwise a text slip.
+// and confirm screen. Photos are compressed as before. A PDF stacks every
+// rasterized page (up to maxPDFPages) when pdftoppm is available, otherwise
+// a text slip.
 func PreviewJPEG(raw []byte) ([]byte, error) {
 	if len(raw) == 0 {
 		return nil, ErrNoImage

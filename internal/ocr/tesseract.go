@@ -155,21 +155,35 @@ func tesseractPage(ctx context.Context, imagePath string) (string, error) {
 	return string(out), nil
 }
 
-func firstPagePNG(raw []byte) ([]byte, error) {
+func previewPagePNGs(raw []byte) ([][]byte, error) {
 	if _, err := lookPath("pdftoppm"); err != nil {
 		return nil, errNeedDockerOCR()
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	pages, cleanup, err := rasterizePDF(ctx, raw, previewDPI, 1)
+	paths, cleanup, err := rasterizePDF(ctx, raw, previewDPI, maxPDFPages)
 	if err != nil {
 		return nil, err
 	}
 	defer cleanup()
-	if len(pages) == 0 {
+	if len(paths) == 0 {
 		return nil, fmt.Errorf("could not rasterize the PDF")
 	}
-	return os.ReadFile(pages[0])
+	out := make([][]byte, 0, len(paths))
+	for _, path := range paths {
+		b, err := os.ReadFile(path)
+		if err != nil {
+			return nil, err
+		}
+		if len(b) == 0 {
+			continue
+		}
+		out = append(out, b)
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("could not rasterize the PDF")
+	}
+	return out, nil
 }
 
 func sortPageFiles(files []string) {
