@@ -26,37 +26,37 @@ func (s *Server) scanReceipt(c *gin.Context) {
 	}
 	fh, err := pickFormFile(c, "bill", "bill_camera")
 	if err != nil {
-		s.renderReceipts(c, http.StatusUnprocessableEntity, "Choose a photo of the bill.")
+		s.renderReceipts(c, http.StatusUnprocessableEntity, "Choose a photo or a PDF of the bill.")
 		return
 	}
 	if fh.Size > ocr.MaxImageBytes {
-		s.renderReceipts(c, http.StatusUnprocessableEntity, "Image must be 10 MB or smaller.")
+		s.renderReceipts(c, http.StatusUnprocessableEntity, "File must be 10 MB or smaller.")
 		return
 	}
 	f, err := fh.Open()
 	if err != nil {
-		s.renderReceipts(c, http.StatusUnprocessableEntity, "Could not read the photo.")
+		s.renderReceipts(c, http.StatusUnprocessableEntity, "Could not read the file.")
 		return
 	}
 	raw, err := io.ReadAll(io.LimitReader(f, ocr.MaxImageBytes+1))
 	f.Close()
 	if err != nil {
-		s.renderReceipts(c, http.StatusUnprocessableEntity, "Could not read the photo.")
+		s.renderReceipts(c, http.StatusUnprocessableEntity, "Could not read the file.")
 		return
 	}
 	if int64(len(raw)) > ocr.MaxImageBytes {
-		s.renderReceipts(c, http.StatusUnprocessableEntity, "Image must be 10 MB or smaller.")
+		s.renderReceipts(c, http.StatusUnprocessableEntity, "File must be 10 MB or smaller.")
 		return
 	}
 
-	jpeg, err := ocr.PrepareJPEG(raw)
+	jpeg, err := ocr.PreviewJPEG(raw)
 	if err != nil {
 		s.renderReceipts(c, http.StatusUnprocessableEntity, strings.TrimSuffix(err.Error(), ".")+".")
 		return
 	}
 	imagePath, err := s.saveReceiptImage(jpeg)
 	if err != nil {
-		s.renderReceipts(c, http.StatusInternalServerError, "Could not store the photo.")
+		s.renderReceipts(c, http.StatusInternalServerError, "Could not store the bill.")
 		return
 	}
 
@@ -67,17 +67,19 @@ func (s *Server) scanReceipt(c *gin.Context) {
 		return
 	}
 
-	_, rawJSON, err := s.reader.Extract(jpeg)
+	_, rawJSON, err := s.reader.Extract(raw)
 	if err != nil {
 		_ = s.store.FailReceipt(receipt.ID)
 		msg := "Could not read the bill: " + err.Error()
 		if errors.Is(err, ocr.ErrNotABill) {
-			msg = "That photo does not look like a bill. Try a clearer shot of the whole receipt."
+			msg = "That file does not look like a bill. Try a clearer photo of the whole receipt, or a text PDF."
 		} else if errors.Is(err, ocr.ErrNoLines) {
-			msg = "No products could be read from this bill. Try another photo."
+			msg = "No products could be read from this bill. Try another photo or PDF."
+		} else if errors.Is(err, ocr.ErrNoPDFText) {
+			msg = "This PDF has no selectable text. Run Bulkly in Docker to read scanned PDFs, or photograph the bill."
 		}
 		status := http.StatusBadGateway
-		if errors.Is(err, ocr.ErrNotABill) || errors.Is(err, ocr.ErrNoLines) {
+		if errors.Is(err, ocr.ErrNotABill) || errors.Is(err, ocr.ErrNoLines) || errors.Is(err, ocr.ErrNoPDFText) {
 			status = http.StatusUnprocessableEntity
 		}
 		s.renderReceipts(c, status, msg)

@@ -36,6 +36,78 @@ func TestParseBillFromFencedJSON(t *testing.T) {
 	}
 }
 
+func TestParseBillWeighedKgUsesQtyAsPacks(t *testing.T) {
+	raw := []byte(`{"bought_on":"2026-08-18","lines":[{"receipt_name":"Marchew","product_name":"Marchew","package_count":"1","package_size":"1.450","unit_name":"kg","amount":"7.23"}]}`)
+	bill, err := parseBill(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bill.Lines[0].PackageCount != "1.450" || bill.Lines[0].PackageSize != "1" {
+		t.Fatalf("weighed kg: %#v", bill.Lines[0])
+	}
+}
+
+func TestParseBillKeepsExplicitPackSize(t *testing.T) {
+	raw := []byte(`{"lines":[{"receipt_name":"Maka 1.5kg","package_count":"2","package_size":"1.5","unit_name":"kg","amount":"9.00"}]}`)
+	bill, err := parseBill(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bill.Lines[0].PackageCount != "2" || bill.Lines[0].PackageSize != "1.5" {
+		t.Fatalf("pack: %#v", bill.Lines[0])
+	}
+}
+
+func TestParseBillMergesRepeatScans(t *testing.T) {
+	raw := []byte(`{"lines":[
+		{"receipt_name":"Mleko UHT 1l","package_count":"1","package_size":"1","unit_name":"l","amount":"3.29"},
+		{"receipt_name":"Mleko UHT 1l","package_count":"1","package_size":"1","unit_name":"l","amount":"3.29"},
+		{"receipt_name":"Chleb","package_count":"1","package_size":"1","unit_name":"szt","amount":"4.50"},
+		{"receipt_name":"Mleko UHT 1l","package_count":"1","package_size":"1","unit_name":"l","amount":"3.29"}
+	]}`)
+	bill, err := parseBill(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(bill.Lines) != 2 {
+		t.Fatalf("lines %d: %#v", len(bill.Lines), bill.Lines)
+	}
+	if bill.Lines[0].ReceiptName != "Mleko UHT 1l" || bill.Lines[0].PackageCount != "3" || bill.Lines[0].Amount != "9.87" {
+		t.Fatalf("merged milk: %#v", bill.Lines[0])
+	}
+	if bill.Lines[1].ReceiptName != "Chleb" || bill.Lines[1].PackageCount != "1" {
+		t.Fatalf("chleb: %#v", bill.Lines[1])
+	}
+}
+
+func TestParseBillDoesNotMergeDiscountedCopy(t *testing.T) {
+	raw := []byte(`{"lines":[
+		{"receipt_name":"Mleko","package_count":"1","package_size":"1","unit_name":"l","amount":"3.29"},
+		{"receipt_name":"Mleko","package_count":"1","package_size":"1","unit_name":"l","amount":"1.55"}
+	]}`)
+	bill, err := parseBill(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(bill.Lines) != 2 {
+		t.Fatalf("lines %d", len(bill.Lines))
+	}
+}
+
+func TestParseBillDoesNotMergeDifferentWeights(t *testing.T) {
+	raw := []byte(`{"lines":[
+		{"receipt_name":"Marchew","package_count":"1.450","package_size":"1","unit_name":"kg","amount":"7.24"},
+		{"receipt_name":"Marchew","package_count":"0.800","package_size":"1","unit_name":"kg","amount":"3.99"}
+	]}`)
+	bill, err := parseBill(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(bill.Lines) != 2 {
+		t.Fatalf("weights should stay separate: %#v", bill.Lines)
+	}
+}
+
 func TestParseBillRejectsNonJSON(t *testing.T) {
 	_, err := parseBill([]byte("sorry, I cannot see that"))
 	if err == nil {

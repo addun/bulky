@@ -1,16 +1,18 @@
 # Reading bills
 
-Bulkly can photograph a receipt and turn the printed lines into purchases. You always check the list before anything is saved.
+Bulkly can photograph a receipt or upload a PDF and turn the printed lines into purchases. You always check the list before anything is saved.
 
 ## Setup
 
-The reader needs a vision model. Set `OCR_API_KEY` (or `OPENAI_API_KEY`) for OpenAI, or `OCR_BASE_URL` for any OpenAI-compatible API, including a local server. Optional: `OCR_MODEL` (default `gpt-4o-mini`). Until that is set, **Receipts** explains that the reader is off.
+The reader needs a vision model for photos, and a text model for PDFs. Set `OCR_API_KEY` (or `OPENAI_API_KEY`) for OpenAI, or `OCR_BASE_URL` for any OpenAI-compatible API, including a local server. Optional: `OCR_MODEL` (default `gpt-4o` for photos; PDFs use `gpt-4o-mini` on OpenAI). Until that is set, **Receipts** explains that the reader is off.
 
-## Photograph
+Scanned PDFs (no selectable text) are read with Tesseract (`pol`). Docker already has that. For `go run` on a Mac, install `tesseract`, `tesseract-lang` (Polish data), and `poppler`. If Tesseract is present without `pol`, the app tells you to run `brew install tesseract-lang` or use Docker.
 
-Open **Receipts**, take a photo or choose a file (jpeg, png, webp, or gif, up to 10 MB), and choose **Read the bill**. The photo is stored; a vision model reads it. Tall receipts are split into overlapping slices (about 1417×1500 px) and sent together in one request. That does not yet create purchases.
+## Upload
 
-The list shows each scan as pending, to confirm, failed, or saved. Failed and pending scans have no product list — photograph the bill again.
+Open **Receipts**, take a photo or choose a file (jpeg, png, webp, gif, or pdf, up to 10 MB), and choose **Read the bill**. Photos go to a vision model: the file is stored, tall receipts are split into overlapping slices (about 1417×2500 px) and sent together in one request. A PDF with selectable text is read in Go and sent as text to a cheaper model (`gpt-4o-mini` on OpenAI). A scanned PDF is rasterized (`pdftoppm`) and OCRed with Tesseract (`-l pol`), then that text goes to the same cheap model. That does not yet create purchases.
+
+The list shows each scan as pending, to confirm, failed, or saved. Failed and pending scans have no product list — photograph or upload the bill again.
 
 The reader is for a receipt, invoice, or till bill. A photo that is not a bill, or one where no product lines can be read, is rejected. Cropped, blurry, or unreadable totals may still produce a list, with a warning on the confirm screen.
 
@@ -25,7 +27,7 @@ It does not read the shop, company, or address. Your catalog is not sent to the 
 
 Polish tills often print a shelf price, a promo on the next row, then the amount actually paid. The reader uses that last figure, not the pre-promo price.
 
-Quantity in the log is packs × pack size. A weighed loose buy is one pack of whatever was on the scale. If a printed name includes a size (`Mąka 1kg`) and the qty column is 2, that is two 1 kg packs.
+Quantity in the log is packs × pack size. A weighed loose buy (`Marchew  1.450 x 4,99` per kg) is 1.450 packs of size 1 kg — the scale weight is packs, not pack size. If a printed name includes a size (`Mąka 1kg`) and the qty column is 2, that is two 1 kg packs. The same till line scanned several times (five milks at 3,29) is stored as one line with packs and amount summed.
 
 ## Confirm
 

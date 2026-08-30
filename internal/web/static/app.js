@@ -109,6 +109,7 @@
   var wrap = document.getElementById("scan-drop");
   var preview = document.getElementById("scan-preview");
   var img = document.getElementById("scan-preview-img");
+  var fileLabel = document.getElementById("scan-preview-file");
   var btn = document.getElementById("receipt-submit");
   var url = "";
 
@@ -118,15 +119,32 @@
     return null;
   }
 
+  function isPDF(f) {
+    if (!f) return false;
+    var name = (f.name || "").toLowerCase();
+    return f.type === "application/pdf" || name.slice(-4) === ".pdf";
+  }
+
   function show(f) {
     if (url) URL.revokeObjectURL(url);
+    url = "";
     if (!f) {
       preview.hidden = true;
       wrap.classList.remove("has-file");
       return;
     }
-    url = URL.createObjectURL(f);
-    img.src = url;
+    if (isPDF(f)) {
+      img.hidden = true;
+      img.removeAttribute("src");
+      fileLabel.hidden = false;
+      fileLabel.textContent = f.name || "PDF";
+    } else {
+      fileLabel.hidden = true;
+      fileLabel.textContent = "";
+      url = URL.createObjectURL(f);
+      img.hidden = false;
+      img.src = url;
+    }
     preview.hidden = false;
     wrap.classList.add("has-file");
   }
@@ -143,7 +161,7 @@
 
   form.addEventListener("submit", function (e) {
     if (!picked()) {
-      file.setCustomValidity("Choose a photo of the bill.");
+      file.setCustomValidity("Choose a photo or a PDF of the bill.");
       file.reportValidity();
       e.preventDefault();
       return;

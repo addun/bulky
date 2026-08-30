@@ -8,6 +8,8 @@ A local log of products you buy in bulk: quantity, price in PLN, and a running h
 docker compose up --build
 ```
 
+The image includes Tesseract (Polish) and Poppler so scanned PDFs can be read. For `go run` on a Mac, install the same tools with `brew install tesseract tesseract-lang poppler` (`tesseract` alone has no Polish data).
+
 Published images from GitHub Releases go to the [GitHub Container Registry](https://ghcr.io) as `ghcr.io/<owner>/<repo>` (linux/amd64 and linux/arm64):
 
 ```bash
@@ -30,7 +32,7 @@ Data (SQLite + product photos) lives in the `bulkly-data` volume.
 
 ## Without Docker
 
-Needs Go 1.23+:
+Needs Go 1.24+:
 
 ```bash
 go run ./cmd/bulkly
@@ -46,6 +48,6 @@ Optional environment:
 | `CURRENCY_SYMBOL` | `zł`                       | Shown next to amounts                        |
 | `OCR_API_KEY`     |                            | API key for the bill reader (`OPENAI_API_KEY` is also accepted) |
 | `OCR_BASE_URL`    | `https://api.openai.com/v1` | OpenAI-compatible base URL (Ollama, etc.)   |
-| `OCR_MODEL`       | `gpt-4o-mini`              | Vision model name                            |
+| `OCR_MODEL`       | `gpt-4o`                   | Vision model for photos. PDFs use `gpt-4o-mini` on OpenAI. |
 
-**Scan a bill:** open [http://localhost:8080/receipts](http://localhost:8080/receipts) and upload a photo of a receipt. That creates a `receipts` row, runs the vision model, and stores the raw JSON. Confirm or edit the product list to migrate those lines into purchases; the receipt status then becomes `migrated`. For OpenAI, set `OCR_API_KEY`. For a local OpenAI-compatible server (for example Ollama), set `OCR_BASE_URL` to that server’s `/v1` endpoint and pick a vision model with `OCR_MODEL`.
+**Scan a bill:** open [http://localhost:8080/receipts](http://localhost:8080/receipts) and upload a photo or a PDF of a receipt. That creates a `receipts` row, runs the reader, and stores the raw JSON. Confirm or edit the product list to migrate those lines into purchases; the receipt status then becomes `migrated`. For OpenAI, set `OCR_API_KEY`. Photos use `OCR_MODEL` (default `gpt-4o`); digital PDFs use `gpt-4o-mini`. Scanned PDFs are OCRed with Tesseract (Polish). Docker includes that; locally you also need `brew install tesseract tesseract-lang poppler`. For a local OpenAI-compatible server (for example Ollama), set `OCR_BASE_URL` to that server’s `/v1` endpoint and pick a model with `OCR_MODEL` — that same model is used for both photos and PDF text.

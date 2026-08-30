@@ -39,11 +39,61 @@ func (a *Agent) Configured() bool {
 	return a != nil && a.cfg.Configured()
 }
 
-func (a *Agent) Extract(image []byte) (Bill, []byte, error) {
+func (a *Agent) textModel() string {
+	base := normalizeBaseURL(a.cfg.BaseURL)
+	if base != "" && base != DefaultBaseURL {
+		return a.cfg.Model
+	}
+	return DefaultTextModel
+}
+
+func (a *Agent) Extract(file []byte) (Bill, []byte, error) {
 	if a == nil || !a.cfg.Configured() {
 		return Bill{}, nil, ErrNotConfigured
 	}
-	jpeg, err := PrepareJPEG(image)
+	if len(file) == 0 {
+		return Bill{}, nil, ErrNoImage
+	}
+	if len(file) > MaxImageBytes {
+		return Bill{}, nil, fmt.Errorf("file must be 10 MB or smaller")
+	}
+	switch sniffFile(file) {
+	case filePDF:
+		return a.extractPDF(file)
+	case fileImage:
+		return a.extractImage(file)
+	default:
+		return Bill{}, nil, fmt.Errorf("file must be jpeg, png, webp, gif, or pdf")
+	}
+}
+
+func (a *Agent) extractPDF(file []byte) (Bill, []byte, error) {
+	text, _ := extractPDFText(file)
+	if isPDFWithText(text) {
+		return a.extractFromText(text)
+	}
+	text, err := scanPDFText(file)
+	if err != nil {
+		return Bill{}, nil, err
+	}
+	return a.extractFromText(text)
+}
+
+func (a *Agent) extractFromText(text string) (Bill, []byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+	body, err := a.complete(ctx, a.textModel(), textSystemPrompt, openai.ChatCompletionMessage{
+		Role:    openai.ChatMessageRoleUser,
+		Content: textUserPrompt(text),
+	})
+	if err != nil {
+		return Bill{}, nil, err
+	}
+	return finishExtract(body)
+}
+
+func (a *Agent) extractImage(file []byte) (Bill, []byte, error) {
+	jpeg, err := PrepareJPEG(file)
 	if err != nil {
 		return Bill{}, nil, err
 	}
@@ -57,6 +107,10 @@ func (a *Agent) Extract(image []byte) (Bill, []byte, error) {
 	if err != nil {
 		return Bill{}, nil, err
 	}
+	return finishExtract(body)
+}
+
+func finishExtract(body []byte) (Bill, []byte, error) {
 	rawJSON, err := extractJSON(body)
 	if err != nil {
 		return Bill{}, nil, err
@@ -93,15 +147,22 @@ func (a *Agent) chat(ctx context.Context, tiles [][]byte) ([]byte, error) {
 			},
 		})
 	}
+	return a.complete(ctx, a.cfg.Model, systemPrompt, openai.ChatCompletionMessage{
+		Role:         openai.ChatMessageRoleUser,
+		MultiContent: parts,
+	})
+}
+
+func (a *Agent) complete(ctx context.Context, model string, system string, user openai.ChatCompletionMessage) ([]byte, error) {
 	resp, err := a.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
-		Model:       a.cfg.Model,
+		Model:       model,
 		Temperature: 0,
 		ResponseFormat: &openai.ChatCompletionResponseFormat{
 			Type: openai.ChatCompletionResponseFormatTypeJSONObject,
 		},
 		Messages: []openai.ChatCompletionMessage{
-			{Role: openai.ChatMessageRoleSystem, Content: systemPrompt},
-			{Role: openai.ChatMessageRoleUser, MultiContent: parts},
+			{Role: openai.ChatMessageRoleSystem, Content: system},
+			user,
 		},
 	})
 	if err != nil {

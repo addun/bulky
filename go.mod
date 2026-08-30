@@ -1,11 +1,12 @@
 module github.com/adrian/bulkly
 
-go 1.23.0
+go 1.24.1
 
 require (
 	github.com/brianvoe/gofakeit/v7 v7.16.0
 	github.com/disintegration/imaging v1.6.2
 	github.com/gin-gonic/gin v1.10.0
+	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728
 	github.com/pressly/goose/v3 v3.24.3
 	github.com/sashabaranov/go-openai v1.41.2
 	github.com/shopspring/decimal v1.4.0
