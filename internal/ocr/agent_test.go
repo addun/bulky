@@ -132,6 +132,35 @@ func TestExtractNotABill(t *testing.T) {
 	}
 }
 
+func TestTextModel(t *testing.T) {
+	openAI := New(Config{APIKey: "x", Model: "gpt-4o"})
+	if openAI.textModel() != DefaultTextModel {
+		t.Fatalf("openai text model %q", openAI.textModel())
+	}
+	local := New(Config{APIKey: "x", BaseURL: "http://localhost:11434/v1", Model: "llava"})
+	if local.textModel() != "llava" {
+		t.Fatalf("local text model %q", local.textModel())
+	}
+}
+
+func mockChat(t *testing.T, handle func(model string, body []byte) []byte) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		var req struct {
+			Model string `json:"model"`
+		}
+		_ = json.Unmarshal(body, &req)
+		content := handle(req.Model, body)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{
+				{"message": map[string]any{"content": string(content)}},
+			},
+		})
+	}))
+}
+
 func tinyPNG(t *testing.T) []byte {
 	t.Helper()
 	img := image.NewRGBA(image.Rect(0, 0, 8, 8))

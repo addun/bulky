@@ -7,10 +7,12 @@ var (
 	ErrNoImage       = errors.New("image is required")
 	ErrNotABill      = errors.New("the photo does not look like a bill")
 	ErrNoLines       = errors.New("no products found on this bill")
+	ErrNoPDFText     = errors.New("this PDF has no readable text")
 )
 
 const DefaultBaseURL = "https://api.openai.com/v1"
 const DefaultModel = "gpt-4o"
+const DefaultTextModel = "gpt-4o-mini"
 
 type Config struct {
 	APIKey  string

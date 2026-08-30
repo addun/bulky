@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 	"unicode"
+
+	"github.com/shopspring/decimal"
 )
 
 func parseBill(raw []byte) (Bill, error) {
@@ -33,7 +35,9 @@ func parseBill(raw []byte) (Bill, error) {
 		bill.Lines[i].Quantity = normalizeNumber(bill.Lines[i].Quantity)
 		bill.Lines[i].Amount = normalizeNumber(bill.Lines[i].Amount)
 		bill.Lines[i].SkipReason = strings.TrimSpace(bill.Lines[i].SkipReason)
+		fixWeighedKg(&bill.Lines[i])
 	}
+	bill.Lines = mergeRepeatScans(bill.Lines)
 	return bill, nil
 }
 
@@ -101,6 +105,99 @@ func normalizeNumber(s string) string {
 		s = strings.Join(parts[:len(parts)-1], "") + "." + parts[len(parts)-1]
 	}
 	return s
+}
+
+// fixWeighedKg maps "1 pack of 1.450 kg" (old OCR rule) to "1.450 × 1 kg"
+// when the size looks like a till scale reading (three decimal places).
+func fixWeighedKg(line *Line) {
+	if !strings.EqualFold(line.UnitName, "kg") {
+		return
+	}
+	if !isOne(line.PackageCount) {
+		return
+	}
+	if !looksLikeScaleKg(line.PackageSize) {
+		return
+	}
+	line.PackageCount = line.PackageSize
+	line.PackageSize = "1"
+}
+
+func isOne(s string) bool {
+	switch s {
+	case "1", "1.0", "1.00", "1.000":
+		return true
+	}
+	return false
+}
+
+func looksLikeScaleKg(s string) bool {
+	i := strings.IndexByte(s, '.')
+	if i < 0 {
+		return false
+	}
+	frac := s[i+1:]
+	if len(frac) < 3 {
+		return false
+	}
+	return strings.TrimRight(frac, "0") != ""
+}
+
+func mergeRepeatScans(lines []Line) []Line {
+	if len(lines) < 2 {
+		return lines
+	}
+	type acc struct {
+		idx    int
+		count  decimal.Decimal
+		amount decimal.Decimal
+	}
+	seen := map[string]*acc{}
+	out := make([]Line, 0, len(lines))
+	for _, line := range lines {
+		if line.Skip {
+			out = append(out, line)
+			continue
+		}
+		key, count, amount, ok := repeatScanKey(line)
+		if !ok {
+			out = append(out, line)
+			continue
+		}
+		if g, hit := seen[key]; hit {
+			g.count = g.count.Add(count)
+			g.amount = g.amount.Add(amount)
+			out[g.idx].PackageCount = g.count.String()
+			out[g.idx].Amount = g.amount.String()
+			continue
+		}
+		idx := len(out)
+		out = append(out, line)
+		seen[key] = &acc{idx: idx, count: count, amount: amount}
+	}
+	return out
+}
+
+func repeatScanKey(line Line) (key string, count, amount decimal.Decimal, ok bool) {
+	name := strings.ToLower(strings.Join(strings.Fields(line.ReceiptName), " "))
+	if name == "" {
+		return "", decimal.Zero, decimal.Zero, false
+	}
+	count, err := decimal.NewFromString(line.PackageCount)
+	if err != nil || count.IsZero() {
+		return "", decimal.Zero, decimal.Zero, false
+	}
+	amount, err = decimal.NewFromString(line.Amount)
+	if err != nil {
+		return "", decimal.Zero, decimal.Zero, false
+	}
+	size, err := decimal.NewFromString(line.PackageSize)
+	if err != nil {
+		size = decimal.Zero
+	}
+	unit := strings.ToLower(line.UnitName)
+	key = name + "\x1f" + unit + "\x1f" + size.String() + "\x1f" + count.String() + "\x1f" + amount.String()
+	return key, count, amount, true
 }
 
 type flexInt int64

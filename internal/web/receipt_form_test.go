@@ -291,7 +291,7 @@ func TestReceiptsPageRendersWhenUnconfigured(t *testing.T) {
 	if !strings.Contains(body, `capture="environment"`) {
 		t.Fatal("configured page should offer the phone camera")
 	}
-	if !strings.Contains(body, "Take photo") || !strings.Contains(body, "Choose photo") {
+	if !strings.Contains(body, "Take photo") || !strings.Contains(body, "Choose file") {
 		t.Fatal("configured page should offer camera and file pickers")
 	}
 	if !strings.Contains(body, `name="bill_camera"`) {
@@ -299,6 +299,9 @@ func TestReceiptsPageRendersWhenUnconfigured(t *testing.T) {
 	}
 	if !strings.Contains(body, `accept="image/*"`) {
 		t.Fatal("file inputs should accept any image so Chrome and phones can open the picker")
+	}
+	if !strings.Contains(body, ".pdf") {
+		t.Fatal("file picker should accept PDFs")
 	}
 }
 

@@ -45,7 +45,7 @@ func TestTileRectsLongSplitsWithOverlap(t *testing.T) {
 }
 
 func TestTileRectsCoversHeight(t *testing.T) {
-	for _, h := range []int{2201, 2500, 5000, 6000} {
+	for _, h := range []int{2501, 4000, 5000, 6000} {
 		got := tileRects(1417, h)
 		if len(got) < 2 {
 			t.Fatalf("h=%d expected split, got %v", h, got)
@@ -106,7 +106,7 @@ func TestSplitReceiptTallKeepsWidth(t *testing.T) {
 		if w != 1417 {
 			t.Fatalf("tile %d width %d", i, w)
 		}
-		if h > sliceMaxH {
+		if h > sliceHeight {
 			t.Fatalf("tile %d %dx%d", i, w, h)
 		}
 	}
