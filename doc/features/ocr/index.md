@@ -10,7 +10,7 @@ Scanned PDFs (no selectable text) are read with Tesseract (`pol`). Docker alread
 
 ## Upload
 
-Open **Receipts**, take a photo or choose a file (jpeg, png, webp, gif, or pdf, up to 10 MB), and choose **Read the bill**. Photos go to a vision model: the file is stored, tall receipts are split into overlapping slices (about 1417×2500 px) and sent together in one request. A PDF with selectable text is read in Go and sent as text to a cheaper model (`gpt-4o-mini` on OpenAI). A scanned PDF is rasterized (`pdftoppm`) and OCRed with Tesseract (`-l pol`), then that text goes to the same cheap model. That does not yet create purchases.
+Open **Receipts**, take a photo or choose a file (jpeg, png, webp, gif, or pdf, up to 10 MB), and choose **Read the bill**. Photos go to a vision model: the file is stored, tall receipts are split into overlapping slices (about 1417×2500 px) and sent together in one request. A PDF with selectable text is read in Go and sent as text to a cheaper model (`gpt-4o-mini` on OpenAI). A scanned PDF is rasterized (`pdftoppm`) and OCRed with Tesseract (`-l pol`), then that text goes to the same cheap model. That does not yet create purchases. The stored preview is a JPEG: photos as uploaded, PDFs as every page stacked (up to 40) when `pdftoppm` is available, otherwise a text slip.
 
 The list shows each scan as pending, to confirm, failed, or saved. Failed and pending scans have no product list — photograph or upload the bill again.
 

@@ -2,6 +2,7 @@ package ocr
 
 import (
 	"bytes"
+	"fmt"
 	"image"
 	"image/color"
 	"image/draw"
@@ -10,6 +11,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/disintegration/imaging"
 	"github.com/ledongthuc/pdf"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/basicfont"
@@ -20,7 +22,11 @@ const (
 	minPDFLetters   = 40
 	maxPDFPages     = 40
 	maxPDFTextRunes = 80_000
+	previewPageGap  = 12
+	previewMaxW     = 1200
 )
+
+var previewGapColor = color.RGBA{R: 216, G: 222, B: 230, A: 255}
 
 func extractPDFText(raw []byte) (text string, err error) {
 	defer func() {
@@ -112,13 +118,72 @@ func pdfPayload(raw []byte) []byte {
 }
 
 func previewPDF(raw []byte) ([]byte, error) {
-	if png, err := firstPagePNG(raw); err == nil && len(png) > 0 {
-		if jpeg, err := PrepareJPEG(png); err == nil {
-			return jpeg, nil
-		}
+	if jpeg, err := previewPDFPages(raw); err == nil && len(jpeg) > 0 {
+		return jpeg, nil
 	}
 	text, _ := extractPDFText(raw)
 	return renderTextSlip(text)
+}
+
+func previewPDFPages(raw []byte) ([]byte, error) {
+	pngs, err := previewPagePNGs(raw)
+	if err != nil {
+		return nil, err
+	}
+	return stackPreviewJPEG(pngs)
+}
+
+func stackPreviewJPEG(pngs [][]byte) ([]byte, error) {
+	if len(pngs) == 0 {
+		return nil, fmt.Errorf("could not rasterize the PDF")
+	}
+	pages := make([]image.Image, 0, len(pngs))
+	for _, raw := range pngs {
+		img, err := imaging.Decode(bytes.NewReader(raw), imaging.AutoOrientation(true))
+		if err != nil {
+			return nil, fmt.Errorf("could not read the PDF page")
+		}
+		pages = append(pages, fitPreviewPage(flattenWhite(img)))
+	}
+	return fitJPEG(stackPages(pages), maxPreparedBytes)
+}
+
+func fitPreviewPage(img image.Image) image.Image {
+	if img.Bounds().Dx() > previewMaxW {
+		return imaging.Resize(img, previewMaxW, 0, imaging.Lanczos)
+	}
+	return img
+}
+
+func stackPages(pages []image.Image) image.Image {
+	if len(pages) == 0 {
+		return imaging.New(1, 1, color.White)
+	}
+	if len(pages) == 1 {
+		return pages[0]
+	}
+	width := 0
+	height := 0
+	for i, p := range pages {
+		if w := p.Bounds().Dx(); w > width {
+			width = w
+		}
+		height += p.Bounds().Dy()
+		if i > 0 {
+			height += previewPageGap
+		}
+	}
+	out := imaging.New(width, height, previewGapColor)
+	y := 0
+	for i, p := range pages {
+		x := (width - p.Bounds().Dx()) / 2
+		out = imaging.Paste(out, p, image.Pt(x, y))
+		y += p.Bounds().Dy()
+		if i < len(pages)-1 {
+			y += previewPageGap
+		}
+	}
+	return out
 }
 
 func renderTextSlip(text string) ([]byte, error) {

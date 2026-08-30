@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"image/jpeg"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -129,7 +130,7 @@ func TestOCRPDFIntegration(t *testing.T) {
 	}
 }
 
-func TestFirstPagePNGMissingToolsFallsBack(t *testing.T) {
+func TestPreviewJPEGMissingToolsFallsBack(t *testing.T) {
 	orig := lookPath
 	t.Cleanup(func() { lookPath = orig })
 	lookPath = func(string) (string, error) { return "", os.ErrNotExist }
@@ -139,6 +140,34 @@ func TestFirstPagePNGMissingToolsFallsBack(t *testing.T) {
 	}
 	if sniffFile(jpeg) != fileImage {
 		t.Fatal("preview should still be a jpeg slip")
+	}
+}
+
+func TestPreviewJPEGStacksPDFPages(t *testing.T) {
+	if _, err := exec.LookPath("pdftoppm"); err != nil {
+		t.Skip("pdftoppm not installed")
+	}
+	one, err := PreviewJPEG(textPDF("page one with enough letters here Maka 5kg"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	two, err := PreviewJPEG(textPDFPages(
+		[]string{"page one with enough letters here Maka 5kg"},
+		[]string{"page two with more product lines Ryza 1kg"},
+	))
+	if err != nil {
+		t.Fatal(err)
+	}
+	img1, err := jpeg.Decode(bytes.NewReader(one))
+	if err != nil {
+		t.Fatal(err)
+	}
+	img2, err := jpeg.Decode(bytes.NewReader(two))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if img2.Bounds().Dy() <= img1.Bounds().Dy() {
+		t.Fatalf("two-page preview height %d should exceed one-page %d", img2.Bounds().Dy(), img1.Bounds().Dy())
 	}
 }
 
