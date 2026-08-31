@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"image/jpeg"
 	"os"
 	"os/exec"
@@ -21,12 +20,8 @@ func TestSortPageFilesNumeric(t *testing.T) {
 	}
 }
 
-func TestExtractScannedPDFUsesOCRTextNotVision(t *testing.T) {
-	orig := scanPDFText
-	t.Cleanup(func() { scanPDFText = orig })
-	scanPDFText = func([]byte) (string, error) {
-		return "Faktura VAT 1/2026 18.08.2026 Maka pszenna 5kg 18.90 Suma PLN 18.90 extra letters", nil
-	}
+func TestExtractPDFUsesVisionNotText(t *testing.T) {
+	stubPDFPages(t, tinyPNG(t))
 
 	billJSON := []byte(`{"bought_on":"2026-08-18","lines":[{"receipt_name":"Maka 5kg","product_name":"Maka","amount":"18.90"}]}`)
 	var reqBody []byte
@@ -41,92 +36,48 @@ func TestExtractScannedPDFUsesOCRTextNotVision(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if bytes.Contains(reqBody, []byte(`"type":"image_url"`)) {
-		t.Fatal("scanned PDF should send OCR text, not images")
+	if !bytes.Contains(reqBody, []byte(`"type":"image_url"`)) {
+		t.Fatal("PDF should send page images, not extracted text")
 	}
-	if !bytes.Contains(reqBody, []byte("Maka pszenna")) {
-		t.Fatalf("request should include OCR text: %s", reqBody)
+	if bytes.Contains(reqBody, []byte("extracted invoice")) {
+		t.Fatalf("request should not use the old text prompt: %s", reqBody)
 	}
 	if bill.BoughtOn != "2026-08-18" {
 		t.Fatalf("bought_on %q", bill.BoughtOn)
 	}
 }
 
-func TestHasPDFOCRFalseWhenMissing(t *testing.T) {
+func TestPDFPageJPEGsNeedsPoppler(t *testing.T) {
 	orig := lookPath
 	t.Cleanup(func() { lookPath = orig })
 	lookPath = func(string) (string, error) { return "", os.ErrNotExist }
-	if hasPDFOCR() {
-		t.Fatal("expected missing tools")
-	}
-}
-
-func TestOCRPDFNeedsDockerWhenMissingTools(t *testing.T) {
-	orig := lookPath
-	t.Cleanup(func() { lookPath = orig })
-	lookPath = func(string) (string, error) { return "", os.ErrNotExist }
-	_, err := ocrPDF(context.Background(), textPDF())
+	_, err := pdfPageJPEGs(textPDF())
 	if !errors.Is(err, ErrNoPDFText) {
 		t.Fatalf("got %v", err)
 	}
-	if !strings.Contains(err.Error(), "Docker") {
-		t.Fatalf("error should mention Docker: %v", err)
+	if !strings.Contains(err.Error(), "poppler") && !strings.Contains(err.Error(), "Docker") {
+		t.Fatalf("error should mention poppler or Docker: %v", err)
 	}
 }
 
-func TestOCRPDFMissingPolishData(t *testing.T) {
-	origLook, origRun := lookPath, runCommand
-	t.Cleanup(func() { lookPath = origLook; runCommand = origRun })
-	lookPath = func(string) (string, error) { return "/usr/bin/x", nil }
-	runCommand = func(_ context.Context, name string, args ...string) ([]byte, error) {
-		if name == "tesseract" && len(args) == 1 && args[0] == "--list-langs" {
-			return []byte("List of available languages (2):\neng\nosd\n"), nil
-		}
-		t.Fatalf("unexpected %s %v", name, args)
-		return nil, nil
-	}
-	_, err := ocrPDF(context.Background(), textPDF())
-	if err == nil || errors.Is(err, ErrNoPDFText) {
-		t.Fatalf("got %v", err)
-	}
-	if !strings.Contains(err.Error(), "tesseract-lang") {
-		t.Fatalf("error should mention tesseract-lang: %v", err)
-	}
-}
-
-func TestTesseractPageWrapsMissingPol(t *testing.T) {
-	orig := runCommand
-	t.Cleanup(func() { runCommand = orig })
-	runCommand = func(_ context.Context, _ string, _ ...string) ([]byte, error) {
-		return nil, fmt.Errorf("tesseract: Error opening data file /opt/homebrew/share/tessdata/pol.traineddata Failed loading language 'pol'")
-	}
-	_, err := tesseractPage(context.Background(), "/tmp/page-1.png")
-	if err == nil || !strings.Contains(err.Error(), "tesseract-lang") {
-		t.Fatalf("got %v", err)
-	}
-}
-
-func TestOCRPDFIntegration(t *testing.T) {
-	if _, err := exec.LookPath("tesseract"); err != nil {
-		t.Skip("tesseract not installed")
-	}
+func TestPDFPageJPEGsIntegration(t *testing.T) {
 	if _, err := exec.LookPath("pdftoppm"); err != nil {
 		t.Skip("pdftoppm not installed")
-	}
-	if !tesseractHasPol(context.Background()) {
-		t.Skip("pol traineddata not installed")
 	}
 	raw := textPDF(
 		"Faktura VAT 1/2026 18.08.2026",
 		"Maka pszenna 5kg 18.90",
 		"Suma PLN 18.90",
 	)
-	got, err := ocrPDF(context.Background(), raw)
+	got, err := pdfPageJPEGs(raw)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !isPDFWithText(got) {
-		t.Fatalf("OCR text too short: %q", got)
+	if len(got) == 0 {
+		t.Fatal("expected at least one page image")
+	}
+	if sniffFile(got[0]) != fileImage {
+		t.Fatal("page should be a jpeg")
 	}
 }
 
@@ -174,5 +125,24 @@ func TestPreviewJPEGStacksPDFPages(t *testing.T) {
 func TestPageIndex(t *testing.T) {
 	if pageIndex(filepath.Join("tmp", "page-12.png")) != 12 {
 		t.Fatal(pageIndex("page-12.png"))
+	}
+}
+
+func TestRasterizePDFUsesPdftoppm(t *testing.T) {
+	origLook, origRun := lookPath, runCommand
+	t.Cleanup(func() { lookPath = origLook; runCommand = origRun })
+	lookPath = func(string) (string, error) { return "/usr/bin/pdftoppm", nil }
+	runCommand = func(_ context.Context, name string, args ...string) ([]byte, error) {
+		if name != "pdftoppm" {
+			t.Fatalf("unexpected %s %v", name, args)
+		}
+		return nil, errors.New("pdftoppm: boom")
+	}
+	_, err := pdfPageJPEGs(textPDF())
+	if err == nil {
+		t.Fatal("expected rasterize error")
+	}
+	if !strings.Contains(err.Error(), "rasterize") {
+		t.Fatalf("got %v", err)
 	}
 }

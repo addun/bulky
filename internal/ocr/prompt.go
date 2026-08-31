@@ -59,42 +59,27 @@ Rules:
 
 - Do not invent lines. If a price is unreadable, include the line with amount "" and mention it in notes.`
 
-const systemPrompt = `You are Bulkly's bill reader. Bulkly is a personal log of products bought in bulk (packs × pack size + total paid). You look at a photo of a receipt, invoice, or till bill and extract the product list.
+const systemPrompt = `You are Bulkly's bill reader. Bulkly is a personal log of products bought in bulk (packs × pack size + total paid). You look at a photo or page image of a receipt, invoice, or till bill and extract the product list.
 
-You may receive one photo, or several overlapping slices of the SAME tall receipt, in order from top to bottom. Treat every attached image as one bill. Adjacent slices overlap by about 100–150 px, so the same product line may appear at the bottom of one slice and the top of the next — include that line only once. The sale date is usually on the first slice; VAT, payment, and the fiscal footer are usually on the last. Do not set not_a_bill=true just because a middle slice has no shop header. Read every line, including faint thermal print.
+You may receive one photo, or successive pages of one PDF bill (first to last). Treat every attached image as one bill. The sale date is usually on the first page; VAT, payment, and the fiscal footer are usually on the last. Do not set not_a_bill=true just because a later page has no shop header. Read every line, including faint thermal print.
+
+Read the printed columns from the image. Product name, quantity, unit price, and line total are separate — never glue them into one string (not "bananyC1.35x6.00").
 
 ` + jsonSpec + `
 
 - not_a_bill=true ONLY when the image is not a receipt/invoice/bill.`
 
-const textSystemPrompt = `You are Bulkly's bill reader. Bulkly is a personal log of products bought in bulk (packs × pack size + total paid). You read the extracted text of a digital invoice or receipt (from a PDF). Row order is the printed order; spacing may be imperfect.
-
-` + jsonSpec + `
-
-- not_a_bill=true ONLY when the text is not a receipt/invoice/bill.`
-
 const userPrompt = "Read the attached photo and return the JSON object described in the system prompt."
 
-func chunkUserPrompt(n int) string {
+func imageUserPrompt(n int) string {
 	if n <= 1 {
 		return userPrompt
 	}
-	return "The attached images are overlapping slices of ONE receipt, top to bottom. Image 1 is the top (header and date). Image " +
+	return "The attached images are successive pages of ONE bill, first to last. Page 1 is the start (header and date). Page " +
 		strconv.Itoa(n) +
-		" is the bottom (footer, VAT, payment). Read every product line across all slices and return ONE JSON object for the whole bill. Do not duplicate a line that appears in the overlap between slices."
+		" is the end (footer, VAT, payment). Read every product line across all pages and return ONE JSON object for the whole bill."
 }
 
-func sliceCaption(index, total int) string {
-	where := "middle"
-	switch {
-	case index == 0:
-		where = "top"
-	case index == total-1:
-		where = "bottom"
-	}
-	return "Image " + strconv.Itoa(index+1) + " of " + strconv.Itoa(total) + " — " + where + " of the receipt:"
-}
-
-func textUserPrompt(extracted string) string {
-	return "Read this extracted invoice/receipt text and return the JSON object described in the system prompt.\n\n" + extracted
+func pageCaption(index, total int) string {
+	return "Page " + strconv.Itoa(index+1) + " of " + strconv.Itoa(total) + ":"
 }

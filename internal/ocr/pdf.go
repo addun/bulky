@@ -217,7 +217,7 @@ func renderTextSlip(text string) ([]byte, error) {
 func wrapPreviewLines(text string) []string {
 	text = strings.TrimSpace(text)
 	if text == "" {
-		return []string{"PDF bill", "No selectable text on this file."}
+		return []string{"PDF bill", "Could not render PDF pages."}
 	}
 	const (
 		maxChars = 52

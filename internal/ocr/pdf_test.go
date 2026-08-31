@@ -130,13 +130,8 @@ func pngBytes(t *testing.T, img image.Image) []byte {
 	return buf.Bytes()
 }
 
-func TestExtractFromPDFSendsTextNotImages(t *testing.T) {
-	orig := scanPDFText
-	t.Cleanup(func() { scanPDFText = orig })
-	scanPDFText = func([]byte) (string, error) {
-		t.Fatal("text PDF should not go to OCR")
-		return "", nil
-	}
+func TestExtractFromPDFSendsImagesNotText(t *testing.T) {
+	stubPDFPages(t, tinyPNG(t))
 
 	billJSON := []byte(`{"bought_on":"2026-08-18","lines":[{"receipt_name":"Maka 5kg","product_name":"Maka","amount":"18.90","unit_name":"kg"}]}`)
 	var reqBody []byte
@@ -156,11 +151,11 @@ func TestExtractFromPDFSendsTextNotImages(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if bytes.Contains(reqBody, []byte(`"type":"image_url"`)) {
-		t.Fatal("text path should not send images")
+	if !bytes.Contains(reqBody, []byte(`"type":"image_url"`)) {
+		t.Fatal("PDF should be sent as page images")
 	}
-	if !bytes.Contains(reqBody, []byte("Maka pszenna")) {
-		t.Fatalf("request should include extracted text: %s", reqBody)
+	if bytes.Contains(reqBody, []byte("Maka pszenna")) {
+		t.Fatalf("request should not include extracted PDF text: %s", reqBody)
 	}
 	if bill.BoughtOn != "2026-08-18" || len(bill.ProductLines()) != 1 {
 		t.Fatalf("bill %#v", bill)
@@ -170,14 +165,40 @@ func TestExtractFromPDFSendsTextNotImages(t *testing.T) {
 	}
 }
 
-func TestExtractPDFLibraryFailureGoesToOCR(t *testing.T) {
-	orig := scanPDFText
-	t.Cleanup(func() { scanPDFText = orig })
-	scanPDFText = func([]byte) (string, error) {
-		return "Faktura VAT 1/2026 18.08.2026 Maka pszenna 5kg 18.90 Suma PLN 18.90 extra", nil
-	}
+func TestExtractPDFSendsEachPageOnce(t *testing.T) {
+	stubPDFPages(t, tinyPNG(t), tinyPNG(t))
 	billJSON := []byte(`{"bought_on":"2026-08-18","lines":[{"receipt_name":"Maka","product_name":"Maka","amount":"18.90"}]}`)
-	srv := mockChat(t, func(_ string, _ []byte) []byte { return billJSON })
+	var reqBody []byte
+	srv := mockChat(t, func(_ string, body []byte) []byte {
+		reqBody = body
+		return billJSON
+	})
+	defer srv.Close()
+
+	a := New(Config{APIKey: "sk-test", BaseURL: srv.URL, Model: "gpt-4o"})
+	_, _, err := a.Extract(textPDF("page one"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := bytes.Count(reqBody, []byte(`"type":"image_url"`)); got != 2 {
+		t.Fatalf("images in request %d, want 2", got)
+	}
+	if !bytes.Contains(reqBody, []byte("Page 1 of 2")) || !bytes.Contains(reqBody, []byte("Page 2 of 2")) {
+		t.Fatalf("prompt should label PDF pages: %s", reqBody)
+	}
+	if bytes.Contains(reqBody, []byte("overlapping")) {
+		t.Fatalf("prompt should not mention slices: %s", reqBody)
+	}
+}
+
+func TestExtractBrokenPDFGoesToVision(t *testing.T) {
+	stubPDFPages(t, tinyPNG(t))
+	billJSON := []byte(`{"bought_on":"2026-08-18","lines":[{"receipt_name":"Maka","product_name":"Maka","amount":"18.90"}]}`)
+	var reqBody []byte
+	srv := mockChat(t, func(_ string, body []byte) []byte {
+		reqBody = body
+		return billJSON
+	})
 	defer srv.Close()
 
 	a := New(Config{APIKey: "sk-test", BaseURL: srv.URL, Model: "gpt-4o"})
@@ -185,16 +206,12 @@ func TestExtractPDFLibraryFailureGoesToOCR(t *testing.T) {
 	if sniffFile(broken) != filePDF {
 		t.Fatal("fixture should sniff as pdf")
 	}
-	text, err := extractPDFText(broken)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if isPDFWithText(text) {
-		t.Fatalf("library should not read this pdf: %q", text)
-	}
 	bill, _, err := a.Extract(broken)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !bytes.Contains(reqBody, []byte(`"type":"image_url"`)) {
+		t.Fatal("broken PDF should still go to vision")
 	}
 	if bill.BoughtOn != "2026-08-18" {
 		t.Fatalf("bought_on %q", bill.BoughtOn)
@@ -213,6 +230,7 @@ func TestExtractPDFWithoutText(t *testing.T) {
 }
 
 func TestExtractLocalAPIUsesConfiguredModelForPDF(t *testing.T) {
+	stubPDFPages(t, tinyPNG(t))
 	var model string
 	srv := mockChat(t, func(m string, _ []byte) []byte {
 		model = m
@@ -230,6 +248,15 @@ func TestExtractLocalAPIUsesConfiguredModelForPDF(t *testing.T) {
 	}
 	if model != "local-reader" {
 		t.Fatalf("model %q", model)
+	}
+}
+
+func stubPDFPages(t *testing.T, pages ...[]byte) {
+	t.Helper()
+	orig := pdfPageJPEGs
+	t.Cleanup(func() { pdfPageJPEGs = orig })
+	pdfPageJPEGs = func([]byte) ([][]byte, error) {
+		return pages, nil
 	}
 }
 

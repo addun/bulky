@@ -7,7 +7,7 @@ var (
 	ErrNoImage       = errors.New("image is required")
 	ErrNotABill      = errors.New("the photo does not look like a bill")
 	ErrNoLines       = errors.New("no products found on this bill")
-	ErrNoPDFText     = errors.New("this PDF has no readable text")
+	ErrNoPDFText     = errors.New("this PDF could not be read as images")
 	ErrNoModel       = errors.New("ocr model is not set")
 )
 

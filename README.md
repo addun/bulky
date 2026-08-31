@@ -8,7 +8,7 @@ A local log of products you buy in bulk: quantity, price in PLN, and a running h
 docker compose up --build
 ```
 
-The image includes Tesseract (Polish) and Poppler so scanned PDFs can be read. For `go run` on a Mac, install the same tools with `brew install tesseract tesseract-lang poppler` (`tesseract` alone has no Polish data).
+The image includes Poppler so PDFs can be turned into page images for the vision model. For `go run` on a Mac, install the same with `brew install poppler`.
 
 Published images from GitHub Releases go to the [GitHub Container Registry](https://ghcr.io) as `ghcr.io/<owner>/<repo>` (linux/amd64 and linux/arm64):
 
@@ -49,4 +49,4 @@ Optional environment:
 | `OCR_API_KEY`     |                            | API key for the bill reader (`OPENAI_API_KEY` is also accepted) |
 | `OCR_BASE_URL`    | `https://api.openai.com/v1` | OpenAI-compatible base URL (Ollama, etc.)   |
 
-**Scan a bill:** open [http://localhost:8080/receipts](http://localhost:8080/receipts) and upload a photo or a PDF of a receipt. That creates a `receipts` row, runs the reader, and stores the raw JSON. Confirm or edit the product list to migrate those lines into purchases; the receipt status then becomes `migrated`. For OpenAI, set `OCR_API_KEY`. Set the model on **Admin** (`/admin`); photos and PDF text both use that name. Scanned PDFs are OCRed with Tesseract (Polish). Docker includes that; locally you also need `brew install tesseract tesseract-lang poppler`. For a local OpenAI-compatible server (for example Ollama), set `OCR_BASE_URL` to that server’s `/v1` endpoint and pick a model on **Admin**.
+**Scan a bill:** open [http://localhost:8080/receipts](http://localhost:8080/receipts) and upload a photo or a PDF of a receipt. That creates a `receipts` row, runs the reader, and stores the raw JSON. Confirm or edit the product list to migrate those lines into purchases; the receipt status then becomes `migrated`. For OpenAI, set `OCR_API_KEY`. Set the model on **Admin** (`/admin`); photos and PDFs both use that name as images (PDFs are rasterized with `pdftoppm`). Docker includes Poppler; locally you also need `brew install poppler`. For a local OpenAI-compatible server (for example Ollama), set `OCR_BASE_URL` to that server’s `/v1` endpoint and pick a model on **Admin**.
