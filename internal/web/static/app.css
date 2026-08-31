@@ -286,6 +286,19 @@ label textarea {
   text-align: right;
 }
 
+.danger-zone a + a {
+  margin-left: 0.75rem;
+}
+
+.merge-plan {
+  margin: 0 0 1.4rem;
+  padding-left: 1.2rem;
+}
+
+.merge-plan li {
+  margin: 0.4rem 0;
+}
+
 .kind-pick {
   border: 1px solid var(--line);
   padding: 0.7rem 0.85rem;
