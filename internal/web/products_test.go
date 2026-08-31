@@ -3,6 +3,7 @@ package web
 import (
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -51,7 +52,7 @@ func TestMergeFormOmitsCurrentProduct(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/products/"+itoa(rice.ID)+"/merge", nil)
+	req := httptest.NewRequest(http.MethodGet, "/products/"+itoa(rice.ID)+"/merge-with", nil)
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d", rec.Code)
@@ -76,7 +77,7 @@ func TestMergeFormOmitsCurrentProduct(t *testing.T) {
 	rec = httptest.NewRecorder()
 	req = httptest.NewRequest(http.MethodGet, "/products/"+itoa(rice.ID), nil)
 	srv.Handler().ServeHTTP(rec, req)
-	if !strings.Contains(rec.Body.String(), `/products/`+itoa(rice.ID)+`/merge`) {
+	if !strings.Contains(rec.Body.String(), `/products/`+itoa(rice.ID)+`/merge-with`) {
 		t.Fatal("product page should link to merge")
 	}
 }
@@ -91,8 +92,10 @@ func TestMergeConfirmShowsSummary(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	form := url.Values{"into_id": {itoa(flour.ID)}}
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/products/"+itoa(rice.ID)+"/merge-with?into_id="+itoa(flour.ID), nil)
+	req := httptest.NewRequest(http.MethodPost, "/products/"+itoa(rice.ID)+"/merge-with", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("redirect status %d", rec.Code)

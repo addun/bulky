@@ -24,7 +24,7 @@
 <form method="post" action="/products/{{.Plan.From.ID}}/merge-with/{{.Plan.Into.ID}}/">
   <div class="actions">
     <button type="submit" class="btn btn-danger">Merge and delete this product</button>
-    <a href="/products/{{.Plan.From.ID}}/merge?into_id={{.Plan.Into.ID}}">Back</a>
+    <a href="/products/{{.Plan.From.ID}}/merge-with?into_id={{.Plan.Into.ID}}">Back</a>
   </div>
 </form>
 {{template "footer" .}}
