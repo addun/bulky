@@ -26,7 +26,6 @@ func main() {
 		OCR: ocr.Config{
 			APIKey:  firstEnv("OCR_API_KEY", "OPENAI_API_KEY"),
 			BaseURL: os.Getenv("OCR_BASE_URL"),
-			Model:   getenv("OCR_MODEL", ""),
 		},
 	})
 	if err != nil {

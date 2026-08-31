@@ -205,7 +205,7 @@ func TestExtractPDFWithoutText(t *testing.T) {
 	orig := lookPath
 	t.Cleanup(func() { lookPath = orig })
 	lookPath = func(string) (string, error) { return "", os.ErrNotExist }
-	a := New(Config{APIKey: "x", BaseURL: "http://127.0.0.1:1"})
+	a := New(Config{APIKey: "x", BaseURL: "http://127.0.0.1:1", Model: "test-model"})
 	_, _, err := a.Extract(textPDF())
 	if !errors.Is(err, ErrNoPDFText) {
 		t.Fatalf("got %v", err)

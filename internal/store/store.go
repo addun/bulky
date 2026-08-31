@@ -32,6 +32,7 @@ var (
 	ErrIncompletePackage = errors.New("packages and package size are both required")
 	ErrInvalidPackage    = errors.New("packages and package size must be greater than zero")
 	ErrInvalidAlias      = errors.New("alias is required")
+	ErrInvalidSetting    = errors.New("invalid setting")
 	ErrSameProduct       = errors.New("cannot merge a product into itself")
 	ErrUnitMismatch      = errors.New("products use different units")
 )

@@ -22,9 +22,7 @@ func New(cfg Config) *Agent {
 	if cfg.BaseURL == "" {
 		cfg.BaseURL = DefaultBaseURL
 	}
-	if strings.TrimSpace(cfg.Model) == "" {
-		cfg.Model = DefaultModel
-	}
+	cfg.Model = strings.TrimSpace(cfg.Model)
 	cfg.APIKey = strings.TrimSpace(cfg.APIKey)
 	oai := openai.DefaultConfig(cfg.APIKey)
 	oai.BaseURL = cfg.BaseURL
@@ -39,17 +37,21 @@ func (a *Agent) Configured() bool {
 	return a != nil && a.cfg.Configured()
 }
 
-func (a *Agent) textModel() string {
-	base := normalizeBaseURL(a.cfg.BaseURL)
-	if base != "" && base != DefaultBaseURL {
-		return a.cfg.Model
+func (a *Agent) WithModel(model string) *Agent {
+	if a == nil {
+		return nil
 	}
-	return DefaultTextModel
+	clone := *a
+	clone.cfg.Model = strings.TrimSpace(model)
+	return &clone
 }
 
 func (a *Agent) Extract(file []byte) (Bill, []byte, error) {
 	if a == nil || !a.cfg.Configured() {
 		return Bill{}, nil, ErrNotConfigured
+	}
+	if a.cfg.Model == "" {
+		return Bill{}, nil, ErrNoModel
 	}
 	if len(file) == 0 {
 		return Bill{}, nil, ErrNoImage
@@ -82,7 +84,7 @@ func (a *Agent) extractPDF(file []byte) (Bill, []byte, error) {
 func (a *Agent) extractFromText(text string) (Bill, []byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
-	body, err := a.complete(ctx, a.textModel(), textSystemPrompt, openai.ChatCompletionMessage{
+	body, err := a.complete(ctx, a.cfg.Model, textSystemPrompt, openai.ChatCompletionMessage{
 		Role:    openai.ChatMessageRoleUser,
 		Content: textUserPrompt(text),
 	})

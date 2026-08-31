@@ -4,13 +4,13 @@ Bulkly can photograph a receipt or upload a PDF and turn the printed lines into 
 
 ## Setup
 
-The reader needs a vision model for photos, and a text model for PDFs. Set `OCR_API_KEY` (or `OPENAI_API_KEY`) for OpenAI, or `OCR_BASE_URL` for any OpenAI-compatible API, including a local server. Optional: `OCR_MODEL` (default `gpt-4o` for photos; PDFs use `gpt-4o-mini` on OpenAI). Until that is set, **Receipts** explains that the reader is off.
+The reader needs a model for photos and for PDF text. Set `OCR_API_KEY` (or `OPENAI_API_KEY`) for OpenAI, or `OCR_BASE_URL` for any OpenAI-compatible API, including a local server. Set the model name on **Admin** (`/admin`); there is no default. Until the key (or base URL) and the model are set, **Receipts** explains that the reader is off.
 
 Scanned PDFs (no selectable text) are read with Tesseract (`pol`). Docker already has that. For `go run` on a Mac, install `tesseract`, `tesseract-lang` (Polish data), and `poppler`. If Tesseract is present without `pol`, the app tells you to run `brew install tesseract-lang` or use Docker.
 
 ## Upload
 
-Open **Receipts**, take a photo or choose a file (jpeg, png, webp, gif, or pdf, up to 10 MB), and choose **Read the bill**. Photos go to a vision model: the file is stored, tall receipts are split into overlapping slices (about 1417×2500 px) and sent together in one request. A PDF with selectable text is read in Go and sent as text to a cheaper model (`gpt-4o-mini` on OpenAI). A scanned PDF is rasterized (`pdftoppm`) and OCRed with Tesseract (`-l pol`), then that text goes to the same cheap model. That does not yet create purchases. The stored preview is a JPEG: photos as uploaded, PDFs as every page stacked (up to 40) when `pdftoppm` is available, otherwise a text slip.
+Open **Receipts**, take a photo or choose a file (jpeg, png, webp, gif, or pdf, up to 10 MB), and choose **Read the bill**. Photos go to the model saved under **Admin**: the file is stored, tall receipts are split into overlapping slices (about 1417×2500 px) and sent together in one request. A PDF with selectable text is read in Go and sent as text to the same model. A scanned PDF is rasterized (`pdftoppm`) and OCRed with Tesseract (`-l pol`), then that text goes to the same model. That does not yet create purchases. The stored preview is a JPEG: photos as uploaded, PDFs as every page stacked (up to 40) when `pdftoppm` is available, otherwise a text slip.
 
 The list shows each scan as pending, to confirm, failed, or saved. Failed and pending scans have no product list — photograph or upload the bill again.
 
