@@ -80,6 +80,9 @@ func (s *Server) routes() {
 
 	s.engine.GET("/", s.index)
 
+	s.engine.GET("/admin", s.admin)
+	s.engine.POST("/admin", s.updateAdmin)
+
 	s.engine.GET("/receipts", s.receipts)
 	s.engine.POST("/receipts", s.scanReceipt)
 	s.engine.GET("/receipts/:id/preview", s.receiptPreview)

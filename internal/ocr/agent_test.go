@@ -125,21 +125,36 @@ func TestExtractNotABill(t *testing.T) {
 		})
 	}))
 	defer srv.Close()
-	a := New(Config{APIKey: "x", BaseURL: srv.URL})
+	a := New(Config{APIKey: "x", BaseURL: srv.URL, Model: "test-model"})
 	_, _, err := a.Extract(tinyPNG(t))
 	if err != ErrNotABill {
 		t.Fatalf("got %v", err)
 	}
 }
 
-func TestTextModel(t *testing.T) {
-	openAI := New(Config{APIKey: "x", Model: "gpt-4o"})
-	if openAI.textModel() != DefaultTextModel {
-		t.Fatalf("openai text model %q", openAI.textModel())
+func TestNewDoesNotDefaultModel(t *testing.T) {
+	a := New(Config{APIKey: "x"})
+	if a.cfg.Model != "" {
+		t.Fatalf("model %q", a.cfg.Model)
 	}
-	local := New(Config{APIKey: "x", BaseURL: "http://localhost:11434/v1", Model: "llava"})
-	if local.textModel() != "llava" {
-		t.Fatalf("local text model %q", local.textModel())
+}
+
+func TestExtractRequiresModel(t *testing.T) {
+	a := New(Config{APIKey: "x", BaseURL: "http://127.0.0.1:1"})
+	_, _, err := a.Extract(tinyPNG(t))
+	if err != ErrNoModel {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestWithModelDoesNotMutateOriginal(t *testing.T) {
+	a := New(Config{APIKey: "x", Model: "first"})
+	b := a.WithModel("second")
+	if a.cfg.Model != "first" {
+		t.Fatalf("original %q", a.cfg.Model)
+	}
+	if b.cfg.Model != "second" {
+		t.Fatalf("copy %q", b.cfg.Model)
 	}
 }
 

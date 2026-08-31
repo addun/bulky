@@ -24,6 +24,15 @@ func (s *Server) scanReceipt(c *gin.Context) {
 		c.Redirect(http.StatusSeeOther, "/receipts?error="+url.QueryEscape("Set OCR_API_KEY or OCR_BASE_URL so the reader can run."))
 		return
 	}
+	model, err := s.ocrModel()
+	if err != nil {
+		s.renderReceipts(c, http.StatusInternalServerError, "Could not load settings.")
+		return
+	}
+	if model == "" {
+		c.Redirect(http.StatusSeeOther, "/receipts?error="+url.QueryEscape("Set the AI model under Admin so the reader can run."))
+		return
+	}
 	fh, err := pickFormFile(c, "bill", "bill_camera")
 	if err != nil {
 		s.renderReceipts(c, http.StatusUnprocessableEntity, "Choose a photo or a PDF of the bill.")
@@ -67,7 +76,7 @@ func (s *Server) scanReceipt(c *gin.Context) {
 		return
 	}
 
-	_, rawJSON, err := s.reader.Extract(raw)
+	_, rawJSON, err := s.reader.WithModel(model).Extract(raw)
 	if err != nil {
 		_ = s.store.FailReceipt(receipt.ID)
 		msg := "Could not read the bill: " + err.Error()
@@ -233,10 +242,15 @@ func (s *Server) renderReceipts(c *gin.Context, status int, errMsg string) {
 		c.String(http.StatusInternalServerError, "could not load receipts")
 		return
 	}
+	model, err := s.ocrModel()
+	if err != nil {
+		c.String(http.StatusInternalServerError, "could not load settings")
+		return
+	}
 	c.HTML(status, "receipts.html", gin.H{
 		"Page":       s.page("Receipts", "", errMsg),
 		"Configured": s.reader.Configured(),
-		"Model":      s.receiptModel(),
+		"Model":      model,
 		"Receipts":   list,
 	})
 }
@@ -267,11 +281,8 @@ func (s *Server) receiptLookups() ([]store.ProductListItem, []store.Unit, []stor
 	return products, units, companies, nil
 }
 
-func (s *Server) receiptModel() string {
-	if s.cfg.OCR.Model != "" {
-		return s.cfg.OCR.Model
-	}
-	return ocr.DefaultModel
+func (s *Server) ocrModel() (string, error) {
+	return s.store.GetSetting(store.SettingOCRModel)
 }
 
 func pickFormFile(c *gin.Context, names ...string) (*multipart.FileHeader, error) {

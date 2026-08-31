@@ -331,6 +331,12 @@ func TestReceiptsPageRendersWhenUnconfigured(t *testing.T) {
 	if !strings.Contains(body, "OCR_API_KEY") {
 		t.Fatal("missing setup hint")
 	}
+	if !strings.Contains(body, "Set the AI model under") {
+		t.Fatal("missing admin hint")
+	}
+	if strings.Contains(body, `name="bill"`) {
+		t.Fatal("unconfigured page should not show the upload field")
+	}
 	if !strings.Contains(body, `href="/receipts"`) {
 		t.Fatal("missing receipts nav")
 	}
@@ -340,6 +346,23 @@ func TestReceiptsPageRendersWhenUnconfigured(t *testing.T) {
 
 	srv, err = New(st, Config{OCR: ocr.Config{APIKey: "sk-test"}})
 	if err != nil {
+		t.Fatal(err)
+	}
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/receipts", nil)
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("key-only status %d", rec.Code)
+	}
+	body = rec.Body.String()
+	if strings.Contains(body, `name="bill"`) {
+		t.Fatal("key without a model should not show the upload field")
+	}
+	if !strings.Contains(body, "Set the AI model under") {
+		t.Fatal("key without a model should point at Admin")
+	}
+
+	if err := st.SetSetting(store.SettingOCRModel, "gpt-4o-mini"); err != nil {
 		t.Fatal(err)
 	}
 	rec = httptest.NewRecorder()

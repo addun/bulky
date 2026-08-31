@@ -3,8 +3,12 @@
 <p class="lede">Shop bills you photographed or uploaded. Each one is a visit’s products and prices, waiting to be saved into your log.</p>
 
 {{if not .Configured}}
-  <p class="banner">The reader is off until you set <code>OCR_API_KEY</code> (OpenAI) or <code>OCR_BASE_URL</code> (any OpenAI-compatible vision API, including a local server). Optional: <code>OCR_MODEL</code>, default {{.Model}}.</p>
-{{else}}
+  <p class="banner">The reader is off until you set <code>OCR_API_KEY</code> (OpenAI) or <code>OCR_BASE_URL</code> (any OpenAI-compatible vision API, including a local server).</p>
+{{end}}
+{{if not .Model}}
+  <p class="banner">Set the AI model under <a href="/admin">Admin</a> so the reader can run.</p>
+{{end}}
+{{if and .Configured .Model}}
 <form class="stack scan-form" method="post" action="/receipts" enctype="multipart/form-data" id="receipt-upload">
   <div class="scan-drop" id="scan-drop">
     <p class="scan-heading">Photo or PDF of the bill</p>
