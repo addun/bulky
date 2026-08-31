@@ -107,10 +107,14 @@ func fmtNoLines() error {
 
 func resolveImportProduct(tx *sql.Tx, line BillLineInput, created map[string]int64, newIDs map[int64]struct{}, companyID int64) (int64, error) {
 	if line.ProductID > 0 {
-		if _, err := getProductTx(tx, line.ProductID); err != nil {
+		p, err := getProductTx(tx, line.ProductID)
+		if err != nil {
 			return 0, err
 		}
-		return line.ProductID, nil
+		if err := maybeAliasFromReceipt(tx, p.ID, companyID, line.ReceiptName, p.Name); err != nil {
+			return 0, err
+		}
+		return p.ID, nil
 	}
 	key := strings.ToLower(strings.TrimSpace(line.ProductName))
 	if key == "" {
