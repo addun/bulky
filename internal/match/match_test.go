@@ -2,51 +2,6 @@ package match
 
 import "testing"
 
-func TestNormalize(t *testing.T) {
-	cases := map[string]string{
-		"MĄKA TORTOWA 1KG":   "maka tortowa",
-		"Mąka tortowa 1 kg":  "maka tortowa",
-		"  Maka,  tortowa. ": "maka tortowa",
-		"RYZ 10KG":           "ryz",
-		"Flour 500 g":        "flour",
-		"Oil 2l":             "oil",
-	}
-	for in, want := range cases {
-		if got := Normalize(in); got != want {
-			t.Errorf("Normalize(%q)=%q want %q", in, got, want)
-		}
-	}
-}
-
-func TestScoreExactAndDiacritics(t *testing.T) {
-	if s := Score("MĄKA", "Mąka"); s != 1 {
-		t.Fatalf("diacritics: %v", s)
-	}
-	if s := Score("Tortowa", "Tortowa"); s != 1 {
-		t.Fatalf("exact: %v", s)
-	}
-}
-
-func TestScoreTypo(t *testing.T) {
-	s := Score("Tortova", "Tortowa")
-	if s < minScore {
-		t.Fatalf("typo score %v", s)
-	}
-}
-
-func TestScoreTokenContainment(t *testing.T) {
-	s := Score("MAKA TORTOWA 1KG", "Mąka")
-	if s != containScore {
-		t.Fatalf("containment: %v", s)
-	}
-	if Score("ab", "ab") != 0 {
-		t.Fatal("short labels should be ignored")
-	}
-	if Score("xy", "xyz") >= minScore {
-		t.Fatal("short query must not be a confident match")
-	}
-}
-
 func TestProductMatchPriority(t *testing.T) {
 	shop := []Label{{ProductID: 5, Text: "Mąka"}}
 	global := []Label{{ProductID: 4, Text: "Mąka"}, {ProductID: 4, Text: "Tortowa"}}
@@ -67,19 +22,52 @@ func TestProductMatchPriority(t *testing.T) {
 		t.Fatalf("name: id=%d ok=%v", id, ok)
 	}
 
-	id, ok = Product("MAKA TORTOWA 1KG", nil, []Label{{ProductID: 4, Text: "Mąka tortowa"}}, names)
+	id, ok = Product("  Cake,  flour ", nil, nil, names)
 	if !ok || id != 4 {
-		t.Fatalf("fuzzy till line: id=%d ok=%v", id, ok)
+		t.Fatalf("spaces and punctuation: id=%d ok=%v", id, ok)
+	}
+
+	id, ok = Product("MAKA TORTOWA 1KG", nil, []Label{{ProductID: 4, Text: "Mąka tortowa 1kg"}}, names)
+	if !ok || id != 4 {
+		t.Fatalf("exact alias: id=%d ok=%v", id, ok)
+	}
+}
+
+func TestProductRejectsFuzzy(t *testing.T) {
+	names := []Label{{ProductID: 4, Text: "Cake flour"}, {ProductID: 5, Text: "Rice"}}
+
+	if _, ok := Product("Tortova", nil, []Label{{ProductID: 4, Text: "Tortowa"}}, nil); ok {
+		t.Fatal("alias typo should not match")
+	}
+	if _, ok := Product("Cak flour", nil, nil, names); ok {
+		t.Fatal("catalog typo should not match")
+	}
+	if _, ok := Product("MAKA TORTOWA 1KG", nil, []Label{{ProductID: 4, Text: "Mąka tortowa"}}, names); ok {
+		t.Fatal("shorter alias should not match")
+	}
+	if _, ok := Product("Rice 1kg", nil, nil, names); ok {
+		t.Fatal("trailing size should not match a catalog name")
+	}
+	if _, ok := Product("MAKA TORTOWA 1KG", nil, nil, []Label{{ProductID: 4, Text: "Mąka"}}); ok {
+		t.Fatal("catalog name must not match by token containment")
 	}
 }
 
 func TestProductAmbiguous(t *testing.T) {
 	global := []Label{
-		{ProductID: 4, Text: "Mąka pszenna"},
-		{ProductID: 6, Text: "Mąka żytnia"},
+		{ProductID: 4, Text: "Mąka"},
+		{ProductID: 6, Text: "Mąka"},
 	}
 	if _, ok := Product("Mąka", nil, global, nil); ok {
-		t.Fatal("two close alias hits should stay unmatched")
+		t.Fatal("two exact alias hits should stay unmatched")
+	}
+
+	names := []Label{
+		{ProductID: 4, Text: "Rice"},
+		{ProductID: 6, Text: "Rice"},
+	}
+	if _, ok := Product("Rice", nil, nil, names); ok {
+		t.Fatal("two exact catalog hits should stay unmatched")
 	}
 }
 
