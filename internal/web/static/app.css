@@ -326,7 +326,7 @@ label textarea {
   vertical-align: middle;
 }
 
-.history tr.price-row td {
+.history li.price-row {
   color: var(--muted);
 }
 
@@ -341,7 +341,8 @@ label textarea {
 
 .ledger,
 .units,
-.years {
+.years,
+.history {
   list-style: none;
   padding: 0;
   margin: 0;
@@ -349,7 +350,8 @@ label textarea {
 
 .ledger li,
 .units li,
-.years li {
+.years li,
+.history li {
   border-bottom: 1px solid var(--line);
 }
 
@@ -507,27 +509,71 @@ label .hint {
   width: auto;
 }
 
-.history {
-  width: 100%;
-  border-collapse: collapse;
+.history li {
+  padding: 1rem 0.15rem 1rem 0;
 }
 
-.history th {
-  text-align: left;
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+.history-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.8rem;
+}
+
+.history-when,
+.history-amt {
+  font-weight: 600;
+}
+
+.history-amt {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.history-facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.15rem 0;
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.history-facts > span:not(:last-child)::after {
+  content: "·";
+  margin: 0 0.45rem;
+  color: var(--line);
+}
+
+.history-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.8rem;
+  margin: 0.55rem 0 0;
+}
+
+.history-slip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: 500;
+}
+
+.history-slip svg {
+  width: 1.1rem;
+  height: 1.1rem;
+  flex-shrink: 0;
+}
+
+.history-noslip {
   color: var(--muted);
 }
 
-.history td,
-.history th {
-  padding: 0.55rem 0.4rem;
-  border-bottom: 1px solid var(--line);
-}
-
-.history td {
-  font-variant-numeric: tabular-nums;
+.history-foot .tight {
+  margin-left: auto;
+  gap: 0.9rem;
 }
 
 .tight {
@@ -773,11 +819,6 @@ code {
 
   .product-head {
     flex-direction: column;
-  }
-
-  .history .tight {
-    flex-direction: column;
-    gap: 0.2rem;
   }
 
   .page-head,

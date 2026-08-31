@@ -226,7 +226,7 @@ func (s *Server) mergeProductRedirect(c *gin.Context) {
 		c.String(http.StatusNotFound, "not found")
 		return
 	}
-	intoID := formInt64Query(c, "into_id")
+	intoID := formInt64(c, "into_id")
 	if intoID <= 0 {
 		p, err := s.store.GetProduct(id)
 		if errors.Is(err, store.ErrNotFound) {

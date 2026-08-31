@@ -35,47 +35,47 @@
   {{if not .Purchases}}
     <p class="empty">Nothing logged yet.</p>
   {{else}}
-    <table class="history">
-      <thead>
-        <tr>
-          <th>Date</th>
-          <th>Company</th>
-          <th>Qty</th>
-          <th>Amount</th>
-          <th>Unit price</th>
-          <th>Receipt</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        {{range .Purchases}}
-        <tr{{if .IsPrice}} class="price-row"{{end}}>
-          <td>{{date .BoughtOn}}{{if .IsPrice}} <span class="kind">price</span>{{end}}</td>
-          <td>{{if .CompanyID}}{{(index $.CompanyByID .CompanyID).Name}}{{else}}—{{end}}</td>
-          <td>
+    <ul class="history">
+      {{range .Purchases}}
+      <li{{if .IsPrice}} class="price-row"{{end}}>
+        <div class="history-head">
+          <span class="history-when">{{date .BoughtOn}}{{if .IsPrice}} <span class="kind">price</span>{{end}}</span>
+          <span class="history-amt">{{money .Amount}}</span>
+        </div>
+        <p class="history-facts">
+          {{if .CompanyID}}<span>{{(index $.CompanyByID .CompanyID).Name}}</span>{{end}}
+          <span>
             {{if .HasPackage}}
               {{qty .PackageCount}} × {{qty .PackageSize}} {{$.Product.UnitName}}
               <span class="meta">({{qty .Quantity}} {{$.Product.UnitName}})</span>
             {{else}}
               {{qty .Quantity}} {{$.Product.UnitName}}
             {{end}}
-          </td>
-          <td>{{money .Amount}}</td>
-          <td>{{unitPrice .Amount .Quantity}}</td>
-          <td>{{if .ReceiptID}}<a href="/receipts/{{.ReceiptID}}">Receipt {{.ReceiptID}}</a>{{else}}—{{end}}</td>
-          <td class="tight">
+          </span>
+          <span>{{unitPrice .Amount .Quantity}} / {{$.Product.UnitName}}</span>
+        </p>
+        <p class="history-foot">
+          {{if .ReceiptID}}
+            <a class="history-slip" href="/receipts/{{.ReceiptID}}">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M7 3.5h10v17l-1.6-1.1-1.6 1.1-1.6-1.1-1.6 1.1-1.6-1.1-1.6 1.1zM9 8h6M9 12h6M9 16h3.5"/></svg>
+              Receipt {{.ReceiptID}}
+            </a>
+          {{else}}
+            <span class="history-noslip">No receipt</span>
+          {{end}}
+          <span class="tight">
             <a href="/purchases/{{.ID}}/edit">Edit</a>
             <a class="danger" href="/purchases/{{.ID}}/delete">Delete</a>
-          </td>
-        </tr>
-        {{end}}
-      </tbody>
-    </table>
+          </span>
+        </p>
+      </li>
+      {{end}}
+    </ul>
   {{end}}
 </section>
 
 <p class="danger-zone">
-  <a class="danger" href="/products/{{.Product.ID}}/merge">Merge</a>
+  <a class="danger" href="/products/{{.Product.ID}}/merge-with">Merge</a>
   <a class="danger" href="/products/{{.Product.ID}}/delete">Delete product</a>
 </p>
 {{template "footer" .}}
