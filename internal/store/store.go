@@ -6,11 +6,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/shopspring/decimal"
 	_ "modernc.org/sqlite"
+
+	"github.com/adrian/bulkly/internal/match"
 )
 
 var (
@@ -418,27 +421,11 @@ func (s *Store) DeleteCompany(id int64) error {
 
 func (s *Store) ListProducts(q string) ([]ProductListItem, error) {
 	q = strings.TrimSpace(q)
-	var rows *sql.Rows
-	var err error
-	if q == "" {
-		rows, err = s.db.Query(`
+	rows, err := s.db.Query(`
 SELECT p.id, p.name, p.unit_id, u.name, p.image_path, p.created_at
 FROM products p
 JOIN units u ON u.id = p.unit_id
 ORDER BY p.name COLLATE NOCASE`)
-	} else {
-		pat := likeContains(q)
-		rows, err = s.db.Query(`
-SELECT p.id, p.name, p.unit_id, u.name, p.image_path, p.created_at
-FROM products p
-JOIN units u ON u.id = p.unit_id
-WHERE p.name LIKE ? ESCAPE '\'
-   OR EXISTS (
-     SELECT 1 FROM product_aliases a
-     WHERE a.product_id = p.id AND a.alias LIKE ? ESCAPE '\'
-   )
-ORDER BY p.name COLLATE NOCASE`, pat, pat)
-	}
 	if err != nil {
 		return nil, err
 	}
@@ -487,7 +474,48 @@ ORDER BY p.name COLLATE NOCASE`, pat, pat)
 			items[i].LastBought = sql.NullString{String: boughtOn, Valid: true}
 		}
 	}
-	return items, prows.Err()
+	if err := prows.Err(); err != nil {
+		return nil, err
+	}
+	if q == "" {
+		return items, nil
+	}
+	aliases, err := s.ListAliases()
+	if err != nil {
+		return nil, err
+	}
+	return filterProductSearch(items, q, aliases), nil
+}
+
+func filterProductSearch(items []ProductListItem, q string, aliases []ProductAlias) []ProductListItem {
+	labels := map[int64][]string{}
+	for _, a := range aliases {
+		labels[a.ProductID] = append(labels[a.ProductID], a.Alias)
+	}
+	type hit struct {
+		item  ProductListItem
+		score float64
+	}
+	var hits []hit
+	for _, it := range items {
+		labs := append([]string{it.Name}, labels[it.ID]...)
+		score := match.Search(q, labs...)
+		if score <= 0 {
+			continue
+		}
+		hits = append(hits, hit{it, score})
+	}
+	sort.SliceStable(hits, func(i, j int) bool {
+		if hits[i].score != hits[j].score {
+			return hits[i].score > hits[j].score
+		}
+		return strings.ToLower(hits[i].item.Name) < strings.ToLower(hits[j].item.Name)
+	})
+	out := make([]ProductListItem, len(hits))
+	for i, h := range hits {
+		out[i] = h.item
+	}
+	return out
 }
 
 func (s *Store) GetProduct(id int64) (Product, error) {
@@ -849,13 +877,6 @@ func normalizeCompany(name, streetName, building, apartment, postalCode, city st
 		return Company{}, ErrCompanyCity
 	}
 	return c, nil
-}
-
-func likeContains(q string) string {
-	q = strings.ReplaceAll(q, `\`, `\\`)
-	q = strings.ReplaceAll(q, `%`, `\%`)
-	q = strings.ReplaceAll(q, `_`, `\_`)
-	return "%" + q + "%"
 }
 
 func isUniqueErr(err error) bool {

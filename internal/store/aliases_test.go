@@ -122,6 +122,34 @@ func TestImportBillResolvesAlias(t *testing.T) {
 	}
 }
 
+func TestListProductsFuzzySearch(t *testing.T) {
+	s, _, flour, rice, lidl, _ := aliasFixture(t)
+	if _, err := s.CreateAlias(flour.ID, lidl.ID, "Mąka tortowa 1kg"); err != nil {
+		t.Fatal(err)
+	}
+
+	found, err := s.ListProducts("maka")
+	if err != nil || len(found) != 1 || found[0].ID != flour.ID {
+		t.Fatalf("diacritics: %v %#v", err, found)
+	}
+	found, err = s.ListProducts("tortova")
+	if err != nil || len(found) != 1 || found[0].ID != flour.ID {
+		t.Fatalf("typo: %v %#v", err, found)
+	}
+	found, err = s.ListProducts("caka flour")
+	if err != nil || len(found) != 1 || found[0].ID != flour.ID {
+		t.Fatalf("name typo: %v %#v", err, found)
+	}
+	found, err = s.ListProducts("Rice")
+	if err != nil || len(found) != 1 || found[0].ID != rice.ID {
+		t.Fatalf("exact name: %v %#v", err, found)
+	}
+	found, err = s.ListProducts("ghost")
+	if err != nil || len(found) != 0 {
+		t.Fatalf("miss: %v %#v", err, found)
+	}
+}
+
 func TestProductNameCannotReuseAlias(t *testing.T) {
 	s, kg, flour, _, _, _ := aliasFixture(t)
 	if _, err := s.CreateAlias(flour.ID, 0, "Tortowa"); err != nil {

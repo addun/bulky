@@ -74,7 +74,7 @@ func TestHydrateBillMatchesAlias(t *testing.T) {
 	}
 }
 
-func TestHydrateBillFuzzyAlias(t *testing.T) {
+func TestHydrateBillRejectsFuzzyAlias(t *testing.T) {
 	products := []store.ProductListItem{
 		{Product: store.Product{ID: 4, Name: "Cake flour", UnitID: 1, UnitName: "kg"}},
 		{Product: store.Product{ID: 5, Name: "Rice", UnitID: 1, UnitName: "kg"}},
@@ -87,8 +87,38 @@ func TestHydrateBillFuzzyAlias(t *testing.T) {
 	got := hydrateBill(ocr.Bill{
 		Lines: []ocr.Line{{ReceiptName: "MAKA TORTOWA 1KG", ProductName: "", ProductID: 0, UnitName: "kg"}},
 	}, products, units, aliases)
-	if got.Lines[0].ProductID != 4 {
-		t.Fatalf("fuzzy alias: %#v", got.Lines[0])
+	if got.Lines[0].ProductID != 0 {
+		t.Fatalf("fuzzy alias should stay unmatched: %#v", got.Lines[0])
+	}
+
+	exact := hydrateBill(ocr.Bill{
+		Lines: []ocr.Line{{ReceiptName: "MAKA TORTOWA 1KG", ProductName: "", ProductID: 0, UnitName: "kg"}},
+	}, products, units, []store.ProductAlias{
+		{ProductID: 4, CompanyID: 0, Alias: "Mąka tortowa 1kg"},
+	})
+	if exact.Lines[0].ProductID != 4 {
+		t.Fatalf("exact alias: %#v", exact.Lines[0])
+	}
+}
+
+func TestHydrateBillRejectsFuzzyCatalog(t *testing.T) {
+	products := []store.ProductListItem{
+		{Product: store.Product{ID: 4, Name: "Rice", UnitID: 1, UnitName: "kg"}},
+	}
+	units := []store.Unit{{ID: 1, Name: "kg"}}
+
+	got := hydrateBill(ocr.Bill{
+		Lines: []ocr.Line{{ReceiptName: "RYZ 10KG", ProductName: "", ProductID: 0, UnitName: "kg"}},
+	}, products, units, nil)
+	if got.Lines[0].ProductID != 0 {
+		t.Fatalf("fuzzy catalog should stay unmatched: %#v", got.Lines[0])
+	}
+
+	exact := hydrateBill(ocr.Bill{
+		Lines: []ocr.Line{{ReceiptName: "Rice", ProductName: "", ProductID: 0, UnitName: "kg"}},
+	}, products, units, nil)
+	if exact.Lines[0].ProductID != 4 {
+		t.Fatalf("exact catalog: %#v", exact.Lines[0])
 	}
 }
 
