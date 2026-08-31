@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	ocrDPI     = "300"
+	visionDPI  = "200"
 	previewDPI = "150"
 )
 
@@ -35,87 +35,43 @@ var runCommand = func(ctx context.Context, name string, args ...string) ([]byte,
 	return out, nil
 }
 
-var scanPDFText = func(raw []byte) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+var pdfPageJPEGs = func(raw []byte) ([][]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	return ocrPDF(ctx, raw)
-}
-
-func hasPDFOCR() bool {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	return requirePDFOCR(ctx) == nil
-}
-
-func requirePDFOCR(ctx context.Context) error {
-	if _, err := lookPath("tesseract"); err != nil {
-		return errNeedDockerOCR()
-	}
 	if _, err := lookPath("pdftoppm"); err != nil {
-		return errNeedDockerOCR()
+		return nil, errNeedPoppler()
 	}
-	if !tesseractHasPol(ctx) {
-		return errMissingPol()
-	}
-	return nil
-}
-
-func tesseractHasPol(ctx context.Context) bool {
-	out, err := runCommand(ctx, "tesseract", "--list-langs")
+	pages, cleanup, err := rasterizePDF(ctx, raw, visionDPI, maxPDFPages)
 	if err != nil {
-		return false
-	}
-	for _, line := range strings.Split(string(out), "\n") {
-		if strings.TrimSpace(line) == "pol" {
-			return true
-		}
-	}
-	return false
-}
-
-func errNeedDockerOCR() error {
-	return fmt.Errorf("%w: run Bulkly in Docker to read scanned PDFs", ErrNoPDFText)
-}
-
-func errMissingPol() error {
-	return fmt.Errorf("tesseract is installed but Polish language data is missing (brew install tesseract-lang), or run Bulkly in Docker")
-}
-
-func ocrPDF(ctx context.Context, raw []byte) (string, error) {
-	if err := requirePDFOCR(ctx); err != nil {
-		return "", err
-	}
-	pages, cleanup, err := rasterizePDF(ctx, raw, ocrDPI, maxPDFPages)
-	if err != nil {
-		return "", err
+		return nil, err
 	}
 	defer cleanup()
 	if len(pages) == 0 {
-		return "", fmt.Errorf("could not rasterize the PDF")
+		return nil, fmt.Errorf("could not rasterize the PDF")
 	}
-	var b strings.Builder
-	for i, page := range pages {
-		text, err := tesseractPage(ctx, page)
+	out := make([][]byte, 0, len(pages))
+	for _, path := range pages {
+		b, err := os.ReadFile(path)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
-		text = strings.TrimSpace(text)
-		if text == "" {
+		if len(b) == 0 {
 			continue
 		}
-		if b.Len() > 0 {
-			b.WriteString("\n\n")
+		jpeg, err := PrepareJPEG(b)
+		if err != nil {
+			return nil, err
 		}
-		if len(pages) > 1 {
-			fmt.Fprintf(&b, "--- page %d ---\n", i+1)
-		}
-		b.WriteString(text)
+		out = append(out, jpeg)
 	}
-	out := strings.TrimSpace(b.String())
-	if !isPDFWithText(out) {
-		return "", ErrNoPDFText
+	if len(out) == 0 {
+		return nil, ErrNoPDFText
 	}
 	return out, nil
+}
+
+func errNeedPoppler() error {
+	return fmt.Errorf("%w: install poppler or run Bulkly in Docker", ErrNoPDFText)
 }
 
 func rasterizePDF(ctx context.Context, raw []byte, dpi string, lastPage int) (pages []string, cleanup func(), err error) {
@@ -144,20 +100,9 @@ func rasterizePDF(ctx context.Context, raw []byte, dpi string, lastPage int) (pa
 	return matches, cleanup, nil
 }
 
-func tesseractPage(ctx context.Context, imagePath string) (string, error) {
-	out, err := runCommand(ctx, "tesseract", imagePath, "stdout", "-l", "pol", "--psm", "6")
-	if err != nil {
-		if strings.Contains(err.Error(), "traineddata") || strings.Contains(err.Error(), "Failed loading language") {
-			return "", errMissingPol()
-		}
-		return "", fmt.Errorf("could not OCR the PDF: %w", err)
-	}
-	return string(out), nil
-}
-
 func previewPagePNGs(raw []byte) ([][]byte, error) {
 	if _, err := lookPath("pdftoppm"); err != nil {
-		return nil, errNeedDockerOCR()
+		return nil, errNeedPoppler()
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()

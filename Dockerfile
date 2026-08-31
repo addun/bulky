@@ -7,7 +7,6 @@ FROM debian:bookworm-slim
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       tzdata ca-certificates \
-      tesseract-ocr tesseract-ocr-pol \
       poppler-utils \
  && rm -rf /var/lib/apt/lists/*
 COPY --from=build /out/bulkly /usr/local/bin/bulkly

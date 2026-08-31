@@ -70,28 +70,11 @@ func (a *Agent) Extract(file []byte) (Bill, []byte, error) {
 }
 
 func (a *Agent) extractPDF(file []byte) (Bill, []byte, error) {
-	text, _ := extractPDFText(file)
-	if isPDFWithText(text) {
-		return a.extractFromText(text)
-	}
-	text, err := scanPDFText(file)
+	pages, err := pdfPageJPEGs(file)
 	if err != nil {
 		return Bill{}, nil, err
 	}
-	return a.extractFromText(text)
-}
-
-func (a *Agent) extractFromText(text string) (Bill, []byte, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-	defer cancel()
-	body, err := a.complete(ctx, a.cfg.Model, textSystemPrompt, openai.ChatCompletionMessage{
-		Role:    openai.ChatMessageRoleUser,
-		Content: textUserPrompt(text),
-	})
-	if err != nil {
-		return Bill{}, nil, err
-	}
-	return finishExtract(body)
+	return a.extractPreparedPages(pages)
 }
 
 func (a *Agent) extractImage(file []byte) (Bill, []byte, error) {
@@ -99,13 +82,16 @@ func (a *Agent) extractImage(file []byte) (Bill, []byte, error) {
 	if err != nil {
 		return Bill{}, nil, err
 	}
-	tiles, err := splitReceipt(jpeg)
-	if err != nil {
-		return Bill{}, nil, err
+	return a.extractPreparedPages([][]byte{jpeg})
+}
+
+func (a *Agent) extractPreparedPages(pages [][]byte) (Bill, []byte, error) {
+	if len(pages) == 0 {
+		return Bill{}, nil, ErrNoImage
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
-	body, err := a.chat(ctx, tiles)
+	body, err := a.chat(ctx, pages)
 	if err != nil {
 		return Bill{}, nil, err
 	}
@@ -130,21 +116,21 @@ func finishExtract(body []byte) (Bill, []byte, error) {
 	return bill, rawJSON, nil
 }
 
-func (a *Agent) chat(ctx context.Context, tiles [][]byte) ([]byte, error) {
+func (a *Agent) chat(ctx context.Context, images [][]byte) ([]byte, error) {
 	parts := []openai.ChatMessagePart{
-		{Type: openai.ChatMessagePartTypeText, Text: chunkUserPrompt(len(tiles))},
+		{Type: openai.ChatMessagePartTypeText, Text: imageUserPrompt(len(images))},
 	}
-	for i, tile := range tiles {
-		if len(tiles) > 1 {
+	for i, img := range images {
+		if len(images) > 1 {
 			parts = append(parts, openai.ChatMessagePart{
 				Type: openai.ChatMessagePartTypeText,
-				Text: sliceCaption(i, len(tiles)),
+				Text: pageCaption(i, len(images)),
 			})
 		}
 		parts = append(parts, openai.ChatMessagePart{
 			Type: openai.ChatMessagePartTypeImageURL,
 			ImageURL: &openai.ChatMessageImageURL{
-				URL:    "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(tile),
+				URL:    "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(img),
 				Detail: openai.ImageURLDetailHigh,
 			},
 		})

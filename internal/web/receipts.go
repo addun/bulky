@@ -81,11 +81,11 @@ func (s *Server) scanReceipt(c *gin.Context) {
 		_ = s.store.FailReceipt(receipt.ID)
 		msg := "Could not read the bill: " + err.Error()
 		if errors.Is(err, ocr.ErrNotABill) {
-			msg = "That file does not look like a bill. Try a clearer photo of the whole receipt, or a text PDF."
+			msg = "That file does not look like a bill. Try a clearer photo of the whole receipt, or another PDF."
 		} else if errors.Is(err, ocr.ErrNoLines) {
 			msg = "No products could be read from this bill. Try another photo or PDF."
 		} else if errors.Is(err, ocr.ErrNoPDFText) {
-			msg = "This PDF has no selectable text. Run Bulkly in Docker to read scanned PDFs, or photograph the bill."
+			msg = "This PDF could not be turned into images. Install poppler or run Bulkly in Docker, or photograph the bill."
 		}
 		status := http.StatusBadGateway
 		if errors.Is(err, ocr.ErrNotABill) || errors.Is(err, ocr.ErrNoLines) || errors.Is(err, ocr.ErrNoPDFText) {

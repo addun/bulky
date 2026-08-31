@@ -62,7 +62,7 @@ func TestExtractFromMockAPI(t *testing.T) {
 	}
 }
 
-func TestExtractTallReceiptChunksInOneRequest(t *testing.T) {
+func TestExtractTallReceiptSendsOneImage(t *testing.T) {
 	billJSON, _ := json.Marshal(map[string]any{
 		"bought_on": "2026-08-18",
 		"lines": []map[string]any{
@@ -98,15 +98,11 @@ func TestExtractTallReceiptChunksInOneRequest(t *testing.T) {
 	if n.Load() != 1 {
 		t.Fatalf("requests %d, want 1", n.Load())
 	}
-	wantTiles := len(tileRects(1417, 4000))
-	if wantTiles < 2 {
-		t.Fatal("fixture should split")
+	if got := bytes.Count(reqBody, []byte(`"type":"image_url"`)); got != 1 {
+		t.Fatalf("images in request %d, want 1", got)
 	}
-	if got := bytes.Count(reqBody, []byte(`"type":"image_url"`)); got != wantTiles {
-		t.Fatalf("images in request %d, want %d", got, wantTiles)
-	}
-	if !bytes.Contains(reqBody, []byte("overlapping slices")) {
-		t.Fatalf("prompt should describe slices: %s", reqBody)
+	if bytes.Contains(reqBody, []byte("overlapping")) || bytes.Contains(reqBody, []byte("slices")) {
+		t.Fatalf("prompt should not mention slices: %s", reqBody)
 	}
 	if bill.BoughtOn != "2026-08-18" || len(bill.ProductLines()) != 3 {
 		t.Fatalf("bill %#v", bill)
