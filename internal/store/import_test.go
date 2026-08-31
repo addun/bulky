@@ -193,27 +193,47 @@ func TestImportBillTwoReceiptNamesOnNewProduct(t *testing.T) {
 	}
 }
 
-func TestImportBillDoesNotAliasExistingProduct(t *testing.T) {
-	s, kg, flour, _, _, _ := aliasFixture(t)
+func TestImportBillAliasesExistingProductFromReceiptName(t *testing.T) {
+	s, kg, flour, _, lidl, _ := aliasFixture(t)
 	res, err := s.ImportBill(BillImport{
-		BoughtOn: "2026-08-20",
+		CompanyID: lidl.ID,
+		BoughtOn:  "2026-08-20",
 		Lines: []BillLineInput{
 			{ProductID: flour.ID, ReceiptName: "MAKA TORTOWA", Quantity: mustDec(t, "1"), Amount: mustDec(t, "4.00")},
-			{ProductName: "Cake flour", ReceiptName: "SHOULD NOT APPLY", UnitID: kg.ID, Quantity: mustDec(t, "1"), Amount: mustDec(t, "4.00")},
 		},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.ProductIDs[0] != flour.ID || res.ProductIDs[1] != flour.ID {
+	if res.ProductIDs[0] != flour.ID {
 		t.Fatalf("should reuse flour: %#v", res)
 	}
 	aliases, err := s.ListAliasesByProduct(flour.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(aliases) != 0 {
-		t.Fatalf("existing product should not gain aliases: %#v", aliases)
+	if len(aliases) != 1 || aliases[0].Alias != "MAKA TORTOWA" || aliases[0].CompanyID != lidl.ID {
+		t.Fatalf("selected product should keep the corrected alias: %#v", aliases)
+	}
+
+	again, err := s.ImportBill(BillImport{
+		BoughtOn: "2026-08-21",
+		Lines: []BillLineInput{
+			{ProductName: "Cake flour", ReceiptName: "SHOULD NOT APPLY", UnitID: kg.ID, Quantity: mustDec(t, "1"), Amount: mustDec(t, "4.00")},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again.ProductIDs[0] != flour.ID {
+		t.Fatalf("name match should reuse flour: %#v", again)
+	}
+	aliases, err = s.ListAliasesByProduct(flour.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(aliases) != 1 || aliases[0].Alias != "MAKA TORTOWA" {
+		t.Fatalf("finding an existing name should not add a new alias: %#v", aliases)
 	}
 }
 

@@ -236,7 +236,7 @@ func parseReceiptForm(get func(string) string) (store.BillImport, receiptView, s
 		if err != nil {
 			return store.BillImport{}, view, fmt.Sprintf("Line %d: amount %s.", i+1, err.Error())
 		}
-		item := store.BillLineInput{Quantity: qty, PackageCount: packages, PackageSize: packSize, Amount: amount}
+		item := store.BillLineInput{Quantity: qty, PackageCount: packages, PackageSize: packSize, Amount: amount, ReceiptName: line.ReceiptName}
 		if line.ProductID > 0 {
 			item.ProductID = line.ProductID
 		} else {
@@ -248,7 +248,6 @@ func parseReceiptForm(get func(string) string) (store.BillImport, receiptView, s
 			}
 			item.ProductName = line.ProductName
 			item.UnitID = line.UnitID
-			item.ReceiptName = line.ReceiptName
 		}
 		in.Lines = append(in.Lines, item)
 	}

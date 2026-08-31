@@ -29,6 +29,10 @@
     return s.replace(".", ",");
   }
 
+  function formatMoney(n) {
+    return n.toFixed(2).replace(".", ",");
+  }
+
   function unitOf(form) {
     var attr = form.getAttribute("data-pack-unit");
     if (attr) return attr.trim();
@@ -56,9 +60,18 @@
       total.textContent = "";
       return;
     }
+    var qty = packs * packSize;
     var unit = unitOf(form);
+    var parts = ["Total " + formatQty(qty) + (unit ? " " + unit : "")];
+    var amountEl = form.querySelector("[data-pack-amount]");
+    var amount = amountEl ? parseNum(amountEl.value) : null;
+    if (amount) {
+      var sym = (form.getAttribute("data-pack-symbol") || "").trim();
+      var price = formatMoney(amount / qty) + (sym ? " " + sym : "");
+      parts.push(price + (unit ? "/" + unit : " per unit"));
+    }
     total.hidden = false;
-    total.textContent = "Total " + formatQty(packs * packSize) + (unit ? " " + unit : "");
+    total.textContent = parts.join(" · ");
   }
 
   function bindPack(form) {
@@ -76,13 +89,35 @@
   document.querySelectorAll("[data-pack-form]").forEach(bindPack);
 
   var lines = document.getElementById("receipt-lines");
+  function syncLineProduct(line) {
+    if (!line) return;
+    var sel = line.querySelector("[data-product-choice]");
+    var nameField = line.querySelector("[data-new-name]");
+    if (!sel || !nameField) return;
+    var isNew = sel.value === "new" || sel.value === "";
+    nameField.hidden = !isNew;
+    if (!isNew) {
+      var opt = sel.options[sel.selectedIndex];
+      var unitId = opt && opt.getAttribute("data-unit-id");
+      var unitSel = line.querySelector("[data-pack-unit-select]");
+      if (unitId && unitSel) unitSel.value = unitId;
+    }
+    syncPack(line);
+  }
+
   if (lines) {
     lines.addEventListener("change", function (e) {
-      if (e.target && e.target.name && e.target.name.indexOf("include_") === 0) {
-        var field = e.target.closest(".receipt-line");
-        if (field) field.classList.toggle("is-off", !e.target.checked);
+      if (!e.target || !e.target.name) return;
+      var field = e.target.closest(".receipt-line");
+      if (!field) return;
+      if (e.target.name.indexOf("include_") === 0) {
+        field.classList.toggle("is-off", !e.target.checked);
+      }
+      if (e.target.name.indexOf("product_choice_") === 0) {
+        syncLineProduct(field);
       }
     });
+    lines.querySelectorAll(".receipt-line").forEach(syncLineProduct);
   }
 
   var add = document.getElementById("add-line");
@@ -97,6 +132,7 @@
       var field = wrap.firstElementChild;
       lines.appendChild(field);
       bindPack(field);
+      syncLineProduct(field);
       count.value = String(i + 1);
     });
   }

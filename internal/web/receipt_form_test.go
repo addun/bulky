@@ -121,6 +121,8 @@ func TestParseReceiptForm(t *testing.T) {
 		"line_count":       "3",
 		"include_0":        "1",
 		"product_choice_0": "4",
+		"product_name_0":   "This name is ignored",
+		"receipt_name_0":   "RYZ 10KG",
 		"packages_0":       "1",
 		"package_size_0":   "10",
 		"amount_0":         "40,00",
@@ -151,6 +153,12 @@ func TestParseReceiptForm(t *testing.T) {
 	}
 	if in.Lines[0].ProductID != 4 || in.Lines[0].Amount.StringFixed(2) != "40.00" {
 		t.Fatalf("line0: %#v", in.Lines[0])
+	}
+	if in.Lines[0].ProductName != "" {
+		t.Fatalf("existing product should ignore the name field: %#v", in.Lines[0])
+	}
+	if in.Lines[0].ReceiptName != "RYZ 10KG" {
+		t.Fatalf("existing product should keep the edited alias: %#v", in.Lines[0])
 	}
 	if in.Lines[1].ProductName != "Flour" || in.Lines[1].UnitID != 1 || in.Lines[1].ReceiptName != "MAKA 5KG" {
 		t.Fatalf("line1: %#v", in.Lines[1])
@@ -205,17 +213,20 @@ func TestReceiptReviewTemplateExecutes(t *testing.T) {
 	}
 	var buf strings.Builder
 	err = srv.tmpl.ExecuteTemplate(&buf, "receipt_review.html", gin.H{
-		"Page": page{Title: "Confirm bill", Currency: "PLN"},
+		"Page": page{Title: "Confirm bill", Currency: "PLN", Symbol: "zł"},
 		"View": receiptView{
 			ReceiptID: 3,
 			ImagePath: "aabbccddeeff00112233445566778899",
 			Status:    store.ReceiptReady,
 			BoughtOn:  "2026-08-20",
-			Lines: []receiptLineView{{
-				Include: true, ProductName: "Rice", UnitID: 1, PackageCount: "1", PackageSize: "10", Amount: "40.00", ReceiptName: "RYZ",
-			}},
+			Lines: []receiptLineView{
+				{Include: true, ProductName: "Rice", UnitID: 1, PackageCount: "1", PackageSize: "10", Amount: "40.00", ReceiptName: "RYZ"},
+				{Include: true, ProductID: 4, ProductName: "Cake flour", UnitID: 1, PackageCount: "1", PackageSize: "1", Amount: "4.50", ReceiptName: "MAKA"},
+			},
 		},
-		"Products":  []store.ProductListItem{},
+		"Products": []store.ProductListItem{
+			{Product: store.Product{ID: 4, Name: "Cake flour", UnitID: 1, UnitName: "kg"}},
+		},
 		"Units":     []store.Unit{{ID: 1, Name: "kg"}},
 		"Companies": []store.Company{{ID: 2, Name: "Local Mill"}},
 	})
@@ -240,6 +251,29 @@ func TestReceiptReviewTemplateExecutes(t *testing.T) {
 	}
 	if !strings.Contains(body, `src="/receipts/3/preview"`) {
 		t.Fatal("preview should be nested under the receipt")
+	}
+	if !strings.Contains(body, `name="receipt_name_0"`) || !strings.Contains(body, "RYZ") {
+		t.Fatal("review form should let you edit the alias")
+	}
+	if strings.Contains(body, `type="hidden" name="receipt_name_0"`) {
+		t.Fatal("alias should be an editable field")
+	}
+	if !strings.Contains(body, "On the bill: RYZ") {
+		t.Fatal("review should still show the printed bill text")
+	}
+	if !strings.Contains(body, ">Alias <input name=\"receipt_name_0\"") {
+		t.Fatal("alias field should be labeled Alias")
+	}
+	pack := strings.Index(body, `name="package_size_0"`)
+	unit := strings.Index(body, `name="unit_id_0"`)
+	if pack < 0 || unit < 0 || unit < pack {
+		t.Fatal("unit should come after package size")
+	}
+	if !strings.Contains(body, `data-new-name>Name <input name="product_name_0"`) {
+		t.Fatal("new product should show a name field")
+	}
+	if !strings.Contains(body, `hidden data-new-name>Name <input name="product_name_1"`) {
+		t.Fatal("matched product should hide the name field")
 	}
 }
 
