@@ -202,6 +202,155 @@ func (s *Server) showProduct(c *gin.Context) {
 	})
 }
 
+func (s *Server) mergeProductForm(c *gin.Context) {
+	id, ok := paramID(c, "id")
+	if !ok {
+		c.String(http.StatusNotFound, "not found")
+		return
+	}
+	p, err := s.store.GetProduct(id)
+	if errors.Is(err, store.ErrNotFound) {
+		c.String(http.StatusNotFound, "not found")
+		return
+	}
+	if err != nil {
+		c.String(http.StatusInternalServerError, "could not load product")
+		return
+	}
+	s.renderMergeForm(c, http.StatusOK, p, formInt64Query(c, "into_id"), "")
+}
+
+func (s *Server) mergeProductRedirect(c *gin.Context) {
+	id, ok := paramID(c, "id")
+	if !ok {
+		c.String(http.StatusNotFound, "not found")
+		return
+	}
+	intoID := formInt64Query(c, "into_id")
+	if intoID <= 0 {
+		p, err := s.store.GetProduct(id)
+		if errors.Is(err, store.ErrNotFound) {
+			c.String(http.StatusNotFound, "not found")
+			return
+		}
+		if err != nil {
+			c.String(http.StatusInternalServerError, "could not load product")
+			return
+		}
+		s.renderMergeForm(c, http.StatusUnprocessableEntity, p, 0, "Choose a product.")
+		return
+	}
+	c.Redirect(http.StatusSeeOther, mergeWithPath(id, intoID))
+}
+
+func (s *Server) mergeProductConfirm(c *gin.Context) {
+	id, ok := paramID(c, "id")
+	if !ok {
+		c.String(http.StatusNotFound, "not found")
+		return
+	}
+	p, err := s.store.GetProduct(id)
+	if errors.Is(err, store.ErrNotFound) {
+		c.String(http.StatusNotFound, "not found")
+		return
+	}
+	if err != nil {
+		c.String(http.StatusInternalServerError, "could not load product")
+		return
+	}
+	intoID, ok := paramID(c, "into")
+	if !ok {
+		s.renderMergeForm(c, http.StatusUnprocessableEntity, p, 0, "Choose a product.")
+		return
+	}
+	plan, err := s.store.MergePlan(intoID, id)
+	if err != nil {
+		msg := mergeFormError(err)
+		if msg == "" {
+			c.String(http.StatusInternalServerError, "could not load merge")
+			return
+		}
+		s.renderMergeForm(c, http.StatusUnprocessableEntity, p, intoID, msg)
+		return
+	}
+	c.HTML(http.StatusOK, "product_merge_confirm.html", gin.H{
+		"Page": s.page("Merge "+plan.From.Name, "", ""),
+		"Plan": plan,
+	})
+}
+
+func (s *Server) mergeProduct(c *gin.Context) {
+	id, ok := paramID(c, "id")
+	if !ok {
+		c.String(http.StatusNotFound, "not found")
+		return
+	}
+	p, err := s.store.GetProduct(id)
+	if errors.Is(err, store.ErrNotFound) {
+		c.String(http.StatusNotFound, "not found")
+		return
+	}
+	if err != nil {
+		c.String(http.StatusInternalServerError, "could not load product")
+		return
+	}
+	intoID, ok := paramID(c, "into")
+	if !ok {
+		s.renderMergeForm(c, http.StatusUnprocessableEntity, p, 0, "Choose a product.")
+		return
+	}
+	keeper, img, err := s.store.MergeProducts(intoID, id)
+	if err == nil {
+		s.deleteImage(img)
+		c.Redirect(http.StatusSeeOther, "/products/"+itoa(keeper.ID))
+		return
+	}
+	msg := mergeFormError(err)
+	if msg == "" {
+		c.String(http.StatusInternalServerError, "could not merge")
+		return
+	}
+	s.renderMergeForm(c, http.StatusUnprocessableEntity, p, intoID, msg)
+}
+
+func mergeWithPath(fromID, intoID int64) string {
+	return "/products/" + itoa(fromID) + "/merge-with/" + itoa(intoID) + "/"
+}
+
+func mergeFormError(err error) string {
+	switch {
+	case errors.Is(err, store.ErrSameProduct):
+		return "Choose a different product."
+	case errors.Is(err, store.ErrNotFound):
+		return "Choose a product."
+	case errors.Is(err, store.ErrUnitMismatch):
+		return "Those products use different units."
+	default:
+		return ""
+	}
+}
+
+func (s *Server) renderMergeForm(c *gin.Context, status int, p store.Product, intoID int64, errMsg string) {
+	items, err := s.store.ListProducts("")
+	if err != nil {
+		c.String(http.StatusInternalServerError, "could not load products")
+		return
+	}
+	targets := make([]store.ProductListItem, 0, len(items))
+	for _, it := range items {
+		if it.ID == p.ID {
+			continue
+		}
+		targets = append(targets, it)
+	}
+	c.HTML(status, "product_merge.html", gin.H{
+		"Page":    s.page("Merge "+p.Name, "", errMsg),
+		"Product": p,
+		"Targets": targets,
+		"IntoID":  intoID,
+	})
+}
+
 func (s *Server) confirmDeleteProduct(c *gin.Context) {
 	id, ok := paramID(c, "id")
 	if !ok {

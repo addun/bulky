@@ -1,0 +1,30 @@
+{{template "header" .}}
+<h1>Merge {{.Plan.From.Name}}?</h1>
+<p class="lede">You are going to merge:</p>
+<ul class="merge-plan">
+  <li><strong>{{.Plan.From.Name}}</strong> into <strong>{{.Plan.Into.Name}}</strong></li>
+  <li>{{.Plan.From.Name}} will be removed</li>
+  {{if .Plan.History}}
+  <li>{{.Plan.History}} history row{{if ne .Plan.History 1}}s{{end}} will move to {{.Plan.Into.Name}}</li>
+  {{else}}
+  <li>Nothing in the history to move</li>
+  {{end}}
+  {{if .Plan.Aliases}}
+  <li>{{.Plan.Aliases}} alias{{if ne .Plan.Aliases 1}}es{{end}} will move to {{.Plan.Into.Name}}</li>
+  {{else}}
+  <li>No aliases to move</li>
+  {{end}}
+  {{if .Plan.NameAsAlias}}
+  <li>“{{.Plan.NameAsAlias}}” stays as an alias on {{.Plan.Into.Name}} so bills still match</li>
+  {{end}}
+  {{if .Plan.TakePhoto}}
+  <li>{{.Plan.From.Name}}’s photo will be used ({{.Plan.Into.Name}} has none)</li>
+  {{end}}
+</ul>
+<form method="post" action="/products/{{.Plan.From.ID}}/merge-with/{{.Plan.Into.ID}}/">
+  <div class="actions">
+    <button type="submit" class="btn btn-danger">Merge and delete this product</button>
+    <a href="/products/{{.Plan.From.ID}}/merge?into_id={{.Plan.Into.ID}}">Back</a>
+  </div>
+</form>
+{{template "footer" .}}
