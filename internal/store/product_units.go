@@ -150,6 +150,91 @@ func (s *Store) SetProductConversions(productID int64, conversions []ProductConv
 	return tx.Commit()
 }
 
+// ChangePurchaseUnit promotes an extra unit to the purchase unit.
+// The extra's factor is used to rewrite purchases and rebase remaining extras.
+// The previous purchase unit is kept as an extra so bills in that unit still match.
+func (s *Store) ChangePurchaseUnit(productID, newUnitID int64) error {
+	p, err := s.GetProduct(productID)
+	if err != nil {
+		return err
+	}
+	if newUnitID == p.UnitID {
+		return ErrInvalidUnit
+	}
+	conv, ok := p.ConversionFor(newUnitID)
+	if !ok {
+		return ErrInvalidConversion
+	}
+	factor := conv.Factor
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`UPDATE products SET unit_id = ? WHERE id = ?`, newUnitID, productID); err != nil {
+		return err
+	}
+	if err := rewritePurchaseQuantitiesTx(tx, productID, factor); err != nil {
+		return err
+	}
+	if err := setProductConversionsTx(tx, productID, newUnitID, rebaseConversions(p.Conversions, p.UnitID, newUnitID, factor)); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func rewritePurchaseQuantitiesTx(tx *sql.Tx, productID int64, factor decimal.Decimal) error {
+	rows, err := tx.Query(purchaseSelect+`
+WHERE p.product_id = ?
+ORDER BY p.id`, productID)
+	if err != nil {
+		return err
+	}
+	var buys []Purchase
+	for rows.Next() {
+		buy, err := scanPurchase(rows)
+		if err != nil {
+			rows.Close()
+			return err
+		}
+		buys = append(buys, buy)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return err
+	}
+	for _, buy := range buys {
+		qty := buy.Quantity.Mul(factor)
+		if buy.HasPackage() {
+			size := buy.PackageSize.Mul(factor)
+			if _, err := tx.Exec(
+				`UPDATE purchases SET quantity = ?, package_size = ? WHERE id = ?`,
+				qty.String(), size.String(), buy.ID,
+			); err != nil {
+				return err
+			}
+			continue
+		}
+		if _, err := tx.Exec(`UPDATE purchases SET quantity = ? WHERE id = ?`, qty.String(), buy.ID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func rebaseConversions(convs []ProductConversion, oldUnitID, newUnitID int64, factor decimal.Decimal) []ProductConversion {
+	out := make([]ProductConversion, 0, len(convs)+1)
+	for _, c := range convs {
+		if c.UnitID == newUnitID {
+			continue
+		}
+		out = append(out, ProductConversion{UnitID: c.UnitID, Factor: c.Factor.Div(factor)})
+	}
+	out = append(out, ProductConversion{UnitID: oldUnitID, Factor: decimal.NewFromInt(1).Div(factor)})
+	return out
+}
+
 type conversionQuerier interface {
 	Query(query string, args ...any) (*sql.Rows, error)
 }

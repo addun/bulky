@@ -166,7 +166,7 @@ func (s *Server) saveProduct(c *gin.Context, id int64) {
 	if imgName != "" {
 		newPath = &imgName
 	}
-	if err := s.store.UpdateProduct(id, name, unitID, newPath, clearImage && imgName == "", convs); err != nil {
+	if err := s.store.UpdateProduct(id, name, cur.UnitID, newPath, clearImage && imgName == "", convs); err != nil {
 		s.deleteImage(imgName)
 		if errors.Is(err, store.ErrDuplicate) {
 			renderErr("That name is already used as an alias.", draft)
@@ -226,6 +226,72 @@ func parseExtraUnits(c *gin.Context, purchaseUnitID int64) ([]store.ProductConve
 		out = append(out, store.ProductConversion{UnitID: unitID, Factor: factor})
 	}
 	return out, ""
+}
+
+func (s *Server) changeProductUnitForm(c *gin.Context) {
+	id, ok := paramID(c, "id")
+	if !ok {
+		c.String(http.StatusNotFound, "not found")
+		return
+	}
+	p, err := s.store.GetProduct(id)
+	if errors.Is(err, store.ErrNotFound) {
+		c.String(http.StatusNotFound, "not found")
+		return
+	}
+	if err != nil {
+		c.String(http.StatusInternalServerError, "could not load product")
+		return
+	}
+	s.renderChangeUnit(c, http.StatusOK, p, 0, "")
+}
+
+func (s *Server) changeProductUnit(c *gin.Context) {
+	id, ok := paramID(c, "id")
+	if !ok {
+		c.String(http.StatusNotFound, "not found")
+		return
+	}
+	p, err := s.store.GetProduct(id)
+	if errors.Is(err, store.ErrNotFound) {
+		c.String(http.StatusNotFound, "not found")
+		return
+	}
+	if err != nil {
+		c.String(http.StatusInternalServerError, "could not load product")
+		return
+	}
+	unitID := formInt64(c, "unit_id")
+	if _, ok := p.ConversionFor(unitID); !ok {
+		s.renderChangeUnit(c, http.StatusUnprocessableEntity, p, unitID, "Choose one of the extra units on this product.")
+		return
+	}
+	if err := s.store.ChangePurchaseUnit(id, unitID); err != nil {
+		msg := "Could not change the unit."
+		switch {
+		case errors.Is(err, store.ErrInvalidUnit):
+			msg = "Choose a different unit from the current purchase unit."
+		case errors.Is(err, store.ErrInvalidConversion):
+			msg = "Choose one of the extra units on this product."
+		}
+		s.renderChangeUnit(c, http.StatusUnprocessableEntity, p, unitID, msg)
+		return
+	}
+	c.Redirect(http.StatusSeeOther, "/products/"+itoa(id))
+}
+
+func (s *Server) renderChangeUnit(c *gin.Context, status int, p store.Product, newUnitID int64, errMsg string) {
+	buys, err := s.store.ListPurchases(p.ID)
+	if err != nil {
+		c.String(http.StatusInternalServerError, "could not load purchases")
+		return
+	}
+	c.HTML(status, "product_change_unit.html", gin.H{
+		"Page":      s.page("Change unit for "+p.Name, "", errMsg),
+		"Product":   p,
+		"NewUnitID": newUnitID,
+		"History":   len(buys),
+	})
 }
 
 func (s *Server) showProduct(c *gin.Context) {

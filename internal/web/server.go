@@ -119,6 +119,8 @@ func (s *Server) routes() {
 	s.engine.GET("/products/:id", s.showProduct)
 	s.engine.GET("/products/:id/edit", s.editProduct)
 	s.engine.POST("/products/:id", s.updateProduct)
+	s.engine.GET("/products/:id/change-unit", s.changeProductUnitForm)
+	s.engine.POST("/products/:id/change-unit", s.changeProductUnit)
 	s.engine.GET("/products/:id/merge-with", s.mergeProductForm)
 	s.engine.POST("/products/:id/merge-with", s.mergeProductRedirect)
 	s.engine.GET("/products/:id/merge-with/:into/", s.mergeProductConfirm)

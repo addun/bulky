@@ -50,7 +50,7 @@
           <select name="product_choice_{{$i}}" data-product-choice>
             <option value="new" {{if eq $line.ProductID 0}}selected{{end}}>New product</option>
             {{range $.Products}}
-            <option value="{{.ID}}" data-unit-id="{{.UnitID}}" data-unit-ids="{{.UnitIDsAttr}}" data-conversions="{{.PackConversionsJSON}}" {{if eq .ID $line.ProductID}}selected{{end}}>{{.Name}} ({{.UnitName}}{{range .Conversions}}, {{.UnitName}}{{end}})</option>
+            <option value="{{.ID}}" data-unit-id="{{.UnitID}}" data-unit-ids="{{.UnitIDsAttr}}" data-conversions="{{.PackConversionsJSON}}" {{if eq .ID $line.ProductID}}selected{{end}}>{{.Name}} ({{.UnitName}})</option>
             {{end}}
           </select>
         </label>
@@ -93,7 +93,7 @@
       <select name="product_choice___I__" data-product-choice>
         <option value="new" selected>New product</option>
         {{range .Products}}
-        <option value="{{.ID}}" data-unit-id="{{.UnitID}}" data-unit-ids="{{.UnitIDsAttr}}" data-conversions="{{.PackConversionsJSON}}">{{.Name}} ({{.UnitName}}{{range .Conversions}}, {{.UnitName}}{{end}})</option>
+        <option value="{{.ID}}" data-unit-id="{{.UnitID}}" data-unit-ids="{{.UnitIDsAttr}}" data-conversions="{{.PackConversionsJSON}}">{{.Name}} ({{.UnitName}})</option>
         {{end}}
       </select>
     </label>

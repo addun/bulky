@@ -33,17 +33,6 @@
     return n.toFixed(2).replace(".", ",");
   }
 
-  function extraConversions(form) {
-    var raw = form.getAttribute("data-conversions");
-    if (!raw) return [];
-    try {
-      var rows = JSON.parse(raw);
-      return Array.isArray(rows) ? rows : [];
-    } catch (e) {
-      return [];
-    }
-  }
-
   function unitOf(form) {
     var attr = form.getAttribute("data-pack-unit");
     if (attr) return attr.trim();
@@ -80,13 +69,6 @@
       var sym = (form.getAttribute("data-pack-symbol") || "").trim();
       var price = formatMoney(amount / qty) + (sym ? " " + sym : "");
       parts.push(price + (unit ? "/" + unit : " per unit"));
-      extraConversions(form).forEach(function (c) {
-        var factor = Number(c && c.factor);
-        if (!factor || !c.name) return;
-        var extraQty = qty * factor;
-        if (!extraQty) return;
-        parts.push(formatMoney(amount / extraQty) + (sym ? " " + sym : "") + "/" + c.name);
-      });
     }
     total.hidden = false;
     total.textContent = parts.join(" · ");
@@ -171,7 +153,10 @@
   var purchaseUnit = document.getElementById("purchase-unit");
   function syncPrimaryUnitLabels() {
     var name = "base unit";
-    if (purchaseUnit && purchaseUnit.selectedIndex >= 0) {
+    var locked = document.querySelector("[data-locked-primary-unit]");
+    if (locked && locked.textContent.trim()) {
+      name = locked.textContent.trim();
+    } else if (purchaseUnit && purchaseUnit.selectedIndex >= 0) {
       var text = (purchaseUnit.options[purchaseUnit.selectedIndex].text || "").trim();
       if (text && text !== "Select…") name = text;
     }
@@ -196,6 +181,35 @@
   if (purchaseUnit) {
     purchaseUnit.addEventListener("change", syncPrimaryUnitLabels);
     syncPrimaryUnitLabels();
+  } else {
+    syncPrimaryUnitLabels();
+  }
+
+  var changeUnit = document.querySelector("[data-change-unit]");
+  if (changeUnit) {
+    var unitSel = changeUnit.querySelector("[name=unit_id]");
+    function syncNewUnit() {
+      var name = "new unit";
+      var factor = "";
+      if (unitSel && unitSel.selectedIndex >= 0) {
+        var opt = unitSel.options[unitSel.selectedIndex];
+        var text = (opt.text || "").trim();
+        if (unitSel.value && text && text !== "Select…") {
+          name = text;
+          factor = opt.getAttribute("data-factor") || "";
+        }
+      }
+      changeUnit.querySelectorAll("[data-new-unit]").forEach(function (el) {
+        el.textContent = name;
+      });
+      changeUnit.querySelectorAll("[data-change-factor]").forEach(function (el) {
+        el.textContent = factor;
+      });
+    }
+    if (unitSel) {
+      unitSel.addEventListener("change", syncNewUnit);
+      syncNewUnit();
+    }
   }
 
   var camera = document.getElementById("bill-camera");

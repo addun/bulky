@@ -212,6 +212,156 @@ func TestMergeProductsRejectsConversionConflict(t *testing.T) {
 	}
 }
 
+func TestChangePurchaseUnitPromotesExtra(t *testing.T) {
+	s, szt, liter, ml := conversionFixture(t)
+	p, err := s.CreateProduct("Water", szt.ID, nil, []ProductConversion{
+		{UnitID: liter.ID, Factor: mustDec(t, "1.5")},
+		{UnitID: ml.ID, Factor: mustDec(t, "1500")},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	packed, err := s.CreatePurchase(p.ID, 0, "2026-08-20", decimal.Zero, mustDec(t, "15"), KindPurchase, mustDec(t, "2"), mustDec(t, "1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	loose, err := s.CreatePurchase(p.ID, 0, "2026-08-21", mustDec(t, "3"), mustDec(t, "7.50"), KindPurchase, decimal.Zero, decimal.Zero)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.ChangePurchaseUnit(p.ID, liter.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.GetProduct(p.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.UnitID != liter.ID {
+		t.Fatalf("unit: %d want %d", got.UnitID, liter.ID)
+	}
+	factors := map[int64]decimal.Decimal{}
+	for _, c := range got.Conversions {
+		factors[c.UnitID] = c.Factor
+	}
+	if _, ok := factors[liter.ID]; ok {
+		t.Fatalf("promoted unit should not stay as extra: %#v", got.Conversions)
+	}
+	wantSzt := decimal.NewFromInt(1).Div(mustDec(t, "1.5"))
+	if !factors[szt.ID].Equal(wantSzt) {
+		t.Fatalf("szt factor: %s want %s", factors[szt.ID], wantSzt)
+	}
+	if !factors[ml.ID].Equal(mustDec(t, "1000")) {
+		t.Fatalf("ml factor: %s", factors[ml.ID])
+	}
+
+	packed, err = s.GetPurchase(packed.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !packed.PackageCount.Equal(mustDec(t, "2")) || !packed.PackageSize.Equal(mustDec(t, "1.5")) || !packed.Quantity.Equal(mustDec(t, "3")) {
+		t.Fatalf("packed: count=%s size=%s qty=%s", packed.PackageCount, packed.PackageSize, packed.Quantity)
+	}
+	if !packed.Amount.Equal(mustDec(t, "15")) {
+		t.Fatalf("amount should stay: %s", packed.Amount)
+	}
+
+	loose, err = s.GetPurchase(loose.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loose.HasPackage() || !loose.Quantity.Equal(mustDec(t, "4.5")) {
+		t.Fatalf("loose: packed=%v qty=%s", loose.HasPackage(), loose.Quantity)
+	}
+}
+
+func TestChangePurchaseUnitRejectsUnknownExtra(t *testing.T) {
+	s, szt, liter, ml := conversionFixture(t)
+	p, err := s.CreateProduct("Water", szt.ID, nil, []ProductConversion{
+		{UnitID: liter.ID, Factor: mustDec(t, "1.5")},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	buy, err := s.CreatePurchase(p.ID, 0, "2026-08-20", mustDec(t, "500"), mustDec(t, "8"), KindPurchase, decimal.Zero, decimal.Zero)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.ChangePurchaseUnit(p.ID, ml.ID); !errors.Is(err, ErrInvalidConversion) {
+		t.Fatalf("unit that is not an extra: %v", err)
+	}
+
+	got, err := s.GetProduct(p.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.UnitID != szt.ID {
+		t.Fatalf("unit: %d", got.UnitID)
+	}
+	buy, err = s.GetPurchase(buy.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !buy.Quantity.Equal(mustDec(t, "500")) {
+		t.Fatalf("qty should stay: %s", buy.Quantity)
+	}
+}
+
+func TestChangePurchaseUnitRejects(t *testing.T) {
+	s, szt, liter, ml := conversionFixture(t)
+	p, err := s.CreateProduct("Water", szt.ID, nil, []ProductConversion{
+		{UnitID: liter.ID, Factor: mustDec(t, "1.5")},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreatePurchase(p.ID, 0, "2026-08-20", mustDec(t, "2"), mustDec(t, "5"), KindPurchase, decimal.Zero, decimal.Zero); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.ChangePurchaseUnit(p.ID, szt.ID); !errors.Is(err, ErrInvalidUnit) {
+		t.Fatalf("same unit: %v", err)
+	}
+	if err := s.ChangePurchaseUnit(p.ID, ml.ID); !errors.Is(err, ErrInvalidConversion) {
+		t.Fatalf("not an extra: %v", err)
+	}
+	if err := s.ChangePurchaseUnit(p.ID, 999); !errors.Is(err, ErrInvalidConversion) {
+		t.Fatalf("missing unit: %v", err)
+	}
+	if err := s.ChangePurchaseUnit(999, liter.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("missing product: %v", err)
+	}
+
+	got, err := s.GetProduct(p.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.UnitID != szt.ID || len(got.Conversions) != 1 || got.Conversions[0].UnitID != liter.ID {
+		t.Fatalf("product should be unchanged: %#v", got)
+	}
+	buys, err := s.ListPurchases(p.ID)
+	if err != nil || len(buys) != 1 || !buys[0].Quantity.Equal(mustDec(t, "2")) {
+		t.Fatalf("purchases should be unchanged: %v %#v", err, buys)
+	}
+}
+
+func TestUpdateProductRejectsUnitChange(t *testing.T) {
+	s, szt, liter, _ := conversionFixture(t)
+	p, err := s.CreateProduct("Water", szt.ID, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpdateProduct(p.ID, "Water", liter.ID, nil, false); !errors.Is(err, ErrInvalidUnit) {
+		t.Fatalf("unit change: %v", err)
+	}
+	got, err := s.GetProduct(p.ID)
+	if err != nil || got.UnitID != szt.ID {
+		t.Fatalf("unit should stay: %v %#v", err, got)
+	}
+}
+
 func conversionFixture(t *testing.T) (*Store, Unit, Unit, Unit) {
 	t.Helper()
 	s, err := Open(t.TempDir())

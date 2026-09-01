@@ -1,0 +1,31 @@
+{{template "header" .}}
+<h1>Change unit for {{.Product.Name}}</h1>
+{{if not .Product.Conversions}}
+<p class="lede">Add a conversion first, then you can make that unit the purchase unit.</p>
+<p><a href="/products/{{.Product.ID}}/edit">Edit conversions</a> · <a href="/products/{{.Product.ID}}">Cancel</a></p>
+{{else}}
+{{if .History}}
+<p class="lede">This converts {{.History}} logged buy{{if ne .History 1}}s{{end}} using the extra unit's factor.</p>
+{{end}}
+<form class="stack" method="post" action="/products/{{.Product.ID}}/change-unit" data-change-unit>
+  <label>
+    New unit
+    <select name="unit_id" required>
+      <option value="">Select…</option>
+      {{range .Product.Conversions}}
+      <option value="{{.UnitID}}" data-factor="{{qty .Factor}}" {{if eq .UnitID $.NewUnitID}}selected{{end}}>{{.UnitName}}</option>
+      {{end}}
+    </select>
+  </label>
+  <p class="extra-eq">
+    <span class="extra-eq-lead">1 {{.Product.UnitName}} equals</span>
+    <span data-change-factor></span>
+    <span data-new-unit>new unit</span>
+  </p>
+  <div class="actions">
+    <button type="submit" class="btn btn-tag">Change unit</button>
+    <a href="/products/{{.Product.ID}}">Cancel</a>
+  </div>
+</form>
+{{end}}
+{{template "footer" .}}

@@ -5,6 +5,7 @@
     Name
     <input name="name" required value="{{.Product.Name}}" autofocus>
   </label>
+  {{if .New}}
   <label>
     Base Unit
     <select name="unit_id" required id="purchase-unit">
@@ -16,6 +17,10 @@
   </label>
   {{if not .Units}}
     <p class="hint">No units yet. <a href="/units">Add a unit</a> first.</p>
+  {{end}}
+  {{else}}
+  <input type="hidden" name="unit_id" value="{{.Product.UnitID}}">
+  <p>Purchase unit <strong data-locked-primary-unit>{{.Product.UnitName}}</strong> · <a href="/products/{{.Product.ID}}/change-unit">Change unit</a></p>
   {{end}}
 
   <fieldset class="form-group">

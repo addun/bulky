@@ -23,7 +23,7 @@
     {{$y := .}}
     <li>
       <span class="year">{{$y.Year}}</span>
-      <span>{{qty $y.Quantity}} {{$.Product.UnitName}}{{range $.Product.Conversions}} · {{qty (qtyIn $y.Quantity .)}} {{.UnitName}}{{end}}</span>
+      <span>{{qty $y.Quantity}} {{$.Product.UnitName}}</span>
       <span class="row-amt">{{money $y.Amount}}</span>
     </li>
     {{end}}
@@ -54,7 +54,7 @@
               {{qty $buy.Quantity}} {{$.Product.UnitName}}
             {{end}}
           </span>
-          <span>{{unitPrice $buy.Amount $buy.Quantity}} / {{$.Product.UnitName}}{{range $.Product.Conversions}} · {{unitPrice $buy.Amount (qtyIn $buy.Quantity .)}} / {{.UnitName}}{{end}}</span>
+          <span>{{unitPrice $buy.Amount $buy.Quantity}} / {{$.Product.UnitName}}</span>
         </p>
         <p class="history-foot">
           {{if $buy.ReceiptID}}

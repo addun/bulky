@@ -579,6 +579,9 @@ func (s *Store) UpdateProduct(id int64, name string, unitID int64, imagePath *st
 	if err != nil {
 		return err
 	}
+	if unitID != cur.UnitID {
+		return ErrInvalidUnit
+	}
 	var path any
 	switch {
 	case clearImage:
@@ -610,10 +613,6 @@ func (s *Store) UpdateProduct(id int64, name string, unitID int64, imagePath *st
 	}
 	if len(conversions) > 0 {
 		if err := setProductConversionsTx(tx, id, unitID, conversions[0]); err != nil {
-			return err
-		}
-	} else if unitID != cur.UnitID {
-		if err := setProductConversionsTx(tx, id, unitID, cur.Conversions); err != nil {
 			return err
 		}
 	}

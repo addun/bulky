@@ -84,6 +84,9 @@ func TestMergeFormOmitsCurrentProduct(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), `/products/`+itoa(rice.ID)+`/merge-with`) {
 		t.Fatal("product page should link to merge")
 	}
+	if strings.Contains(rec.Body.String(), `/products/`+itoa(rice.ID)+`/change-unit`) {
+		t.Fatal("product page should not link to change unit")
+	}
 }
 
 func TestMergeConfirmShowsSummary(t *testing.T) {
@@ -266,9 +269,15 @@ func TestProductFormSavesExtraUnits(t *testing.T) {
 	if !strings.Contains(body, `selected>`+liter.Name) && !strings.Contains(body, `value="`+itoa(liter.ID)+`" selected`) {
 		t.Fatalf("edit form should select litres: %s", body)
 	}
+	if !strings.Contains(body, `/products/`+itoa(p.ID)+`/change-unit`) {
+		t.Fatal("edit form should link to change unit")
+	}
+	if strings.Contains(body, `id="purchase-unit"`) {
+		t.Fatal("edit form should not offer a live purchase unit select")
+	}
 }
 
-func TestProductShowShowsExtraPrices(t *testing.T) {
+func TestProductShowUsesPurchaseUnit(t *testing.T) {
 	st, err := store.Open(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -299,8 +308,12 @@ func TestProductShowShowsExtraPrices(t *testing.T) {
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	srv.Handler().ServeHTTP(rec, req)
-	if !strings.Contains(rec.Body.String(), "szt · l") {
-		t.Fatalf("list should name both units: %s", rec.Body.String())
+	list := rec.Body.String()
+	if !strings.Contains(list, `class="meta">szt`) {
+		t.Fatalf("list should name the purchase unit: %s", list)
+	}
+	if strings.Contains(list, `class="meta">szt · l</span>`) || strings.Contains(list, `class="meta">szt · l ·`) {
+		t.Fatal("list should not name extra units")
 	}
 
 	rec = httptest.NewRecorder()
@@ -310,18 +323,21 @@ func TestProductShowShowsExtraPrices(t *testing.T) {
 		t.Fatalf("status %d", rec.Code)
 	}
 	body := rec.Body.String()
-	if !strings.Contains(body, "6 szt · 9 l") {
-		t.Fatal("year should show both quantities")
+	if !strings.Contains(body, "6 szt") {
+		t.Fatal("year should show purchase quantity")
 	}
-	if !strings.Contains(body, "2,50 zł / szt") || !strings.Contains(body, "1,67 zł / l") {
-		t.Fatalf("history should show both unit prices: %s", body)
+	if strings.Contains(body, "9 l") || strings.Contains(body, "1,67 zł / l") {
+		t.Fatal("product page should not show extra unit quantities or prices")
+	}
+	if !strings.Contains(body, "2,50 zł / szt") {
+		t.Fatalf("history should show purchase unit price: %s", body)
 	}
 
 	rec = httptest.NewRecorder()
 	req = httptest.NewRequest(http.MethodGet, "/products/"+itoa(p.ID)+"/purchases/new", nil)
 	srv.Handler().ServeHTTP(rec, req)
-	if !strings.Contains(rec.Body.String(), `data-conversions=`) || !strings.Contains(rec.Body.String(), "1.5") {
-		t.Fatal("purchase form should include extra unit conversions")
+	if !strings.Contains(rec.Body.String(), "Package size (szt)") {
+		t.Fatal("purchase form should use the purchase unit")
 	}
 }
 
@@ -363,5 +379,146 @@ func TestMergeProductRejectsConversionConflict(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "Those products convert to l differently.") {
 		t.Fatalf("body: %s", rec.Body.String())
+	}
+}
+
+func TestChangeProductUnitFormAndSave(t *testing.T) {
+	st, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+	szt, err := st.CreateUnit("szt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	liter, err := st.CreateUnit("l")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ml, err := st.CreateUnit("ml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := st.CreateProduct("Water", szt.ID, nil, []store.ProductConversion{
+		{UnitID: liter.ID, Factor: decimal.RequireFromString("1.5")},
+		{UnitID: ml.ID, Factor: decimal.RequireFromString("1500")},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.CreatePurchase(p.ID, 0, "2026-08-20", decimal.Zero, decimal.RequireFromString("15"), store.KindPurchase, decimal.RequireFromString("2"), decimal.RequireFromString("1")); err != nil {
+		t.Fatal(err)
+	}
+	srv, err := New(st, Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/products/"+itoa(p.ID)+"/change-unit", nil)
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `Change unit for Water`) || !strings.Contains(body, `1 szt equals`) {
+		t.Fatal("form should explain the conversion")
+	}
+	if strings.Contains(body, `keep_old`) {
+		t.Fatal("old unit is always kept, not a checkbox")
+	}
+	if strings.Contains(body, `name="factor"`) {
+		t.Fatal("factor comes from the extra, not a form field")
+	}
+	if strings.Contains(body, `<option value="`+itoa(szt.ID)+`"`) {
+		t.Fatal("current unit should not be a choice")
+	}
+	kg, err := st.FindUnitByName("kg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(body, `<option value="`+itoa(kg.ID)+`"`) {
+		t.Fatal("units that are not extras should not be a choice")
+	}
+	if !strings.Contains(body, `<option value="`+itoa(liter.ID)+`"`) || !strings.Contains(body, `<option value="`+itoa(ml.ID)+`"`) {
+		t.Fatal("extras should be the only choices")
+	}
+
+	form := url.Values{
+		"unit_id": {itoa(liter.ID)},
+	}
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/products/"+itoa(p.ID)+"/change-unit", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
+	}
+	if loc := rec.Header().Get("Location"); loc != "/products/"+itoa(p.ID) {
+		t.Fatalf("location: %s", loc)
+	}
+
+	got, err := st.GetProduct(p.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.UnitID != liter.ID {
+		t.Fatalf("unit: %d", got.UnitID)
+	}
+	buys, err := st.ListPurchases(p.ID)
+	if err != nil || len(buys) != 1 || !buys[0].Quantity.Equal(decimal.RequireFromString("3")) {
+		t.Fatalf("buys: %v %#v", err, buys)
+	}
+}
+
+func TestChangeProductUnitRequiresExtra(t *testing.T) {
+	st, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+	szt, err := st.CreateUnit("szt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	liter, err := st.CreateUnit("l")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := st.CreateProduct("Water", szt.ID, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv, err := New(st, Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/products/"+itoa(p.ID)+"/change-unit", nil)
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "Add a conversion first") {
+		t.Fatalf("body: %s", rec.Body.String())
+	}
+
+	form := url.Values{"unit_id": {itoa(liter.ID)}}
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/products/"+itoa(p.ID)+"/change-unit", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "Choose one of the extra units on this product") {
+		t.Fatalf("body: %s", rec.Body.String())
+	}
+
+	got, err := st.GetProduct(p.ID)
+	if err != nil || got.UnitID != szt.ID {
+		t.Fatalf("unit should stay: %v %#v", err, got)
 	}
 }
