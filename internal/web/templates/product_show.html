@@ -41,7 +41,7 @@
       {{$buy := .}}
       <li{{if $buy.IsPrice}} class="price-row"{{end}}>
         <div class="history-head">
-          <span class="history-when">{{date $buy.BoughtOn}}{{if $buy.IsPrice}} <span class="kind">price</span>{{end}}</span>
+          <span class="history-when">{{datetime $buy.BoughtOn}}{{if $buy.IsPrice}} <span class="kind">price</span>{{end}}</span>
           <span class="history-amt">{{money $buy.Amount}}</span>
         </div>
         <p class="history-facts">

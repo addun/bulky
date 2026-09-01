@@ -3,6 +3,7 @@ package ocr
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -99,11 +100,11 @@ func (a *Agent) extractPreparedPages(pages [][]byte) (Bill, []byte, error) {
 }
 
 func finishExtract(body []byte) (Bill, []byte, error) {
-	rawJSON, err := extractJSON(body)
+	bill, err := parseBill(body)
 	if err != nil {
 		return Bill{}, nil, err
 	}
-	bill, err := parseBill(body)
+	rawJSON, err := json.Marshal(bill)
 	if err != nil {
 		return Bill{}, nil, err
 	}

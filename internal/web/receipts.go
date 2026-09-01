@@ -8,7 +8,6 @@ import (
 	"net/url"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -258,10 +257,10 @@ func (s *Server) updateReceiptVisit(c *gin.Context) {
 		c.Redirect(http.StatusSeeOther, "/receipts/"+itoa(id))
 		return
 	}
-	boughtOn := strings.TrimSpace(c.PostForm("bought_on"))
+	boughtOn, err := store.NormalizeBoughtOn(store.JoinBoughtOn(c.PostForm("bought_on"), c.PostForm("bought_at")))
 	companyID, msg := s.resolveCompanyForm(c)
-	if _, err := time.Parse("2006-01-02", boughtOn); err != nil {
-		s.renderReceiptEdit(c, http.StatusUnprocessableEntity, receipt, boughtOn, companyID, "Date must be a valid day.")
+	if err != nil {
+		s.renderReceiptEdit(c, http.StatusUnprocessableEntity, receipt, store.JoinBoughtOn(c.PostForm("bought_on"), c.PostForm("bought_at")), companyID, "Date must be a valid day.")
 		return
 	}
 	if msg != "" {
@@ -346,13 +345,18 @@ func (s *Server) renderReceiptShow(c *gin.Context, status int, receipt store.Rec
 		c.String(http.StatusInternalServerError, "could not load companies")
 		return
 	}
-	boughtOn, notes, company := receiptVisitFacts(receipt, buys, companies)
+	boughtOn, boughtAt, notes, company := receiptVisitFacts(receipt, buys, companies)
+	if boughtAt == "" {
+		boughtAt = store.BoughtOnTime(boughtOn)
+	}
+	boughtOn = store.JoinBoughtOn(boughtOn, boughtAt)
 	imported := int(formInt64Query(c, "imported"))
 	c.HTML(status, "receipt_show.html", gin.H{
 		"Page":      s.page("Receipt", "", errMsg),
 		"Receipt":   receipt,
 		"Purchases": buys,
 		"BoughtOn":  boughtOn,
+		"BoughtAt":  boughtAt,
 		"Notes":     notes,
 		"Company":   company,
 		"Total":     receiptPurchaseTotal(buys),
@@ -371,15 +375,23 @@ func (s *Server) renderReceiptEdit(c *gin.Context, status int, receipt store.Rec
 		c.String(http.StatusInternalServerError, "could not load companies")
 		return
 	}
+	var boughtAt string
 	if boughtOn == "" && companyID == 0 {
 		var company store.Company
-		boughtOn, _, company = receiptVisitFacts(receipt, buys, companies)
+		boughtOn, boughtAt, _, company = receiptVisitFacts(receipt, buys, companies)
 		companyID = company.ID
+	} else {
+		_, boughtAt, _, _ = receiptVisitFacts(receipt, buys, companies)
 	}
+	if boughtAt == "" {
+		boughtAt = store.BoughtOnTime(boughtOn)
+	}
+	boughtOn = store.JoinBoughtOn(boughtOn, boughtAt)
 	c.HTML(status, "receipt_edit.html", gin.H{
 		"Page":      s.page("Edit visit", "", errMsg),
 		"Receipt":   receipt,
 		"BoughtOn":  boughtOn,
+		"BoughtAt":  boughtAt,
 		"Company":   companyByID(companies, companyID),
 		"Companies": companies,
 	})

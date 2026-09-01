@@ -22,6 +22,9 @@ func templateFuncs(symbol string) template.FuncMap {
 			}
 			return iso
 		},
+		"datetime":  store.FormatBoughtOn,
+		"dateValue": store.BoughtOnDate,
+		"timeValue": store.BoughtOnTime,
 		"unitPrice": func(amount, quantity decimal.Decimal) string {
 			if quantity.IsZero() {
 				return "—"

@@ -8,7 +8,10 @@
 
   <fieldset class="form-group">
     <legend>When</legend>
-    <label>Date <input type="date" name="bought_on" required value="{{.Purchase.BoughtOn}}"></label>
+    <div class="form-row">
+      <label>Date <input type="date" name="bought_on" required value="{{dateValue .Purchase.BoughtOn}}"></label>
+      <label>Hour <input type="time" name="bought_at" value="{{timeValue .Purchase.BoughtOn}}"></label>
+    </div>
   </fieldset>
 
   <fieldset class="form-group">

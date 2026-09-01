@@ -170,8 +170,8 @@ func formInt64Query(c *gin.Context, name string) int64 {
 }
 
 func (s *Server) parsePurchase(c *gin.Context) (boughtOn string, qty, amount, packages, packSize decimal.Decimal, errMsg string) {
-	boughtOn = strings.TrimSpace(c.PostForm("bought_on"))
-	if _, err := time.Parse("2006-01-02", boughtOn); err != nil {
+	when, whenErr := store.NormalizeBoughtOn(store.JoinBoughtOn(c.PostForm("bought_on"), c.PostForm("bought_at")))
+	if whenErr != nil {
 		return "", decimal.Zero, decimal.Zero, decimal.Zero, decimal.Zero, "Date must be a valid day."
 	}
 	amount, err := parseDecimal(c.PostForm("amount"), 2, true)
@@ -186,7 +186,7 @@ func (s *Server) parsePurchase(c *gin.Context) (boughtOn string, qty, amount, pa
 	if err != nil {
 		return "", decimal.Zero, decimal.Zero, decimal.Zero, decimal.Zero, "Package size " + err.Error() + "."
 	}
-	return boughtOn, decimal.Zero, amount, packages, packSize, ""
+	return when, decimal.Zero, amount, packages, packSize, ""
 }
 
 func purchaseSaveError(err error) string {

@@ -28,11 +28,18 @@ func (c Config) Configured() bool {
 }
 
 type Bill struct {
-	BoughtOn  string `json:"bought_on"`
-	Notes     string `json:"notes"`
-	NotABill  bool   `json:"not_a_bill"`
-	CompanyID int64  `json:"company_id,omitempty"`
-	Lines     []Line `json:"lines"`
+	BoughtOn        string `json:"bought_on"`
+	BoughtAt        string `json:"bought_at,omitempty"`
+	Notes           string `json:"notes"`
+	NotABill        bool   `json:"not_a_bill"`
+	CompanyID       int64  `json:"company_id,omitempty"`
+	CompanyName     string `json:"company_name,omitempty"`
+	StreetName      string `json:"street_name,omitempty"`
+	BuildingNumber  string `json:"building_number,omitempty"`
+	ApartmentNumber string `json:"apartment_number,omitempty"`
+	PostalCode      string `json:"postal_code,omitempty"`
+	City            string `json:"city,omitempty"`
+	Lines           []Line `json:"lines"`
 }
 
 type Line struct {
@@ -41,9 +48,12 @@ type Line struct {
 	ProductID    int64  `json:"product_id"`
 	UnitID       int64  `json:"unit_id"`
 	UnitName     string `json:"unit_name"`
+	VatType      string `json:"vat_type,omitempty"`
 	PackageCount string `json:"package_count"`
 	PackageSize  string `json:"package_size"`
 	Quantity     string `json:"quantity"`
+	UnitPrice    string `json:"unit_price,omitempty"`
+	Discount     string `json:"discount,omitempty"`
 	Amount       string `json:"amount"`
 	Skip         bool   `json:"skip"`
 	SkipReason   string `json:"skip_reason"`

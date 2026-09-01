@@ -24,19 +24,24 @@ func (s *Server) companies(c *gin.Context) {
 }
 
 func (s *Server) newCompany(c *gin.Context) {
-	s.renderCompanyForm(c, http.StatusOK, store.Company{}, true, "")
+	s.renderCompanyForm(c, http.StatusOK, companyFromQuery(c), true, "", receiptReturnPath(c.Query("next")))
 }
 
 func (s *Server) createCompany(c *gin.Context) {
 	name, street, building, apartment, postal, city := companyFields(c)
 	form := store.Company{Name: name, StreetName: street, BuildingNumber: building, ApartmentNumber: apartment, PostalCode: postal, City: city}
+	next := receiptReturnPath(c.PostForm("next"))
 	_, err := s.store.CreateCompany(name, street, building, apartment, postal, city)
 	if msg := companyFormError(err); msg != "" {
-		s.renderCompanyForm(c, http.StatusUnprocessableEntity, form, true, msg)
+		s.renderCompanyForm(c, http.StatusUnprocessableEntity, form, true, msg, next)
 		return
 	}
 	if err != nil {
-		s.renderCompanyForm(c, http.StatusUnprocessableEntity, form, true, "Could not save the company.")
+		s.renderCompanyForm(c, http.StatusUnprocessableEntity, form, true, "Could not save the company.", next)
+		return
+	}
+	if next != "" {
+		c.Redirect(http.StatusSeeOther, next)
 		return
 	}
 	c.Redirect(http.StatusSeeOther, "/companies")
@@ -165,6 +170,49 @@ func companyFields(c *gin.Context) (name, street, building, apartment, postal, c
 		strings.TrimSpace(c.PostForm("city"))
 }
 
+func companyFromQuery(c *gin.Context) store.Company {
+	q := func(field string) string {
+		return strings.TrimSpace(c.Query(prefillQuery(field)))
+	}
+	return store.Company{
+		Name:            q("name"),
+		StreetName:      q("street_name"),
+		BuildingNumber:  q("building_number"),
+		ApartmentNumber: q("apartment_number"),
+		PostalCode:      q("postal_code"),
+		City:            q("city"),
+	}
+}
+
+func prefillQuery(field string) string {
+	return "prefill[" + field + "]"
+}
+
+func receiptReturnPath(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return ""
+	}
+	u, err := url.Parse(s)
+	if err != nil || u.IsAbs() || u.Host != "" || u.RawQuery != "" || u.Fragment != "" {
+		return ""
+	}
+	path := u.Path
+	if !strings.HasPrefix(path, "/receipts/") {
+		return ""
+	}
+	id := strings.TrimPrefix(path, "/receipts/")
+	if id == "" || strings.ContainsAny(id, "/.") {
+		return ""
+	}
+	for _, r := range id {
+		if r < '0' || r > '9' {
+			return ""
+		}
+	}
+	return "/receipts/" + id
+}
+
 func companyFormError(err error) string {
 	switch {
 	case errors.Is(err, store.ErrCompanyName):
@@ -192,7 +240,7 @@ func companiesByID(list []store.Company) map[int64]store.Company {
 	return m
 }
 
-func (s *Server) renderCompanyForm(c *gin.Context, status int, co store.Company, isNew bool, errMsg string) {
+func (s *Server) renderCompanyForm(c *gin.Context, status int, co store.Company, isNew bool, errMsg, next string) {
 	title := "Edit company"
 	if isNew {
 		title = "Add company"
@@ -201,5 +249,6 @@ func (s *Server) renderCompanyForm(c *gin.Context, status int, co store.Company,
 		"Page":    s.page(title, "", errMsg),
 		"Company": co,
 		"New":     isNew,
+		"Next":    next,
 	})
 }

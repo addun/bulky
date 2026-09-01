@@ -1,6 +1,7 @@
 {{template "header" .}}
 <h1>{{if .New}}Add company{{else}}Edit company{{end}}</h1>
 <form class="stack" method="post" action="{{if .New}}/companies{{else}}/companies/{{.Company.ID}}{{end}}">
+  {{if .Next}}<input type="hidden" name="next" value="{{.Next}}">{{end}}
   <fieldset class="form-group">
     <legend>Name</legend>
     <label>Name <input name="name" required placeholder="Makro, local mill…" value="{{.Company.Name}}" autofocus></label>
@@ -19,7 +20,7 @@
   </fieldset>
   <div class="form-actions">
     <button type="submit" class="btn btn-tag">{{if .New}}Add company{{else}}Save company{{end}}</button>
-    <a href="/companies">Cancel</a>
+    <a href="{{if .Next}}{{.Next}}{{else}}/companies{{end}}">Cancel</a>
   </div>
 </form>
 {{template "footer" .}}

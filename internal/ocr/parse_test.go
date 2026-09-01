@@ -125,6 +125,87 @@ func TestNormalizeDateAndNumber(t *testing.T) {
 	if got := normalizeNumber("1.234,50"); got != "1234.50" {
 		t.Fatalf("grouped: %q", got)
 	}
+	if got := normalizeNumber("14zł"); got != "14" {
+		t.Fatalf("zł: %q", got)
+	}
+}
+
+func TestParseBillDateAndHour(t *testing.T) {
+	bill, err := parseBill([]byte(`{"bought_on":"18.08.2026 14:32","lines":[{"receipt_name":"Chleb","package_count":"1","amount":"4.50"}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bill.BoughtOn != "2026-08-18" || bill.BoughtAt != "14:32" {
+		t.Fatalf("datetime: bought_on=%q bought_at=%q", bill.BoughtOn, bill.BoughtAt)
+	}
+
+	bill, err = parseBill([]byte(`{"bought_on":"2026-08-18","bought_at":"14.32:05","lines":[{"receipt_name":"Chleb","package_count":"1","amount":"4.50"}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bill.BoughtOn != "2026-08-18" || bill.BoughtAt != "14:32" {
+		t.Fatalf("bought_at field: bought_on=%q bought_at=%q", bill.BoughtOn, bill.BoughtAt)
+	}
+}
+
+func TestParseBillCompanyAddress(t *testing.T) {
+	raw := []byte(`{"company_name":"Biedronka","street_name":"ul. Kościuszki","building_number":"10","postal_code":"40001","city":"Katowice","lines":[{"receipt_name":"Chleb","package_count":"1","amount":"4.50"}]}`)
+	bill, err := parseBill(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bill.CompanyName != "Biedronka" || bill.StreetName != "Kościuszki" || bill.BuildingNumber != "10" || bill.PostalCode != "40-001" || bill.City != "Katowice" {
+		t.Fatalf("address: %#v", bill)
+	}
+}
+
+func TestParseBillKeepsPrintedAmount(t *testing.T) {
+	raw := []byte(`{"lines":[{"receipt_name":"Mleko","vat_type":"B","package_count":"10","unit_price":"1,99","discount":"5,00","amount":"14,99"}]}`)
+	bill, err := parseBill(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	line := bill.Lines[0]
+	if line.VatType != "B" || line.PackageCount != "10" || line.UnitPrice != "1.99" || line.Discount != "5.00" || line.Amount != "14.99" {
+		t.Fatalf("printed: %#v", line)
+	}
+}
+
+func TestParseBillFillsAmountFromPriceAndDiscount(t *testing.T) {
+	raw := []byte(`{"lines":[{"receipt_name":"Maslo","vat_type":"C","package_count":"3","unit_price":"18,55 C","discount":"-2,38"}]}`)
+	bill, err := parseBill(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	line := bill.Lines[0]
+	if line.VatType != "C" || line.UnitPrice != "18.55" || line.Discount != "2.38" {
+		t.Fatalf("fields: %#v", line)
+	}
+	if line.Amount != "53.27" {
+		t.Fatalf("amount: %q want 53.27 (3×18.55 − 2.38)", line.Amount)
+	}
+}
+
+func TestParseBillFillsAmountWithoutDiscount(t *testing.T) {
+	raw := []byte(`{"lines":[{"receipt_name":"Chleb","package_count":"2","unit_price":"4,50"}]}`)
+	bill, err := parseBill(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bill.Lines[0].Amount != "9.00" {
+		t.Fatalf("amount: %q", bill.Lines[0].Amount)
+	}
+}
+
+func TestParseBillPreservesCompanyID(t *testing.T) {
+	raw := []byte(`{"company_id":9,"bought_on":"2026-08-20","lines":[{"receipt_name":"Rice","package_count":"1","amount":"4.00"}]}`)
+	bill, err := parseBill(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bill.CompanyID != 9 {
+		t.Fatalf("company_id: %d", bill.CompanyID)
+	}
 }
 
 func TestPrepareJPEGAcceptsPNG(t *testing.T) {

@@ -234,7 +234,13 @@ func patchBillVisitJSON(raw string, companyID int64, boughtOn string) (string, e
 	if err := json.Unmarshal([]byte(raw), &bill); err != nil {
 		return "", err
 	}
-	bill["bought_on"] = boughtOn
+	date, clock := SplitBoughtOn(boughtOn)
+	bill["bought_on"] = date
+	if clock != "" {
+		bill["bought_at"] = clock
+	} else {
+		delete(bill, "bought_at")
+	}
 	if companyID > 0 {
 		bill["company_id"] = companyID
 	} else {
