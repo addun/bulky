@@ -62,6 +62,10 @@ func exactPool(query string, labels []Label) (int64, result) {
 	return 0, ambiguous
 }
 
+func Fold(s string) string {
+	return fold(s)
+}
+
 func fold(s string) string {
 	var b strings.Builder
 	b.Grow(len(s))

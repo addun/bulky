@@ -12,6 +12,10 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+func Parse(raw []byte) (Bill, error) {
+	return parseBill(raw)
+}
+
 func parseBill(raw []byte) (Bill, error) {
 	payload, err := extractJSON(raw)
 	if err != nil {
@@ -22,23 +26,43 @@ func parseBill(raw []byte) (Bill, error) {
 		return Bill{}, fmt.Errorf("model returned invalid JSON")
 	}
 	bill.Notes = strings.TrimSpace(bill.Notes)
+	bill.CompanyName = strings.TrimSpace(bill.CompanyName)
+	bill.StreetName = stripStreetPrefix(bill.StreetName)
+	bill.BuildingNumber = strings.TrimSpace(bill.BuildingNumber)
+	bill.ApartmentNumber = strings.TrimSpace(bill.ApartmentNumber)
+	bill.PostalCode = normalizePostal(bill.PostalCode)
+	bill.City = strings.TrimSpace(bill.City)
+	bill.BoughtOn, bill.BoughtAt = splitDateAndTime(bill.BoughtOn, bill.BoughtAt)
 	bill.BoughtOn = normalizeDate(bill.BoughtOn)
+	bill.BoughtAt = normalizeTime(bill.BoughtAt)
 	for i := range bill.Lines {
-		bill.Lines[i].ReceiptName = strings.TrimSpace(bill.Lines[i].ReceiptName)
-		bill.Lines[i].ProductName = strings.TrimSpace(bill.Lines[i].ProductName)
-		if bill.Lines[i].ProductName == "" {
-			bill.Lines[i].ProductName = bill.Lines[i].ReceiptName
-		}
-		bill.Lines[i].UnitName = strings.TrimSpace(bill.Lines[i].UnitName)
-		bill.Lines[i].PackageCount = normalizeNumber(bill.Lines[i].PackageCount)
-		bill.Lines[i].PackageSize = normalizeNumber(bill.Lines[i].PackageSize)
-		bill.Lines[i].Quantity = normalizeNumber(bill.Lines[i].Quantity)
-		bill.Lines[i].Amount = normalizeNumber(bill.Lines[i].Amount)
-		bill.Lines[i].SkipReason = strings.TrimSpace(bill.Lines[i].SkipReason)
+		normalizeLine(&bill.Lines[i])
 		fixWeighedKg(&bill.Lines[i])
+		fillMissingAmount(&bill.Lines[i])
 	}
 	bill.Lines = mergeRepeatScans(bill.Lines)
 	return bill, nil
+}
+
+func normalizeLine(line *Line) {
+	line.ReceiptName = strings.TrimSpace(line.ReceiptName)
+	line.ProductName = strings.TrimSpace(line.ProductName)
+	if line.ProductName == "" {
+		line.ProductName = line.ReceiptName
+	}
+	line.UnitName = strings.TrimSpace(line.UnitName)
+	line.SkipReason = strings.TrimSpace(line.SkipReason)
+
+	unitPrice, vatFromPrice := peelVAT(line.UnitPrice)
+	amount, vatFromAmount := peelVAT(line.Amount)
+	count, vatFromCount := peelVAT(line.PackageCount)
+	line.UnitPrice = normalizeNumber(unitPrice)
+	line.Amount = normalizeNumber(amount)
+	line.PackageCount = normalizeNumber(count)
+	line.PackageSize = normalizeNumber(line.PackageSize)
+	line.Quantity = normalizeNumber(line.Quantity)
+	line.Discount = normalizeDiscount(line.Discount)
+	line.VatType = normalizeVAT(line.VatType, vatFromPrice, vatFromAmount, vatFromCount)
 }
 
 func extractJSON(raw []byte) ([]byte, error) {
@@ -60,6 +84,22 @@ func extractJSON(raw []byte) ([]byte, error) {
 		return nil, fmt.Errorf("model response was not JSON")
 	}
 	return []byte(s[start : end+1]), nil
+}
+
+func splitDateAndTime(date, clock string) (string, string) {
+	date = strings.TrimSpace(date)
+	clock = strings.TrimSpace(clock)
+	date = strings.ReplaceAll(date, "\u00a0", " ")
+	date = strings.ReplaceAll(date, "T", " ")
+	parts := strings.Fields(date)
+	if len(parts) == 0 {
+		return date, clock
+	}
+	date = parts[0]
+	if clock == "" && len(parts) >= 2 {
+		clock = parts[1]
+	}
+	return date, clock
 }
 
 func normalizeDate(s string) string {
@@ -89,6 +129,108 @@ func normalizeDate(s string) string {
 	return s
 }
 
+func normalizeTime(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return ""
+	}
+	s = strings.ReplaceAll(s, "\u00a0", " ")
+	s = strings.ReplaceAll(s, ".", ":")
+	if i := strings.IndexByte(s, ' '); i >= 0 {
+		s = s[:i]
+	}
+	for _, layout := range []string{"15:04:05", "15:04", "15:04:05Z07:00"} {
+		if t, err := time.Parse(layout, s); err == nil {
+			return t.Format("15:04")
+		}
+	}
+	return s
+}
+
+func normalizePostal(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return ""
+	}
+	var digits strings.Builder
+	for _, r := range s {
+		if unicode.IsDigit(r) {
+			digits.WriteRune(r)
+		}
+	}
+	d := digits.String()
+	if len(d) == 5 {
+		return d[:2] + "-" + d[2:]
+	}
+	return s
+}
+
+func stripStreetPrefix(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return ""
+	}
+	lower := strings.ToLower(s)
+	for _, p := range []string{"ulica ", "ul. ", "ul ", "aleje ", "aleja ", "al. ", "al ", "plac ", "pl. ", "pl "} {
+		if strings.HasPrefix(lower, p) {
+			return strings.TrimSpace(s[len(p):])
+		}
+	}
+	return s
+}
+
+func peelVAT(s string) (num, vat string) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "", ""
+	}
+	runes := []rune(s)
+	last := unicode.ToUpper(runes[len(runes)-1])
+	if last == 'A' || last == 'B' || last == 'C' {
+		return strings.TrimSpace(string(runes[:len(runes)-1])), string(last)
+	}
+	return s, ""
+}
+
+func normalizeVAT(values ...string) string {
+	for _, s := range values {
+		s = strings.ToUpper(strings.TrimSpace(s))
+		if s == "" {
+			continue
+		}
+		s = strings.TrimRightFunc(s, func(r rune) bool {
+			return unicode.IsDigit(r) || r == '%' || unicode.IsSpace(r)
+		})
+		s = strings.TrimSpace(s)
+		if s == "A" || s == "B" || s == "C" {
+			return s
+		}
+		if r := []rune(s); len(r) > 0 {
+			last := unicode.ToUpper(r[len(r)-1])
+			if last == 'A' || last == 'B' || last == 'C' {
+				return string(last)
+			}
+		}
+	}
+	return ""
+}
+
+func normalizeDiscount(s string) string {
+	s = strings.TrimSpace(s)
+	s = strings.TrimPrefix(s, "−")
+	s = strings.TrimPrefix(s, "–")
+	s = strings.TrimPrefix(s, "-")
+	s = normalizeNumber(s)
+	if s == "" {
+		return ""
+	}
+	d, err := decimal.NewFromString(s)
+	if err != nil {
+		return s
+	}
+	return d.Abs().StringFixed(2)
+}
+
 func normalizeNumber(s string) string {
 	s = strings.TrimSpace(s)
 	s = strings.ReplaceAll(s, "\u00a0", "")
@@ -105,6 +247,31 @@ func normalizeNumber(s string) string {
 		s = strings.Join(parts[:len(parts)-1], "") + "." + parts[len(parts)-1]
 	}
 	return s
+}
+
+// fillMissingAmount sets amount from printed unit price, qty, and rabat
+// when the till did not print a final line total. Never overwrites a
+// printed amount.
+func fillMissingAmount(line *Line) {
+	if line.Skip || strings.TrimSpace(line.Amount) != "" {
+		return
+	}
+	price, err := decimal.NewFromString(line.UnitPrice)
+	if err != nil || price.IsZero() {
+		return
+	}
+	count, err := decimal.NewFromString(line.PackageCount)
+	if err != nil || count.IsZero() {
+		return
+	}
+	discount := decimal.Zero
+	if line.Discount != "" {
+		d, err := decimal.NewFromString(line.Discount)
+		if err == nil {
+			discount = d.Abs()
+		}
+	}
+	line.Amount = count.Mul(price).Sub(discount).Round(2).StringFixed(2)
 }
 
 // fixWeighedKg maps "1 pack of 1.450 kg" (old OCR rule) to "1.450 × 1 kg"
@@ -148,9 +315,10 @@ func mergeRepeatScans(lines []Line) []Line {
 		return lines
 	}
 	type acc struct {
-		idx    int
-		count  decimal.Decimal
-		amount decimal.Decimal
+		idx      int
+		count    decimal.Decimal
+		amount   decimal.Decimal
+		discount decimal.Decimal
 	}
 	seen := map[string]*acc{}
 	out := make([]Line, 0, len(lines))
@@ -159,7 +327,7 @@ func mergeRepeatScans(lines []Line) []Line {
 			out = append(out, line)
 			continue
 		}
-		key, count, amount, ok := repeatScanKey(line)
+		key, count, amount, discount, ok := repeatScanKey(line)
 		if !ok {
 			out = append(out, line)
 			continue
@@ -167,37 +335,46 @@ func mergeRepeatScans(lines []Line) []Line {
 		if g, hit := seen[key]; hit {
 			g.count = g.count.Add(count)
 			g.amount = g.amount.Add(amount)
+			g.discount = g.discount.Add(discount)
 			out[g.idx].PackageCount = g.count.String()
 			out[g.idx].Amount = g.amount.String()
+			if !g.discount.IsZero() || out[g.idx].Discount != "" {
+				out[g.idx].Discount = g.discount.String()
+			}
 			continue
 		}
 		idx := len(out)
 		out = append(out, line)
-		seen[key] = &acc{idx: idx, count: count, amount: amount}
+		seen[key] = &acc{idx: idx, count: count, amount: amount, discount: discount}
 	}
 	return out
 }
 
-func repeatScanKey(line Line) (key string, count, amount decimal.Decimal, ok bool) {
+func repeatScanKey(line Line) (key string, count, amount, discount decimal.Decimal, ok bool) {
 	name := strings.ToLower(strings.Join(strings.Fields(line.ReceiptName), " "))
 	if name == "" {
-		return "", decimal.Zero, decimal.Zero, false
+		return "", decimal.Zero, decimal.Zero, decimal.Zero, false
 	}
 	count, err := decimal.NewFromString(line.PackageCount)
 	if err != nil || count.IsZero() {
-		return "", decimal.Zero, decimal.Zero, false
+		return "", decimal.Zero, decimal.Zero, decimal.Zero, false
 	}
 	amount, err = decimal.NewFromString(line.Amount)
 	if err != nil {
-		return "", decimal.Zero, decimal.Zero, false
+		return "", decimal.Zero, decimal.Zero, decimal.Zero, false
+	}
+	if line.Discount != "" {
+		discount, _ = decimal.NewFromString(line.Discount)
+		discount = discount.Abs()
 	}
 	size, err := decimal.NewFromString(line.PackageSize)
 	if err != nil {
 		size = decimal.Zero
 	}
 	unit := strings.ToLower(line.UnitName)
-	key = name + "\x1f" + unit + "\x1f" + size.String() + "\x1f" + count.String() + "\x1f" + amount.String()
-	return key, count, amount, true
+	price := line.UnitPrice
+	key = name + "\x1f" + unit + "\x1f" + size.String() + "\x1f" + count.String() + "\x1f" + amount.String() + "\x1f" + price + "\x1f" + line.VatType
+	return key, count, amount, discount, true
 }
 
 type flexInt int64
@@ -256,10 +433,18 @@ func (n *flexNum) UnmarshalJSON(b []byte) error {
 }
 
 type rawBill struct {
-	BoughtOn string    `json:"bought_on"`
-	Notes    string    `json:"notes"`
-	NotABill bool      `json:"not_a_bill"`
-	Lines    []rawLine `json:"lines"`
+	BoughtOn        string    `json:"bought_on"`
+	BoughtAt        string    `json:"bought_at"`
+	Notes           string    `json:"notes"`
+	NotABill        bool      `json:"not_a_bill"`
+	CompanyID       flexInt   `json:"company_id"`
+	CompanyName     string    `json:"company_name"`
+	StreetName      string    `json:"street_name"`
+	BuildingNumber  string    `json:"building_number"`
+	ApartmentNumber string    `json:"apartment_number"`
+	PostalCode      string    `json:"postal_code"`
+	City            string    `json:"city"`
+	Lines           []rawLine `json:"lines"`
 }
 
 type rawLine struct {
@@ -268,9 +453,12 @@ type rawLine struct {
 	ProductID    flexInt `json:"product_id"`
 	UnitID       flexInt `json:"unit_id"`
 	UnitName     string  `json:"unit_name"`
+	VatType      string  `json:"vat_type"`
 	PackageCount flexNum `json:"package_count"`
 	PackageSize  flexNum `json:"package_size"`
 	Quantity     flexNum `json:"quantity"`
+	UnitPrice    flexNum `json:"unit_price"`
+	Discount     flexNum `json:"discount"`
 	Amount       flexNum `json:"amount"`
 	Skip         bool    `json:"skip"`
 	SkipReason   string  `json:"skip_reason"`
@@ -282,8 +470,16 @@ func (b *Bill) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	b.BoughtOn = raw.BoughtOn
+	b.BoughtAt = raw.BoughtAt
 	b.Notes = raw.Notes
 	b.NotABill = raw.NotABill
+	b.CompanyID = int64(raw.CompanyID)
+	b.CompanyName = raw.CompanyName
+	b.StreetName = raw.StreetName
+	b.BuildingNumber = raw.BuildingNumber
+	b.ApartmentNumber = raw.ApartmentNumber
+	b.PostalCode = raw.PostalCode
+	b.City = raw.City
 	b.Lines = make([]Line, len(raw.Lines))
 	for i, line := range raw.Lines {
 		b.Lines[i] = Line{
@@ -292,9 +488,12 @@ func (b *Bill) UnmarshalJSON(data []byte) error {
 			ProductID:    int64(line.ProductID),
 			UnitID:       int64(line.UnitID),
 			UnitName:     line.UnitName,
+			VatType:      line.VatType,
 			PackageCount: string(line.PackageCount),
 			PackageSize:  string(line.PackageSize),
 			Quantity:     string(line.Quantity),
+			UnitPrice:    string(line.UnitPrice),
+			Discount:     string(line.Discount),
 			Amount:       string(line.Amount),
 			Skip:         line.Skip,
 			SkipReason:   line.SkipReason,

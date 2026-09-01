@@ -3,7 +3,6 @@ package web
 import (
 	"errors"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -255,7 +254,7 @@ func (s *Server) renderPurchaseForm(c *gin.Context, status int, prod store.Produ
 }
 
 func newPurchaseDraft(hasLast bool, lastSize decimal.Decimal) store.Purchase {
-	p := store.Purchase{BoughtOn: time.Now().Format("2006-01-02")}
+	p := store.Purchase{BoughtOn: time.Now().Format("2006-01-02 15:04")}
 	if hasLast {
 		p.PackageCount = decimal.NewFromInt(1)
 		p.PackageSize = lastSize
@@ -265,7 +264,7 @@ func newPurchaseDraft(hasLast bool, lastSize decimal.Decimal) store.Purchase {
 
 func purchaseFromForm(c *gin.Context) store.Purchase {
 	p := store.Purchase{
-		BoughtOn:  strings.TrimSpace(c.PostForm("bought_on")),
+		BoughtOn:  store.JoinBoughtOn(c.PostForm("bought_on"), c.PostForm("bought_at")),
 		Kind:      store.PurchaseKind(c.PostForm("kind")),
 		CompanyID: formInt64(c, "company_id"),
 	}

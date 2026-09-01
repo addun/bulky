@@ -211,6 +211,7 @@ func TestParseReceiptForm(t *testing.T) {
 
 	in, _, msg := parseReceiptForm(get(map[string]string{
 		"bought_on":        "2026-08-20",
+		"bought_at":        "14:32",
 		"line_count":       "3",
 		"include_0":        "1",
 		"product_choice_0": "4",
@@ -237,6 +238,9 @@ func TestParseReceiptForm(t *testing.T) {
 	}), nil)
 	if msg != "" {
 		t.Fatal(msg)
+	}
+	if in.BoughtOn != "2026-08-20 14:32" {
+		t.Fatalf("bought_on: %q", in.BoughtOn)
 	}
 	if in.Company != nil || in.CompanyID != 0 {
 		t.Fatalf("company should be empty: %#v", in)
@@ -668,11 +672,11 @@ func TestReceiptEditUpdatesVisit(t *testing.T) {
 	if !strings.Contains(body, "every product assigned to this receipt") {
 		t.Fatal("expected assigned-products warning")
 	}
-	if !strings.Contains(body, `name="bought_on"`) || !strings.Contains(body, `name="company_id"`) {
-		t.Fatal("expected date and company fields")
+	if !strings.Contains(body, `name="bought_on"`) || !strings.Contains(body, `name="bought_at"`) || !strings.Contains(body, `name="company_id"`) {
+		t.Fatal("expected date, hour, and company fields")
 	}
 
-	form := url.Values{"company_id": {itoa(co.ID)}, "bought_on": {"2026-08-22"}}
+	form := url.Values{"company_id": {itoa(co.ID)}, "bought_on": {"2026-08-22"}, "bought_at": {"14:32"}}
 	rec = httptest.NewRecorder()
 	req = httptest.NewRequest(http.MethodPost, "/receipts/"+itoa(r.ID)+"/edit", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -688,7 +692,7 @@ func TestReceiptEditUpdatesVisit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(assigned) != 1 || assigned[0].CompanyID != co.ID || assigned[0].BoughtOn != "2026-08-22" {
+	if len(assigned) != 1 || assigned[0].CompanyID != co.ID || assigned[0].BoughtOn != "2026-08-22 14:32" {
 		t.Fatalf("purchases: %#v", assigned)
 	}
 
@@ -699,8 +703,81 @@ func TestReceiptEditUpdatesVisit(t *testing.T) {
 	if strings.Contains(body, "No company") {
 		t.Fatal("company should be set")
 	}
-	if !strings.Contains(body, "Local Mill") || !strings.Contains(body, "2026-08-22") {
-		t.Fatal("visit should show the saved date and company")
+	if !strings.Contains(body, "Local Mill") || !strings.Contains(body, "2026-08-22 14:32") {
+		t.Fatal("visit should show the saved date, hour, and company")
+	}
+}
+
+func TestMatchCompanyPrefersAddress(t *testing.T) {
+	companies := []store.Company{
+		{ID: 1, Name: "Biedronka", StreetName: "Kościuszki", BuildingNumber: "10", PostalCode: "40-001", City: "Katowice"},
+		{ID: 2, Name: "Biedronka", StreetName: "Jerozolimskie", BuildingNumber: "179", PostalCode: "02-222", City: "Warszawa"},
+	}
+	got := matchCompany(ocr.Bill{
+		CompanyName:    "Biedronka",
+		StreetName:     "ul. Kościuszki",
+		BuildingNumber: "10",
+		PostalCode:     "40001",
+		City:           "Katowice",
+	}, companies)
+	if got != 1 {
+		t.Fatalf("address match: %d", got)
+	}
+
+	unique := matchCompany(ocr.Bill{CompanyName: "Local Mill"}, []store.Company{
+		{ID: 7, Name: "Local Mill", StreetName: "Kościuszki", BuildingNumber: "10", PostalCode: "40-001", City: "Katowice"},
+	})
+	if unique != 7 {
+		t.Fatalf("unique name: %d", unique)
+	}
+
+	ambiguous := matchCompany(ocr.Bill{CompanyName: "Biedronka"}, companies)
+	if ambiguous != 0 {
+		t.Fatalf("ambiguous name should not pick: %d", ambiguous)
+	}
+}
+
+func TestReceiptReviewFillsAmountAndCompany(t *testing.T) {
+	dir := t.TempDir()
+	st, err := store.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	co, err := st.CreateCompany("Biedronka", "Kościuszki", "10", "", "40-001", "Katowice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := st.CreateReceipt("aabbccddeeff00112233445566778899")
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw := `{"bought_on":"18.08.2026 14:32","company_name":"Biedronka","street_name":"ul. Kościuszki","building_number":"10","postal_code":"40-001","city":"Katowice","lines":[{"receipt_name":"Maslo","vat_type":"C","package_count":"3","package_size":"1","unit_name":"szt","unit_price":"18,55 C","discount":"-2,38"}]}`
+	if err := st.SaveAIResponse(r.ID, raw); err != nil {
+		t.Fatal(err)
+	}
+	srv, err := New(st, Config{Currency: "PLN", CurrencySymbol: "zł"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/receipts/"+itoa(r.ID), nil)
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `value="53.27"`) {
+		t.Fatal("review should calc amount from unit price and rabat")
+	}
+	if !strings.Contains(body, `name="bought_at"`) || !strings.Contains(body, `value="14:32"`) {
+		t.Fatal("review should show the sale hour")
+	}
+	if !strings.Contains(body, `option value="`+itoa(co.ID)+`" selected`) {
+		t.Fatalf("company not selected")
+	}
+	if strings.Contains(body, "Create company") {
+		t.Fatal("matched company should not offer create")
 	}
 }
 

@@ -6,7 +6,10 @@
 <form class="stack" method="post" action="/receipts/{{.Receipt.ID}}/edit">
   <fieldset class="form-group">
     <legend>When</legend>
-    <label>Date <input type="date" name="bought_on" required value="{{.BoughtOn}}"></label>
+    <div class="form-row">
+      <label>Date <input type="date" name="bought_on" required value="{{dateValue .BoughtOn}}"></label>
+      <label>Hour <input type="time" name="bought_at" value="{{timeValue .BoughtOn}}"></label>
+    </div>
   </fieldset>
 
   <fieldset class="form-group">

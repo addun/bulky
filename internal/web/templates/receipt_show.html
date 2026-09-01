@@ -21,7 +21,7 @@
         <a href="/receipts/{{.Receipt.ID}}/edit">Edit</a>
       </div>
       <p class="meta">
-        {{if .BoughtOn}}{{date .BoughtOn}}{{else}}No date{{end}}
+        {{if .BoughtOn}}{{datetime .BoughtOn}}{{else}}No date{{end}}
         {{if .Company.ID}} · {{.Company.Name}}{{else}} · No company{{end}}
       </p>
     </section>
