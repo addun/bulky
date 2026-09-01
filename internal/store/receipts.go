@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"strings"
 )
@@ -188,6 +189,62 @@ func (s *Store) MigrateReceipt(id int64, in BillImport, rawJSON string) (BillImp
 		return BillImportResult{}, err
 	}
 	return res, nil
+}
+
+func (s *Store) UpdateReceiptVisit(id, companyID int64, boughtOn string) error {
+	company, err := s.optionalCompanyArg(companyID)
+	if err != nil {
+		return err
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	r, err := getReceiptTx(tx, id)
+	if err != nil {
+		return err
+	}
+	if r.Status != ReceiptMigrated {
+		if r.Status == ReceiptReady {
+			return ErrReceiptNotReady
+		}
+		return ErrNotFound
+	}
+	if _, err := tx.Exec(`UPDATE purchases SET company_id = ?, bought_on = ? WHERE receipt_id = ?`, company, boughtOn, id); err != nil {
+		return err
+	}
+	raw, err := patchBillVisitJSON(r.RawResponse, companyID, boughtOn)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`UPDATE receipts SET raw_response = ? WHERE id = ?`, raw, id); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func patchBillVisitJSON(raw string, companyID int64, boughtOn string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		raw = "{}"
+	}
+	var bill map[string]any
+	if err := json.Unmarshal([]byte(raw), &bill); err != nil {
+		return "", err
+	}
+	bill["bought_on"] = boughtOn
+	if companyID > 0 {
+		bill["company_id"] = companyID
+	} else {
+		delete(bill, "company_id")
+	}
+	out, err := json.Marshal(bill)
+	if err != nil {
+		return "", err
+	}
+	return string(out), nil
 }
 
 func getReceiptTx(tx *sql.Tx, id int64) (Receipt, error) {

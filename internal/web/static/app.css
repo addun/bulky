@@ -240,6 +240,10 @@ label textarea {
   margin-bottom: 0.2rem;
 }
 
+.page-head h2 {
+  margin: 0;
+}
+
 .page-head .hint {
   margin: 0.35rem 0 0;
 }
@@ -718,6 +722,20 @@ code {
 
 .receipt-line.is-off {
   opacity: 0.5;
+}
+
+.ledger .history-foot {
+  padding: 0 0.4rem 0.55rem 0.7rem;
+  margin-top: 0;
+}
+
+.receipt-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.8rem;
+  padding: 0.9rem 0.4rem 0.2rem 0.7rem;
+  font-weight: 600;
 }
 
 .receipt-include {

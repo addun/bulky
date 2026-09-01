@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/adrian/bulkly/internal/match"
 	"github.com/adrian/bulkly/internal/ocr"
 	"github.com/adrian/bulkly/internal/store"
@@ -272,6 +274,38 @@ func knownCompanyID(id int64, companies []store.Company) int64 {
 		}
 	}
 	return 0
+}
+
+func receiptVisitFacts(r store.Receipt, buys []store.ReceiptPurchase, companies []store.Company) (boughtOn, notes string, company store.Company) {
+	var bill ocr.Bill
+	if strings.TrimSpace(r.RawResponse) != "" {
+		_ = json.Unmarshal([]byte(r.RawResponse), &bill)
+	}
+	notes = bill.Notes
+	if len(buys) > 0 {
+		return buys[0].BoughtOn, notes, companyByID(companies, buys[0].CompanyID)
+	}
+	return bill.BoughtOn, notes, companyByID(companies, bill.CompanyID)
+}
+
+func companyByID(companies []store.Company, id int64) store.Company {
+	if id <= 0 {
+		return store.Company{}
+	}
+	for _, c := range companies {
+		if c.ID == id {
+			return c
+		}
+	}
+	return store.Company{}
+}
+
+func receiptPurchaseTotal(buys []store.ReceiptPurchase) decimal.Decimal {
+	sum := decimal.Zero
+	for _, p := range buys {
+		sum = sum.Add(p.Amount)
+	}
+	return sum
 }
 
 func unitKey(s string) string {

@@ -5,10 +5,12 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/shopspring/decimal"
 
 	"github.com/adrian/bulkly/internal/ocr"
 	"github.com/adrian/bulkly/internal/store"
@@ -466,6 +468,178 @@ func TestReceiptReviewLoadsReceiptJSON(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), `name="company_id"`) {
 		t.Fatal("review should include a company picker")
+	}
+}
+
+func TestReceiptShowListsAssignedPurchases(t *testing.T) {
+	dir := t.TempDir()
+	st, err := store.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	units, err := st.ListUnits()
+	if err != nil || len(units) == 0 {
+		t.Fatalf("units: %v %#v", err, units)
+	}
+	co, err := st.CreateCompany("Local Mill", "Kościuszki", "10", "", "40-001", "Katowice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := st.CreateReceipt("aabbccddeeff00112233445566778899")
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw := `{"bought_on":"2026-08-20","notes":"Check the till total.","company_id":` + itoa(co.ID) + `,"lines":[{"product_name":"Rice","quantity":"10","amount":"40.00"}]}`
+	if err := st.SaveAIResponse(r.ID, raw); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.MigrateReceipt(r.ID, store.BillImport{
+		CompanyID: co.ID,
+		BoughtOn:  "2026-08-20",
+		Lines: []store.BillLineInput{
+			{ProductName: "Rice", UnitID: units[0].ID, Quantity: decimal.RequireFromString("10"), Amount: decimal.RequireFromString("40.00")},
+			{ProductName: "Flour", UnitID: units[0].ID, Quantity: decimal.RequireFromString("5"), Amount: decimal.RequireFromString("18.50")},
+		},
+	}, raw); err != nil {
+		t.Fatal(err)
+	}
+
+	srv, err := New(st, Config{Currency: "PLN", CurrencySymbol: "zł"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/receipts/"+itoa(r.ID)+"?imported=2", nil)
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if strings.Contains(body, "Confirm the bill") || strings.Contains(body, `name="product_choice_0"`) {
+		t.Fatal("saved receipt should not show the confirm form")
+	}
+	if !strings.Contains(body, "<h1>Receipt</h1>") {
+		t.Fatal("expected the receipt heading")
+	}
+	if !strings.Contains(body, "Saved 2 purchases from the bill.") {
+		t.Fatal("expected the import banner")
+	}
+	if !strings.Contains(body, "Check the till total.") {
+		t.Fatal("expected AI notes")
+	}
+	if !strings.Contains(body, "Local Mill") {
+		t.Fatal("expected company")
+	}
+	if !strings.Contains(body, `<strong>Rice</strong>`) || !strings.Contains(body, `<strong>Flour</strong>`) {
+		t.Fatal("expected assigned products")
+	}
+	if !strings.Contains(body, ">Total<") {
+		t.Fatal("expected bill total")
+	}
+	if !strings.Contains(body, `href="/receipts/`+itoa(r.ID)+`/edit"`) {
+		t.Fatal("visit should link to edit")
+	}
+	if strings.Contains(body, `name="company_id"`) {
+		t.Fatal("show page should not edit the visit inline")
+	}
+}
+
+func TestReceiptEditUpdatesVisit(t *testing.T) {
+	dir := t.TempDir()
+	st, err := store.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	units, err := st.ListUnits()
+	if err != nil || len(units) == 0 {
+		t.Fatalf("units: %v %#v", err, units)
+	}
+	co, err := st.CreateCompany("Local Mill", "Kościuszki", "10", "", "40-001", "Katowice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := st.CreateReceipt("aabbccddeeff00112233445566778899")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SaveAIResponse(r.ID, `{"bought_on":"2026-08-20","lines":[{"product_name":"Rice"}]}`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.MigrateReceipt(r.ID, store.BillImport{
+		BoughtOn: "2026-08-20",
+		Lines: []store.BillLineInput{
+			{ProductName: "Rice", UnitID: units[0].ID, Quantity: decimal.RequireFromString("10"), Amount: decimal.RequireFromString("40.00")},
+		},
+	}, `{"bought_on":"2026-08-20"}`); err != nil {
+		t.Fatal(err)
+	}
+
+	srv, err := New(st, Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/receipts/"+itoa(r.ID), nil)
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "No company") {
+		t.Fatal("expected missing company on the visit")
+	}
+	if !strings.Contains(body, `href="/receipts/`+itoa(r.ID)+`/edit"`) {
+		t.Fatal("expected edit link")
+	}
+
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/receipts/"+itoa(r.ID)+"/edit", nil)
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("edit status %d", rec.Code)
+	}
+	body = rec.Body.String()
+	if !strings.Contains(body, "Edit visit") {
+		t.Fatal("expected edit heading")
+	}
+	if !strings.Contains(body, "every product assigned to this receipt") {
+		t.Fatal("expected assigned-products warning")
+	}
+	if !strings.Contains(body, `name="bought_on"`) || !strings.Contains(body, `name="company_id"`) {
+		t.Fatal("expected date and company fields")
+	}
+
+	form := url.Values{"company_id": {itoa(co.ID)}, "bought_on": {"2026-08-22"}}
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/receipts/"+itoa(r.ID)+"/edit", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status %d", rec.Code)
+	}
+	if loc := rec.Header().Get("Location"); loc != "/receipts/"+itoa(r.ID) {
+		t.Fatalf("location %q", loc)
+	}
+
+	assigned, err := st.ListPurchasesByReceipt(r.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(assigned) != 1 || assigned[0].CompanyID != co.ID || assigned[0].BoughtOn != "2026-08-22" {
+		t.Fatalf("purchases: %#v", assigned)
+	}
+
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/receipts/"+itoa(r.ID), nil)
+	srv.Handler().ServeHTTP(rec, req)
+	body = rec.Body.String()
+	if strings.Contains(body, "No company") {
+		t.Fatal("company should be set")
+	}
+	if !strings.Contains(body, "Local Mill") || !strings.Contains(body, "2026-08-22") {
+		t.Fatal("visit should show the saved date and company")
 	}
 }
 
