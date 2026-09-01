@@ -65,13 +65,14 @@ func hydrateBill(bill ocr.Bill, products []store.ProductListItem, units []store.
 	}
 
 	for i, line := range bill.Lines {
+		fromUnit := lineUnitID(line, unitByID, unitByName)
 		if line.ProductID != 0 {
 			if p, ok := productByID[line.ProductID]; ok {
 				line.ProductID = p.ID
-				line.UnitID = p.UnitID
 				if line.ProductName == "" {
 					line.ProductName = p.Name
 				}
+				applyPurchaseUnit(&line, p.Product, fromUnit)
 			} else {
 				line.ProductID = 0
 			}
@@ -79,7 +80,7 @@ func hydrateBill(bill ocr.Bill, products []store.ProductListItem, units []store.
 		if line.ProductID == 0 {
 			if p, ok := matchLineProduct(line.ReceiptName, line.ProductName, shop, global, names, productByID); ok {
 				line.ProductID = p.ID
-				line.UnitID = p.UnitID
+				applyPurchaseUnit(&line, p.Product, fromUnit)
 			}
 		}
 		if line.ProductID == 0 {
@@ -93,6 +94,34 @@ func hydrateBill(bill ocr.Bill, products []store.ProductListItem, units []store.
 		bill.Lines[i] = line
 	}
 	return bill
+}
+
+func lineUnitID(line ocr.Line, unitByID map[int64]store.Unit, unitByName map[string]store.Unit) int64 {
+	if _, ok := unitByID[line.UnitID]; ok {
+		return line.UnitID
+	}
+	if u, ok := unitByName[unitKey(line.UnitName)]; ok {
+		return u.ID
+	}
+	return 0
+}
+
+func applyPurchaseUnit(line *ocr.Line, p store.Product, fromUnit int64) {
+	if fromUnit == 0 {
+		fromUnit = line.UnitID
+	}
+	count, size := linePackFields(*line)
+	packs, err1 := parseDecimal(count, 8, false)
+	packSize, err2 := parseDecimal(size, 8, false)
+	if err1 == nil && err2 == nil {
+		np, ns, converted := store.ConvertPacksToPrimary(packs, packSize, fromUnit, p)
+		if converted {
+			line.PackageCount = np.String()
+			line.PackageSize = ns.String()
+			line.Quantity = np.Mul(ns).String()
+		}
+	}
+	line.UnitID = p.UnitID
 }
 
 func matchLineProduct(receiptName, productName string, shop, global, names []match.Label, products map[int64]store.ProductListItem) (store.ProductListItem, bool) {
@@ -214,10 +243,15 @@ func parseReceiptView(get func(string) string) receiptView {
 	return view
 }
 
-func parseReceiptForm(get func(string) string) (store.BillImport, receiptView, string) {
+func parseReceiptForm(get func(string) string, products []store.ProductListItem) (store.BillImport, receiptView, string) {
 	view := parseReceiptView(get)
 	if _, err := time.Parse("2006-01-02", view.BoughtOn); err != nil {
 		return store.BillImport{}, view, "Date must be a valid day."
+	}
+
+	byID := map[int64]store.ProductListItem{}
+	for _, p := range products {
+		byID[p.ID] = p
 	}
 
 	in := store.BillImport{BoughtOn: view.BoughtOn, CompanyID: view.CompanyID}
@@ -232,6 +266,9 @@ func parseReceiptForm(get func(string) string) (store.BillImport, receiptView, s
 		packSize, err := parseDecimal(line.PackageSize, 8, false)
 		if err != nil {
 			return store.BillImport{}, view, fmt.Sprintf("Line %d: package size %s.", i+1, err.Error())
+		}
+		if p, ok := byID[line.ProductID]; ok {
+			packages, packSize, _ = store.ConvertPacksToPrimary(packages, packSize, line.UnitID, p.Product)
 		}
 		qty := packages.Mul(packSize)
 		amount, err := parseDecimal(line.Amount, 2, true)

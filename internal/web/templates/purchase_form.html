@@ -1,7 +1,7 @@
 {{template "header" .}}
 <h1>{{if .New}}Add new purchase{{else if .Purchase.IsPrice}}Edit price{{else}}Edit purchase{{end}}</h1>
 <p class="lede">{{.Product.Name}}</p>
-<form class="stack" method="post" action="{{if .New}}/products/{{.Product.ID}}/purchases{{else}}/purchases/{{.Purchase.ID}}{{end}}" data-pack-form data-pack-unit="{{.Product.UnitName}}" data-pack-symbol="{{.Page.Symbol}}">
+<form class="stack" method="post" action="{{if .New}}/products/{{.Product.ID}}/purchases{{else}}/purchases/{{.Purchase.ID}}{{end}}" data-pack-form data-pack-unit="{{.Product.UnitName}}" data-pack-symbol="{{.Page.Symbol}}" data-conversions="{{.Product.PackConversionsJSON}}">
   {{if and (not .New) .Purchase.ReceiptID}}
   <p class="meta">From <a href="/receipts/{{.Purchase.ReceiptID}}">receipt {{.Purchase.ReceiptID}}</a></p>
   {{end}}

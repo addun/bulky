@@ -31,7 +31,7 @@
         {{end}}
         <span class="row-main">
           <strong>{{.Name}}</strong>
-          <span class="meta">{{.UnitName}}{{if .LastBought.Valid}} · last {{date .LastBought.String}}{{end}}</span>
+          <span class="meta">{{.UnitName}}{{range .Conversions}} · {{.UnitName}}{{end}}{{if .LastBought.Valid}} · last {{date .LastBought.String}}{{end}}</span>
         </span>
         <span class="row-amt">{{if gt .PurchaseCount 0}}{{money .LifetimeAmount}}{{else}}—{{end}}</span>
       </a>

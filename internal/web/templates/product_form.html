@@ -1,13 +1,13 @@
 {{template "header" .}}
 <h1>{{if .New}}Add product{{else}}Edit {{.Product.Name}}{{end}}</h1>
-<form class="stack" method="post" action="{{if .New}}/products{{else}}/products/{{.Product.ID}}{{end}}" enctype="multipart/form-data">
+<form class="stack" method="post" action="{{if .New}}/products{{else}}/products/{{.Product.ID}}{{end}}" enctype="multipart/form-data" id="product-form">
   <label>
     Name
     <input name="name" required value="{{.Product.Name}}" autofocus>
   </label>
   <label>
-    Unit
-    <select name="unit_id" required>
+    Base Unit
+    <select name="unit_id" required id="purchase-unit">
       <option value="">Select…</option>
       {{range .Units}}
       <option value="{{.ID}}" {{if eq .ID $.Product.UnitID}}selected{{end}}>{{.Name}}</option>
@@ -17,6 +17,29 @@
   {{if not .Units}}
     <p class="hint">No units yet. <a href="/units">Add a unit</a> first.</p>
   {{end}}
+
+  <fieldset class="form-group">
+    <legend>Conversions</legend>
+    <div id="extra-units" class="extra-units">
+      {{range $c := .Product.Conversions}}
+      <div class="form-row extra-unit">
+        <div class="extra-eq">
+          <span class="extra-eq-lead">1 <span data-primary-unit>{{$.Product.UnitName}}</span> equals</span>
+          <input name="extra_factor" inputmode="decimal" value="{{qty $c.Factor}}" placeholder="1.5" aria-label="Conversion amount">
+          <select name="extra_unit_id" data-extra-unit aria-label="Conversion unit">
+            <option value="">Select…</option>
+            {{range $.Units}}
+            <option value="{{.ID}}" {{if eq .ID $c.UnitID}}selected{{end}}>{{.Name}}</option>
+            {{end}}
+          </select>
+        </div>
+        <button type="button" class="btn btn-ghost" data-remove-extra>Remove</button>
+      </div>
+      {{end}}
+    </div>
+    <p><button type="button" class="btn btn-ghost" id="add-extra-unit">Add conversion</button></p>
+  </fieldset>
+
   <label>
     Photo <span class="hint">optional, jpeg/png/webp/gif up to 5 MB — stored as a 240×240 JPEG · take or choose on a phone</span>
     <input name="image" type="file" accept="image/*">
@@ -32,4 +55,19 @@
     <a href="{{if .New}}/{{else}}/products/{{.Product.ID}}{{end}}">Cancel</a>
   </div>
 </form>
+<template id="extra-unit-template">
+  <div class="form-row extra-unit">
+    <div class="extra-eq">
+      <span class="extra-eq-lead">1 <span data-primary-unit>{{.Product.UnitName}}</span> equals</span>
+      <input name="extra_factor" inputmode="decimal" placeholder="1.5" aria-label="Conversion amount">
+      <select name="extra_unit_id" data-extra-unit aria-label="Conversion unit">
+        <option value="">Select…</option>
+        {{range .Units}}
+        <option value="{{.ID}}">{{.Name}}</option>
+        {{end}}
+      </select>
+    </div>
+    <button type="button" class="btn btn-ghost" data-remove-extra>Remove</button>
+  </div>
+</template>
 {{template "footer" .}}
