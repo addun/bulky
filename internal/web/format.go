@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/shopspring/decimal"
+
+	"github.com/adrian/bulkly/internal/store"
 )
 
 func templateFuncs(symbol string) template.FuncMap {
@@ -25,6 +27,9 @@ func templateFuncs(symbol string) template.FuncMap {
 				return "—"
 			}
 			return formatGrouped(amount.Div(quantity), 2) + " " + symbol
+		},
+		"qtyIn": func(qty decimal.Decimal, conv store.ProductConversion) decimal.Decimal {
+			return store.QtyIn(qty, conv)
 		},
 		"hasImage": func(path string) bool {
 			return strings.TrimSpace(path) != ""

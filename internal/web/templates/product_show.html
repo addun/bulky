@@ -20,10 +20,11 @@
   <h2>By year</h2>
   <ul class="years">
     {{range .Years}}
+    {{$y := .}}
     <li>
-      <span class="year">{{.Year}}</span>
-      <span>{{qty .Quantity}} {{$.Product.UnitName}}</span>
-      <span class="row-amt">{{money .Amount}}</span>
+      <span class="year">{{$y.Year}}</span>
+      <span>{{qty $y.Quantity}} {{$.Product.UnitName}}{{range $.Product.Conversions}} · {{qty (qtyIn $y.Quantity .)}} {{.UnitName}}{{end}}</span>
+      <span class="row-amt">{{money $y.Amount}}</span>
     </li>
     {{end}}
   </ul>
@@ -37,35 +38,36 @@
   {{else}}
     <ul class="history">
       {{range .Purchases}}
-      <li{{if .IsPrice}} class="price-row"{{end}}>
+      {{$buy := .}}
+      <li{{if $buy.IsPrice}} class="price-row"{{end}}>
         <div class="history-head">
-          <span class="history-when">{{date .BoughtOn}}{{if .IsPrice}} <span class="kind">price</span>{{end}}</span>
-          <span class="history-amt">{{money .Amount}}</span>
+          <span class="history-when">{{date $buy.BoughtOn}}{{if $buy.IsPrice}} <span class="kind">price</span>{{end}}</span>
+          <span class="history-amt">{{money $buy.Amount}}</span>
         </div>
         <p class="history-facts">
-          {{if .CompanyID}}<span>{{(index $.CompanyByID .CompanyID).Name}}</span>{{end}}
+          {{if $buy.CompanyID}}<span>{{(index $.CompanyByID $buy.CompanyID).Name}}</span>{{end}}
           <span>
-            {{if .HasPackage}}
-              {{qty .PackageCount}} × {{qty .PackageSize}} {{$.Product.UnitName}}
-              <span class="meta">({{qty .Quantity}} {{$.Product.UnitName}})</span>
+            {{if $buy.HasPackage}}
+              {{qty $buy.PackageCount}} × {{qty $buy.PackageSize}} {{$.Product.UnitName}}
+              <span class="meta">({{qty $buy.Quantity}} {{$.Product.UnitName}})</span>
             {{else}}
-              {{qty .Quantity}} {{$.Product.UnitName}}
+              {{qty $buy.Quantity}} {{$.Product.UnitName}}
             {{end}}
           </span>
-          <span>{{unitPrice .Amount .Quantity}} / {{$.Product.UnitName}}</span>
+          <span>{{unitPrice $buy.Amount $buy.Quantity}} / {{$.Product.UnitName}}{{range $.Product.Conversions}} · {{unitPrice $buy.Amount (qtyIn $buy.Quantity .)}} / {{.UnitName}}{{end}}</span>
         </p>
         <p class="history-foot">
-          {{if .ReceiptID}}
-            <a class="history-slip" href="/receipts/{{.ReceiptID}}">
+          {{if $buy.ReceiptID}}
+            <a class="history-slip" href="/receipts/{{$buy.ReceiptID}}">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M7 3.5h10v17l-1.6-1.1-1.6 1.1-1.6-1.1-1.6 1.1-1.6-1.1-1.6 1.1zM9 8h6M9 12h6M9 16h3.5"/></svg>
-              Receipt {{.ReceiptID}}
+              Receipt {{$buy.ReceiptID}}
             </a>
           {{else}}
             <span class="history-noslip">No receipt</span>
           {{end}}
           <span class="tight">
-            <a href="/purchases/{{.ID}}/edit">Edit</a>
-            <a class="danger" href="/purchases/{{.ID}}/delete">Delete</a>
+            <a href="/purchases/{{$buy.ID}}/edit">Edit</a>
+            <a class="danger" href="/purchases/{{$buy.ID}}/delete">Delete</a>
           </span>
         </p>
       </li>

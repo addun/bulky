@@ -94,12 +94,25 @@ func (s *Server) saveProduct(c *gin.Context, id int64) {
 		})
 	}
 	if name == "" {
-		renderErr("Name is required.", store.Product{ID: id, Name: name, UnitID: formInt64(c, "unit_id")})
+		p := store.Product{ID: id, Name: name, UnitID: formInt64(c, "unit_id")}
+		p.Conversions, _ = parseExtraUnits(c, p.UnitID)
+		renderErr("Name is required.", p)
 		return
 	}
 	unitID := formInt64(c, "unit_id")
 	if _, err := s.store.GetUnit(unitID); err != nil {
-		renderErr("Choose a unit.", store.Product{ID: id, Name: name, UnitID: unitID})
+		p := store.Product{ID: id, Name: name, UnitID: unitID}
+		p.Conversions, _ = parseExtraUnits(c, unitID)
+		renderErr("Choose a unit.", p)
+		return
+	}
+	convs, msg := parseExtraUnits(c, unitID)
+	draft := store.Product{ID: id, Name: name, UnitID: unitID, Conversions: convs}
+	if u, err := s.store.GetUnit(unitID); err == nil {
+		draft.UnitName = u.Name
+	}
+	if msg != "" {
+		renderErr(msg, draft)
 		return
 	}
 
@@ -108,7 +121,7 @@ func (s *Server) saveProduct(c *gin.Context, id int64) {
 		var err error
 		imgName, err = s.saveImage(fh)
 		if err != nil {
-			renderErr(err.Error()+".", store.Product{ID: id, Name: name, UnitID: unitID})
+			renderErr(err.Error()+".", draft)
 			return
 		}
 	}
@@ -119,14 +132,18 @@ func (s *Server) saveProduct(c *gin.Context, id int64) {
 		if imgName != "" {
 			path = &imgName
 		}
-		p, err := s.store.CreateProduct(name, unitID, path)
+		p, err := s.store.CreateProduct(name, unitID, path, convs)
 		if err != nil {
 			s.deleteImage(imgName)
 			if errors.Is(err, store.ErrDuplicate) {
-				renderErr("That name is already used as an alias.", store.Product{Name: name, UnitID: unitID})
+				renderErr("That name is already used as an alias.", draft)
 				return
 			}
-			renderErr("Could not save the product.", store.Product{Name: name, UnitID: unitID})
+			if errors.Is(err, store.ErrInvalidConversion) {
+				renderErr("Check the extra units: each must be different from the purchase unit, unique, and have a factor greater than zero.", draft)
+				return
+			}
+			renderErr("Could not save the product.", draft)
 			return
 		}
 		c.Redirect(http.StatusSeeOther, "/products/"+itoa(p.ID))
@@ -141,7 +158,7 @@ func (s *Server) saveProduct(c *gin.Context, id int64) {
 	}
 	if err != nil {
 		s.deleteImage(imgName)
-		renderErr("Could not save the product.", cur)
+		renderErr("Could not save the product.", draft)
 		return
 	}
 
@@ -149,13 +166,17 @@ func (s *Server) saveProduct(c *gin.Context, id int64) {
 	if imgName != "" {
 		newPath = &imgName
 	}
-	if err := s.store.UpdateProduct(id, name, unitID, newPath, clearImage && imgName == ""); err != nil {
+	if err := s.store.UpdateProduct(id, name, unitID, newPath, clearImage && imgName == "", convs); err != nil {
 		s.deleteImage(imgName)
 		if errors.Is(err, store.ErrDuplicate) {
-			renderErr("That name is already used as an alias.", cur)
+			renderErr("That name is already used as an alias.", draft)
 			return
 		}
-		renderErr("Could not save the product.", cur)
+		if errors.Is(err, store.ErrInvalidConversion) {
+			renderErr("Check the extra units: each must be different from the purchase unit, unique, and have a factor greater than zero.", draft)
+			return
+		}
+		renderErr("Could not save the product.", draft)
 		return
 	}
 	if imgName != "" && cur.ImagePath.Valid {
@@ -165,6 +186,46 @@ func (s *Server) saveProduct(c *gin.Context, id int64) {
 		s.deleteImage(cur.ImagePath.String)
 	}
 	c.Redirect(http.StatusSeeOther, "/products/"+itoa(id))
+}
+
+func parseExtraUnits(c *gin.Context, purchaseUnitID int64) ([]store.ProductConversion, string) {
+	ids := c.PostFormArray("extra_unit_id")
+	factors := c.PostFormArray("extra_factor")
+	n := len(ids)
+	if len(factors) > n {
+		n = len(factors)
+	}
+	var out []store.ProductConversion
+	seen := map[int64]bool{}
+	for i := 0; i < n; i++ {
+		idStr, facStr := "", ""
+		if i < len(ids) {
+			idStr = strings.TrimSpace(ids[i])
+		}
+		if i < len(factors) {
+			facStr = strings.TrimSpace(factors[i])
+		}
+		if idStr == "" && facStr == "" {
+			continue
+		}
+		if idStr == "" {
+			return out, "Choose a unit for each extra unit."
+		}
+		unitID, _ := strconv.ParseInt(idStr, 10, 64)
+		if unitID == purchaseUnitID {
+			return out, "An extra unit cannot be the same as the purchase unit."
+		}
+		if seen[unitID] {
+			return out, "Each extra unit can only be listed once."
+		}
+		seen[unitID] = true
+		factor, err := parseDecimal(facStr, 8, false)
+		if err != nil {
+			return out, "Extra unit factor " + err.Error() + "."
+		}
+		out = append(out, store.ProductConversion{UnitID: unitID, Factor: factor})
+	}
+	return out, ""
 }
 
 func (s *Server) showProduct(c *gin.Context) {
@@ -318,7 +379,10 @@ func mergeWithPath(fromID, intoID int64) string {
 }
 
 func mergeFormError(err error) string {
+	var conflict *store.ConversionConflictError
 	switch {
+	case errors.As(err, &conflict):
+		return "Those products convert to " + conflict.UnitName + " differently."
 	case errors.Is(err, store.ErrSameProduct):
 		return "Choose a different product."
 	case errors.Is(err, store.ErrNotFound):

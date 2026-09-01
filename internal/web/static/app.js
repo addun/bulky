@@ -33,6 +33,17 @@
     return n.toFixed(2).replace(".", ",");
   }
 
+  function extraConversions(form) {
+    var raw = form.getAttribute("data-conversions");
+    if (!raw) return [];
+    try {
+      var rows = JSON.parse(raw);
+      return Array.isArray(rows) ? rows : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
   function unitOf(form) {
     var attr = form.getAttribute("data-pack-unit");
     if (attr) return attr.trim();
@@ -69,6 +80,13 @@
       var sym = (form.getAttribute("data-pack-symbol") || "").trim();
       var price = formatMoney(amount / qty) + (sym ? " " + sym : "");
       parts.push(price + (unit ? "/" + unit : " per unit"));
+      extraConversions(form).forEach(function (c) {
+        var factor = Number(c && c.factor);
+        if (!factor || !c.name) return;
+        var extraQty = qty * factor;
+        if (!extraQty) return;
+        parts.push(formatMoney(amount / extraQty) + (sym ? " " + sym : "") + "/" + c.name);
+      });
     }
     total.hidden = false;
     total.textContent = parts.join(" · ");
@@ -100,7 +118,17 @@
       var opt = sel.options[sel.selectedIndex];
       var unitId = opt && opt.getAttribute("data-unit-id");
       var unitSel = line.querySelector("[data-pack-unit-select]");
-      if (unitId && unitSel) unitSel.value = unitId;
+      var allowed = {};
+      var ids = ((opt && opt.getAttribute("data-unit-ids")) || unitId || "").split(",");
+      ids.forEach(function (id) {
+        if (id) allowed[id] = true;
+      });
+      if (unitSel && unitId && !allowed[unitSel.value]) {
+        unitSel.value = unitId;
+      }
+      line.setAttribute("data-conversions", (opt && opt.getAttribute("data-conversions")) || "[]");
+    } else {
+      line.removeAttribute("data-conversions");
     }
     syncPack(line);
   }
@@ -135,6 +163,39 @@
       syncLineProduct(field);
       count.value = String(i + 1);
     });
+  }
+
+  var extraUnits = document.getElementById("extra-units");
+  var addExtra = document.getElementById("add-extra-unit");
+  var extraTmpl = document.getElementById("extra-unit-template");
+  var purchaseUnit = document.getElementById("purchase-unit");
+  function syncPrimaryUnitLabels() {
+    var name = "base unit";
+    if (purchaseUnit && purchaseUnit.selectedIndex >= 0) {
+      var text = (purchaseUnit.options[purchaseUnit.selectedIndex].text || "").trim();
+      if (text && text !== "Select…") name = text;
+    }
+    document.querySelectorAll("[data-primary-unit]").forEach(function (el) {
+      el.textContent = name;
+    });
+  }
+  if (addExtra && extraUnits && extraTmpl) {
+    addExtra.addEventListener("click", function () {
+      var wrap = document.createElement("div");
+      wrap.innerHTML = extraTmpl.innerHTML.trim();
+      extraUnits.appendChild(wrap.firstElementChild);
+      syncPrimaryUnitLabels();
+    });
+    extraUnits.addEventListener("click", function (e) {
+      var btn = e.target && e.target.closest("[data-remove-extra]");
+      if (!btn) return;
+      var row = btn.closest(".extra-unit");
+      if (row) row.remove();
+    });
+  }
+  if (purchaseUnit) {
+    purchaseUnit.addEventListener("change", syncPrimaryUnitLabels);
+    syncPrimaryUnitLabels();
   }
 
   var camera = document.getElementById("bill-camera");

@@ -124,6 +124,67 @@ func TestHydrateBillRejectsFuzzyCatalog(t *testing.T) {
 	}
 }
 
+func TestHydrateBillConvertsExtraUnit(t *testing.T) {
+	factor := decimal.RequireFromString("1.5")
+	products := []store.ProductListItem{
+		{Product: store.Product{
+			ID: 4, Name: "Water", UnitID: 1, UnitName: "szt",
+			Conversions: []store.ProductConversion{{UnitID: 2, UnitName: "l", Factor: factor}},
+		}},
+	}
+	units := []store.Unit{{ID: 1, Name: "szt"}, {ID: 2, Name: "l"}}
+	got := hydrateBill(ocr.Bill{
+		Lines: []ocr.Line{{
+			ReceiptName: "WODA 1,5L", ProductName: "Water", ProductID: 0,
+			UnitID: 2, UnitName: "l", PackageCount: "2", PackageSize: "1.5", Amount: "5",
+		}},
+	}, products, units, nil)
+	line := got.Lines[0]
+	if line.ProductID != 4 || line.UnitID != 1 {
+		t.Fatalf("match: %#v", line)
+	}
+	if line.PackageCount != "2" || line.PackageSize != "1" {
+		t.Fatalf("converted packs: count=%q size=%q", line.PackageCount, line.PackageSize)
+	}
+}
+
+func TestParseReceiptFormConvertsExtraUnit(t *testing.T) {
+	get := func(form map[string]string) func(string) string {
+		return func(k string) string { return form[k] }
+	}
+	products := []store.ProductListItem{
+		{Product: store.Product{
+			ID: 4, Name: "Water", UnitID: 1, UnitName: "szt",
+			Conversions: []store.ProductConversion{
+				{UnitID: 2, UnitName: "l", Factor: decimal.RequireFromString("1.5")},
+			},
+		}},
+	}
+	in, _, msg := parseReceiptForm(get(map[string]string{
+		"bought_on":        "2026-08-20",
+		"line_count":       "1",
+		"include_0":        "1",
+		"product_choice_0": "4",
+		"unit_id_0":        "2",
+		"packages_0":       "2",
+		"package_size_0":   "1.5",
+		"amount_0":         "5",
+	}), products)
+	if msg != "" {
+		t.Fatal(msg)
+	}
+	if len(in.Lines) != 1 {
+		t.Fatalf("lines: %#v", in.Lines)
+	}
+	line := in.Lines[0]
+	if !line.PackageCount.Equal(decimal.RequireFromString("2")) || !line.PackageSize.Equal(decimal.RequireFromString("1")) {
+		t.Fatalf("converted: %#v", line)
+	}
+	if !line.Quantity.Equal(decimal.RequireFromString("2")) {
+		t.Fatalf("qty: %s", line.Quantity)
+	}
+}
+
 func TestHydrateBillAmbiguousAlias(t *testing.T) {
 	products := []store.ProductListItem{
 		{Product: store.Product{ID: 4, Name: "Wheat flour", UnitID: 1, UnitName: "kg"}},
@@ -173,7 +234,7 @@ func TestParseReceiptForm(t *testing.T) {
 		"packages_2":       "1",
 		"package_size_2":   "1",
 		"amount_2":         "1",
-	}))
+	}), nil)
 	if msg != "" {
 		t.Fatal(msg)
 	}
@@ -208,7 +269,7 @@ func TestParseReceiptForm(t *testing.T) {
 		"packages_0":       "1",
 		"package_size_0":   "1",
 		"amount_0":         "1",
-	}))
+	}), nil)
 	if msg != "" {
 		t.Fatal(msg)
 	}
@@ -226,7 +287,7 @@ func TestParseReceiptForm(t *testing.T) {
 		"packages_0":       "1",
 		"package_size_0":   "1",
 		"amount_0":         "1",
-	}))
+	}), nil)
 	if msg == "" {
 		t.Fatal("expected name error")
 	}

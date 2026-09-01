@@ -273,6 +273,48 @@ label textarea {
   grid-template-columns: 1fr 1fr;
 }
 
+.extra-units {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.extra-unit {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.extra-eq {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem 0.55rem;
+}
+
+.extra-eq-lead {
+  font-weight: 500;
+}
+
+.extra-eq input,
+.extra-eq select {
+  font: inherit;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: inherit;
+}
+
+.extra-eq input {
+  width: 6.5rem;
+}
+
+.extra-eq select {
+  min-width: 6.5rem;
+}
+
+.extra-unit [data-remove-extra] {
+  margin: 0;
+}
+
 .product-actions {
   display: flex;
   flex-wrap: wrap;

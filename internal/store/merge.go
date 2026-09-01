@@ -34,6 +34,9 @@ func (s *Store) MergePlan(intoID, fromID int64) (MergePlan, error) {
 		plan.NameAsAlias = fromName
 	}
 	plan.TakePhoto = !into.ImagePath.Valid && from.ImagePath.Valid
+	if err := conversionMergeConflict(into.Conversions, from.Conversions); err != nil {
+		return MergePlan{}, err
+	}
 	return plan, nil
 }
 
@@ -79,6 +82,10 @@ func mergeProductsTx(tx *sql.Tx, intoID, fromID int64) (Product, string, error) 
 		return getProductTx(tx, id)
 	}, intoID, fromID)
 	if err != nil {
+		return Product{}, "", err
+	}
+
+	if err := mergeConversionsTx(tx, into.ID, from.ID); err != nil {
 		return Product{}, "", err
 	}
 

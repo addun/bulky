@@ -17,24 +17,26 @@ import (
 )
 
 var (
-	ErrNotFound          = errors.New("not found")
-	ErrUnitInUse         = errors.New("unit is in use")
-	ErrCompanyInUse      = errors.New("company is in use")
-	ErrDuplicate         = errors.New("already exists")
-	ErrInvalidUnit       = errors.New("invalid unit")
-	ErrInvalidCompany    = errors.New("invalid company")
-	ErrCompanyName       = errors.New("company name required")
-	ErrCompanyStreet     = errors.New("company street name required")
-	ErrCompanyBuilding   = errors.New("company building number required")
-	ErrCompanyPostal     = errors.New("company postal code required")
-	ErrCompanyCity       = errors.New("company city required")
-	ErrInvalidKind       = errors.New("invalid purchase kind")
-	ErrIncompletePackage = errors.New("packages and package size are both required")
-	ErrInvalidPackage    = errors.New("packages and package size must be greater than zero")
-	ErrInvalidAlias      = errors.New("alias is required")
-	ErrInvalidSetting    = errors.New("invalid setting")
-	ErrSameProduct       = errors.New("cannot merge a product into itself")
-	ErrUnitMismatch      = errors.New("products use different units")
+	ErrNotFound           = errors.New("not found")
+	ErrUnitInUse          = errors.New("unit is in use")
+	ErrCompanyInUse       = errors.New("company is in use")
+	ErrDuplicate          = errors.New("already exists")
+	ErrInvalidUnit        = errors.New("invalid unit")
+	ErrInvalidCompany     = errors.New("invalid company")
+	ErrCompanyName        = errors.New("company name required")
+	ErrCompanyStreet      = errors.New("company street name required")
+	ErrCompanyBuilding    = errors.New("company building number required")
+	ErrCompanyPostal      = errors.New("company postal code required")
+	ErrCompanyCity        = errors.New("company city required")
+	ErrInvalidKind        = errors.New("invalid purchase kind")
+	ErrIncompletePackage  = errors.New("packages and package size are both required")
+	ErrInvalidPackage     = errors.New("packages and package size must be greater than zero")
+	ErrInvalidAlias       = errors.New("alias is required")
+	ErrInvalidSetting     = errors.New("invalid setting")
+	ErrSameProduct        = errors.New("cannot merge a product into itself")
+	ErrUnitMismatch       = errors.New("products use different units")
+	ErrInvalidConversion  = errors.New("invalid unit conversion")
+	ErrConversionMismatch = errors.New("products convert to a unit differently")
 )
 
 const purchaseSelect = `
@@ -79,12 +81,13 @@ type Unit struct {
 }
 
 type Product struct {
-	ID        int64
-	Name      string
-	UnitID    int64
-	UnitName  string
-	ImagePath sql.NullString
-	CreatedAt string
+	ID          int64
+	Name        string
+	UnitID      int64
+	UnitName    string
+	ImagePath   sql.NullString
+	CreatedAt   string
+	Conversions []ProductConversion
 }
 
 type ProductListItem struct {
@@ -222,56 +225,6 @@ func (s *Store) ImagesDir() string {
 
 func nowRFC3339() string {
 	return time.Now().UTC().Format(time.RFC3339)
-}
-
-func (s *Store) ListUnits() ([]Unit, error) {
-	rows, err := s.db.Query(`
-SELECT u.id, u.name, COUNT(p.id)
-FROM units u
-LEFT JOIN products p ON p.unit_id = u.id
-GROUP BY u.id
-ORDER BY u.name COLLATE NOCASE`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []Unit
-	for rows.Next() {
-		var u Unit
-		if err := rows.Scan(&u.ID, &u.Name, &u.ProductCount); err != nil {
-			return nil, err
-		}
-		out = append(out, u)
-	}
-	return out, rows.Err()
-}
-
-func (s *Store) GetUnit(id int64) (Unit, error) {
-	var u Unit
-	err := s.db.QueryRow(`
-SELECT u.id, u.name, COUNT(p.id)
-FROM units u
-LEFT JOIN products p ON p.unit_id = u.id
-WHERE u.id = ?
-GROUP BY u.id`, id).Scan(&u.ID, &u.Name, &u.ProductCount)
-	if errors.Is(err, sql.ErrNoRows) {
-		return Unit{}, ErrNotFound
-	}
-	return u, err
-}
-
-func (s *Store) FindUnitByName(name string) (Unit, error) {
-	var u Unit
-	err := s.db.QueryRow(`
-SELECT u.id, u.name, COUNT(p.id)
-FROM units u
-LEFT JOIN products p ON p.unit_id = u.id
-WHERE u.name = ? COLLATE NOCASE
-GROUP BY u.id`, name).Scan(&u.ID, &u.Name, &u.ProductCount)
-	if errors.Is(err, sql.ErrNoRows) {
-		return Unit{}, ErrNotFound
-	}
-	return u, err
 }
 
 func (s *Store) CreateUnit(name string) (Unit, error) {
@@ -494,6 +447,9 @@ ORDER BY p.name COLLATE NOCASE`)
 	if err := prows.Err(); err != nil {
 		return nil, err
 	}
+	if err := attachItemConversions(s.db, items); err != nil {
+		return nil, err
+	}
 	if q == "" {
 		return items, nil
 	}
@@ -545,10 +501,16 @@ WHERE p.id = ?`, id).Scan(&p.ID, &p.Name, &p.UnitID, &p.UnitName, &p.ImagePath, 
 	if errors.Is(err, sql.ErrNoRows) {
 		return Product{}, ErrNotFound
 	}
-	return p, err
+	if err != nil {
+		return Product{}, err
+	}
+	if err := attachProductConversions(s.db, &p); err != nil {
+		return Product{}, err
+	}
+	return p, nil
 }
 
-func (s *Store) CreateProduct(name string, unitID int64, imagePath *string) (Product, error) {
+func (s *Store) CreateProduct(name string, unitID int64, imagePath *string, conversions ...[]ProductConversion) (Product, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return Product{}, fmt.Errorf("name is required")
@@ -566,7 +528,16 @@ func (s *Store) CreateProduct(name string, unitID int64, imagePath *string) (Pro
 	if taken {
 		return Product{}, ErrDuplicate
 	}
-	res, err := s.db.Exec(
+	var convs []ProductConversion
+	if len(conversions) > 0 {
+		convs = conversions[0]
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return Product{}, err
+	}
+	defer tx.Rollback()
+	res, err := tx.Exec(
 		`INSERT INTO products (name, unit_id, image_path, created_at) VALUES (?, ?, ?, ?)`,
 		name, unitID, imagePath, nowRFC3339(),
 	)
@@ -577,10 +548,16 @@ func (s *Store) CreateProduct(name string, unitID int64, imagePath *string) (Pro
 	if err != nil {
 		return Product{}, err
 	}
+	if err := setProductConversionsTx(tx, id, unitID, convs); err != nil {
+		return Product{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return Product{}, err
+	}
 	return s.GetProduct(id)
 }
 
-func (s *Store) UpdateProduct(id int64, name string, unitID int64, imagePath *string, clearImage bool) error {
+func (s *Store) UpdateProduct(id int64, name string, unitID int64, imagePath *string, clearImage bool, conversions ...[]ProductConversion) error {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return fmt.Errorf("name is required")
@@ -615,7 +592,12 @@ func (s *Store) UpdateProduct(id int64, name string, unitID int64, imagePath *st
 			path = nil
 		}
 	}
-	res, err := s.db.Exec(`UPDATE products SET name = ?, unit_id = ?, image_path = ? WHERE id = ?`, name, unitID, path, id)
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	res, err := tx.Exec(`UPDATE products SET name = ?, unit_id = ?, image_path = ? WHERE id = ?`, name, unitID, path, id)
 	if err != nil {
 		return err
 	}
@@ -626,7 +608,16 @@ func (s *Store) UpdateProduct(id int64, name string, unitID int64, imagePath *st
 	if n == 0 {
 		return ErrNotFound
 	}
-	return nil
+	if len(conversions) > 0 {
+		if err := setProductConversionsTx(tx, id, unitID, conversions[0]); err != nil {
+			return err
+		}
+	} else if unitID != cur.UnitID {
+		if err := setProductConversionsTx(tx, id, unitID, cur.Conversions); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 func (s *Store) DeleteProduct(id int64) (imageName string, err error) {

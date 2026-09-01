@@ -167,7 +167,7 @@ func (s *Server) confirmReceipt(c *gin.Context) {
 		return
 	}
 
-	in, view, msg := parseReceiptForm(c.PostForm)
+	in, view, msg := parseReceiptForm(c.PostForm, products)
 	view.ReceiptID = id
 	view.ImagePath = receipt.ImagePath
 	view.Status = receipt.Status
