@@ -42,6 +42,13 @@ SELECT p.id, p.product_id, p.company_id, p.kind, p.receipt_id, p.bought_on, p.qu
        p.package_count, p.package_size
 FROM purchases p`
 
+const receiptPurchaseSelect = `
+SELECT p.id, p.product_id, p.company_id, p.kind, p.receipt_id, p.bought_on, p.quantity, p.amount, p.created_at,
+       p.package_count, p.package_size, pr.name, u.name, pr.image_path
+FROM purchases p
+JOIN products pr ON pr.id = p.product_id
+JOIN units u ON u.id = pr.unit_id`
+
 type PurchaseKind string
 
 const (
@@ -139,6 +146,13 @@ type Purchase struct {
 	PackageSize  decimal.Decimal
 	Amount       decimal.Decimal
 	CreatedAt    string
+}
+
+type ReceiptPurchase struct {
+	Purchase
+	ProductName string
+	UnitName    string
+	ImagePath   sql.NullString
 }
 
 func (p Purchase) IsPurchase() bool { return p.Kind == KindPurchase }
@@ -649,6 +663,25 @@ ORDER BY p.bought_on DESC, p.id DESC`, productID)
 	return out, rows.Err()
 }
 
+func (s *Store) ListPurchasesByReceipt(receiptID int64) ([]ReceiptPurchase, error) {
+	rows, err := s.db.Query(receiptPurchaseSelect+`
+WHERE p.receipt_id = ?
+ORDER BY p.id`, receiptID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []ReceiptPurchase
+	for rows.Next() {
+		p, err := scanReceiptPurchase(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
 func (s *Store) GetPurchase(id int64) (Purchase, error) {
 	row := s.db.QueryRow(purchaseSelect+` WHERE p.id = ?`, id)
 	p, err := scanPurchase(row)
@@ -805,41 +838,65 @@ LIMIT 1`, productID).Scan(&size)
 }
 
 func scanPurchase(row rowScanner) (Purchase, error) {
+	p, _, err := scanPurchaseRow(row, false)
+	return p, err
+}
+
+func scanReceiptPurchase(row rowScanner) (ReceiptPurchase, error) {
+	p, extra, err := scanPurchaseRow(row, true)
+	if err != nil {
+		return ReceiptPurchase{}, err
+	}
+	return ReceiptPurchase{Purchase: p, ProductName: extra.name, UnitName: extra.unit, ImagePath: extra.image}, nil
+}
+
+type purchaseProductCols struct {
+	name  string
+	unit  string
+	image sql.NullString
+}
+
+func scanPurchaseRow(row rowScanner, withProduct bool) (Purchase, purchaseProductCols, error) {
 	var p Purchase
 	var companyID, receiptID sql.NullInt64
 	var qty, amt, kind string
 	var packCount, packSize sql.NullString
-	if err := row.Scan(&p.ID, &p.ProductID, &companyID, &kind, &receiptID, &p.BoughtOn, &qty, &amt, &p.CreatedAt, &packCount, &packSize); err != nil {
-		return Purchase{}, err
+	var extra purchaseProductCols
+	dest := []any{&p.ID, &p.ProductID, &companyID, &kind, &receiptID, &p.BoughtOn, &qty, &amt, &p.CreatedAt, &packCount, &packSize}
+	if withProduct {
+		dest = append(dest, &extra.name, &extra.unit, &extra.image)
+	}
+	if err := row.Scan(dest...); err != nil {
+		return Purchase{}, extra, err
 	}
 	p.CompanyID = companyID.Int64
 	p.Kind = PurchaseKind(kind)
 	p.ReceiptID = receiptID.Int64
 	q, err := decimal.NewFromString(qty)
 	if err != nil {
-		return Purchase{}, err
+		return Purchase{}, extra, err
 	}
 	a, err := decimal.NewFromString(amt)
 	if err != nil {
-		return Purchase{}, err
+		return Purchase{}, extra, err
 	}
 	p.Quantity = q
 	p.Amount = a
 	if packCount.Valid && packCount.String != "" {
 		n, err := decimal.NewFromString(packCount.String)
 		if err != nil {
-			return Purchase{}, err
+			return Purchase{}, extra, err
 		}
 		p.PackageCount = n
 	}
 	if packSize.Valid && packSize.String != "" {
 		n, err := decimal.NewFromString(packSize.String)
 		if err != nil {
-			return Purchase{}, err
+			return Purchase{}, extra, err
 		}
 		p.PackageSize = n
 	}
-	return p, nil
+	return p, extra, nil
 }
 
 func (s *Store) optionalCompanyArg(id int64) (any, error) {

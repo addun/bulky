@@ -1,0 +1,71 @@
+{{template "header" .}}
+<h1>Receipt</h1>
+
+{{if gt .Imported 0}}
+<p class="banner">Saved {{.Imported}} purchase{{if ne .Imported 1}}s{{end}} from the bill.</p>
+{{end}}
+{{if .Notes}}<p class="banner">{{.Notes}}</p>{{end}}
+
+<div class="receipt-layout">
+  {{if .Receipt.ImagePath}}
+  <figure class="receipt-slip">
+    <img src="/receipts/{{.Receipt.ID}}/preview" alt="Uploaded bill">
+    <figcaption class="hint">The bill you uploaded</figcaption>
+  </figure>
+  {{end}}
+
+  <div>
+    <section>
+      <div class="page-head">
+        <h2>Visit</h2>
+        <a href="/receipts/{{.Receipt.ID}}/edit">Edit</a>
+      </div>
+      <p class="meta">
+        {{if .BoughtOn}}{{date .BoughtOn}}{{else}}No date{{end}}
+        {{if .Company.ID}} · {{.Company.Name}}{{else}} · No company{{end}}
+      </p>
+    </section>
+
+    <h2>Products</h2>
+    {{if not .Purchases}}
+      <p class="empty">No purchases left on this bill.</p>
+    {{else}}
+      <ul class="ledger">
+        {{range .Purchases}}
+        <li>
+          <a class="row" href="/products/{{.ProductID}}">
+            {{if .ImagePath.Valid}}
+              <img class="thumb" src="/images/{{.ImagePath.String}}" alt="">
+            {{else}}
+              <span class="thumb thumb-empty" aria-hidden="true"></span>
+            {{end}}
+            <span class="row-main">
+              <strong>{{.ProductName}}</strong>
+              <span class="meta">
+                {{if .HasPackage}}
+                  {{qty .PackageCount}} × {{qty .PackageSize}} {{.UnitName}}
+                  ({{qty .Quantity}} {{.UnitName}})
+                {{else}}
+                  {{qty .Quantity}} {{.UnitName}}
+                {{end}}
+              </span>
+            </span>
+            <span class="row-amt">{{money .Amount}}</span>
+          </a>
+          <p class="history-foot">
+            <span class="tight">
+              <a href="/purchases/{{.ID}}/edit">Edit</a>
+              <a class="danger" href="/purchases/{{.ID}}/delete">Delete</a>
+            </span>
+          </p>
+        </li>
+        {{end}}
+      </ul>
+      <p class="receipt-total">
+        <span>Total</span>
+        <span class="row-amt">{{money .Total}}</span>
+      </p>
+    {{end}}
+  </div>
+</div>
+{{template "footer" .}}

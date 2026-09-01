@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -122,6 +123,10 @@ func (s *Server) showReceipt(c *gin.Context) {
 		s.renderReceipts(c, http.StatusUnprocessableEntity, "This scan has no product list yet. Upload the bill again.")
 		return
 	}
+	if receipt.Status == store.ReceiptMigrated {
+		s.renderReceiptShow(c, http.StatusOK, receipt, c.Query("error"))
+		return
+	}
 	products, units, companies, err := s.receiptLookups()
 	if err != nil {
 		c.String(http.StatusInternalServerError, "could not load the catalog")
@@ -173,7 +178,7 @@ func (s *Server) confirmReceipt(c *gin.Context) {
 		_ = s.store.UpdateReceiptJSON(id, string(rawJSON))
 	}
 	if receipt.Status == store.ReceiptMigrated {
-		s.renderReceiptReview(c, http.StatusConflict, view, products, units, companies, "This bill is already saved as purchases.")
+		s.renderReceiptShow(c, http.StatusConflict, receipt, "This bill is already saved as purchases.")
 		return
 	}
 	if view.CompanyID == 0 && formInt(c.PostForm("company_id")) > 0 {
@@ -209,7 +214,72 @@ func (s *Server) confirmReceipt(c *gin.Context) {
 		s.renderReceiptReview(c, http.StatusUnprocessableEntity, view, products, units, companies, msg)
 		return
 	}
-	c.Redirect(http.StatusSeeOther, "/?imported="+itoa(int64(res.Purchases)))
+	c.Redirect(http.StatusSeeOther, "/receipts/"+itoa(id)+"?imported="+itoa(int64(res.Purchases)))
+}
+
+func (s *Server) editReceipt(c *gin.Context) {
+	id, ok := paramID(c, "id")
+	if !ok {
+		c.String(http.StatusNotFound, "not found")
+		return
+	}
+	receipt, err := s.store.GetReceipt(id)
+	if errors.Is(err, store.ErrNotFound) {
+		c.String(http.StatusNotFound, "not found")
+		return
+	}
+	if err != nil {
+		c.String(http.StatusInternalServerError, "could not load the receipt")
+		return
+	}
+	if receipt.Status != store.ReceiptMigrated {
+		c.Redirect(http.StatusSeeOther, "/receipts/"+itoa(id))
+		return
+	}
+	s.renderReceiptEdit(c, http.StatusOK, receipt, "", 0, c.Query("error"))
+}
+
+func (s *Server) updateReceiptVisit(c *gin.Context) {
+	id, ok := paramID(c, "id")
+	if !ok {
+		c.String(http.StatusNotFound, "not found")
+		return
+	}
+	receipt, err := s.store.GetReceipt(id)
+	if errors.Is(err, store.ErrNotFound) {
+		c.String(http.StatusNotFound, "not found")
+		return
+	}
+	if err != nil {
+		c.String(http.StatusInternalServerError, "could not load the receipt")
+		return
+	}
+	if receipt.Status != store.ReceiptMigrated {
+		c.Redirect(http.StatusSeeOther, "/receipts/"+itoa(id))
+		return
+	}
+	boughtOn := strings.TrimSpace(c.PostForm("bought_on"))
+	companyID, msg := s.resolveCompanyForm(c)
+	if _, err := time.Parse("2006-01-02", boughtOn); err != nil {
+		s.renderReceiptEdit(c, http.StatusUnprocessableEntity, receipt, boughtOn, companyID, "Date must be a valid day.")
+		return
+	}
+	if msg != "" {
+		s.renderReceiptEdit(c, http.StatusUnprocessableEntity, receipt, boughtOn, companyID, msg)
+		return
+	}
+	if err := s.store.UpdateReceiptVisit(id, companyID, boughtOn); err != nil {
+		msg := "Could not save the visit."
+		if errors.Is(err, store.ErrInvalidCompany) {
+			msg = "Choose a company."
+		} else if errors.Is(err, store.ErrReceiptNotReady) {
+			c.Redirect(http.StatusSeeOther, "/receipts/"+itoa(id))
+			return
+		}
+		s.renderReceiptEdit(c, http.StatusUnprocessableEntity, receipt, boughtOn, companyID, msg)
+		return
+	}
+	c.Redirect(http.StatusSeeOther, "/receipts/"+itoa(id))
 }
 
 func (s *Server) receiptPreview(c *gin.Context) {
@@ -261,6 +331,56 @@ func (s *Server) renderReceiptReview(c *gin.Context, status int, view receiptVie
 		"View":      view,
 		"Products":  products,
 		"Units":     units,
+		"Companies": companies,
+	})
+}
+
+func (s *Server) renderReceiptShow(c *gin.Context, status int, receipt store.Receipt, errMsg string) {
+	buys, err := s.store.ListPurchasesByReceipt(receipt.ID)
+	if err != nil {
+		c.String(http.StatusInternalServerError, "could not load purchases")
+		return
+	}
+	companies, err := s.store.ListCompanies()
+	if err != nil {
+		c.String(http.StatusInternalServerError, "could not load companies")
+		return
+	}
+	boughtOn, notes, company := receiptVisitFacts(receipt, buys, companies)
+	imported := int(formInt64Query(c, "imported"))
+	c.HTML(status, "receipt_show.html", gin.H{
+		"Page":      s.page("Receipt", "", errMsg),
+		"Receipt":   receipt,
+		"Purchases": buys,
+		"BoughtOn":  boughtOn,
+		"Notes":     notes,
+		"Company":   company,
+		"Total":     receiptPurchaseTotal(buys),
+		"Imported":  imported,
+	})
+}
+
+func (s *Server) renderReceiptEdit(c *gin.Context, status int, receipt store.Receipt, boughtOn string, companyID int64, errMsg string) {
+	buys, err := s.store.ListPurchasesByReceipt(receipt.ID)
+	if err != nil {
+		c.String(http.StatusInternalServerError, "could not load purchases")
+		return
+	}
+	companies, err := s.store.ListCompanies()
+	if err != nil {
+		c.String(http.StatusInternalServerError, "could not load companies")
+		return
+	}
+	if boughtOn == "" && companyID == 0 {
+		var company store.Company
+		boughtOn, _, company = receiptVisitFacts(receipt, buys, companies)
+		companyID = company.ID
+	}
+	c.HTML(status, "receipt_edit.html", gin.H{
+		"Page":      s.page("Edit visit", "", errMsg),
+		"Receipt":   receipt,
+		"BoughtOn":  boughtOn,
+		"Company":   companyByID(companies, companyID),
 		"Companies": companies,
 	})
 }
