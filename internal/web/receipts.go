@@ -359,7 +359,6 @@ func (s *Server) renderReceiptShow(c *gin.Context, status int, receipt store.Rec
 		"BoughtAt":  boughtAt,
 		"Notes":     notes,
 		"Company":   company,
-		"Total":     receiptPurchaseTotal(buys),
 		"Imported":  imported,
 	})
 }

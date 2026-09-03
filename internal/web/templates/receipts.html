@@ -1,6 +1,5 @@
 {{template "header" .}}
 <h1>Receipts</h1>
-<p class="lede">Shop bills you photographed or uploaded. Each one is a visit’s products and prices, waiting to be saved into your log.</p>
 
 {{if not .Configured}}
   <p class="banner">The reader is off until you set <code>OCR_API_KEY</code> (OpenAI) or <code>OCR_BASE_URL</code> (any OpenAI-compatible vision API, including a local server).</p>
@@ -12,7 +11,7 @@
 <form class="stack scan-form" method="post" action="/receipts" enctype="multipart/form-data" id="receipt-upload">
   <div class="scan-drop" id="scan-drop">
     <p class="scan-heading">Photo or PDF of the bill</p>
-    <p class="hint">jpeg, png, webp, gif or pdf · up to 10 MB</p>
+    <p class="hint">Drop a file here, take a photo, or choose one · jpeg, png, webp, gif or pdf · up to 10 MB</p>
     <div class="scan-picks">
       <label class="btn btn-plain scan-pick">
         Take photo
@@ -23,10 +22,7 @@
         <input id="bill" name="bill" type="file" accept="image/*,.pdf,application/pdf">
       </label>
     </div>
-    <div class="scan-preview" id="scan-preview" hidden>
-      <img id="scan-preview-img" alt="Bill preview">
-      <p class="scan-preview-file" id="scan-preview-file" hidden></p>
-    </div>
+    <p class="scan-ready" id="scan-ready" hidden></p>
   </div>
   <div class="actions">
     <button type="submit" class="btn btn-tag" id="receipt-submit">Read the bill</button>

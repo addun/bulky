@@ -8,8 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/shopspring/decimal"
-
 	"github.com/adrian/bulkly/internal/match"
 	"github.com/adrian/bulkly/internal/ocr"
 	"github.com/adrian/bulkly/internal/store"
@@ -512,14 +510,6 @@ func companyByID(companies []store.Company, id int64) store.Company {
 		}
 	}
 	return store.Company{}
-}
-
-func receiptPurchaseTotal(buys []store.ReceiptPurchase) decimal.Decimal {
-	sum := decimal.Zero
-	for _, p := range buys {
-		sum = sum.Add(p.Amount)
-	}
-	return sum
 }
 
 func unitKey(s string) string {
