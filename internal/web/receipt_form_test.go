@@ -448,6 +448,9 @@ func TestReceiptsPageRendersWhenUnconfigured(t *testing.T) {
 	if !strings.Contains(body, "Take photo") || !strings.Contains(body, "Choose file") {
 		t.Fatal("configured page should offer camera and file pickers")
 	}
+	if !strings.Contains(body, "Drop a file here") {
+		t.Fatal("configured page should offer drag and drop")
+	}
 	if !strings.Contains(body, `name="bill_camera"`) {
 		t.Fatal("configured page should post the camera field")
 	}
@@ -599,8 +602,8 @@ func TestReceiptShowListsAssignedPurchases(t *testing.T) {
 	if !strings.Contains(body, `<strong>Rice</strong>`) || !strings.Contains(body, `<strong>Flour</strong>`) {
 		t.Fatal("expected assigned products")
 	}
-	if !strings.Contains(body, ">Total<") {
-		t.Fatal("expected bill total")
+	if strings.Contains(body, ">Total<") {
+		t.Fatal("show page should not list a bill total")
 	}
 	if !strings.Contains(body, `href="/admin/receipts/`+itoa(r.ID)+`/edit"`) {
 		t.Fatal("visit should link to edit")

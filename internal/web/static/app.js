@@ -505,11 +505,8 @@
   if (!camera || !file || !form) return;
 
   var wrap = document.getElementById("scan-drop");
-  var preview = document.getElementById("scan-preview");
-  var img = document.getElementById("scan-preview-img");
-  var fileLabel = document.getElementById("scan-preview-file");
+  var ready = document.getElementById("scan-ready");
   var btn = document.getElementById("receipt-submit");
-  var url = "";
 
   function picked() {
     if (camera.files && camera.files[0]) return camera.files[0];
@@ -524,26 +521,14 @@
   }
 
   function show(f) {
-    if (url) URL.revokeObjectURL(url);
-    url = "";
     if (!f) {
-      preview.hidden = true;
+      ready.hidden = true;
+      ready.textContent = "";
       wrap.classList.remove("has-file");
       return;
     }
-    if (isPDF(f)) {
-      img.hidden = true;
-      img.removeAttribute("src");
-      fileLabel.hidden = false;
-      fileLabel.textContent = f.name || "PDF";
-    } else {
-      fileLabel.hidden = true;
-      fileLabel.textContent = "";
-      url = URL.createObjectURL(f);
-      img.hidden = false;
-      img.src = url;
-    }
-    preview.hidden = false;
+    ready.hidden = false;
+    ready.textContent = "File " + (f.name || "bill") + " is ready to upload";
     wrap.classList.add("has-file");
   }
 
@@ -556,6 +541,83 @@
   }
   camera.addEventListener("change", onPick(camera));
   file.addEventListener("change", onPick(file));
+
+  function hasFiles(e) {
+    var types = e.dataTransfer && e.dataTransfer.types;
+    if (!types) return false;
+    if (typeof types.contains === "function") return types.contains("Files");
+    return Array.prototype.indexOf.call(types, "Files") !== -1;
+  }
+
+  function isBillFile(f) {
+    if (!f) return false;
+    if (isPDF(f)) return true;
+    var type = (f.type || "").toLowerCase();
+    if (type.indexOf("image/") === 0) return true;
+    var name = (f.name || "").toLowerCase();
+    return /\.(jpe?g|png|webp|gif)$/.test(name);
+  }
+
+  function firstBill(files) {
+    if (!files) return null;
+    for (var i = 0; i < files.length; i++) {
+      if (isBillFile(files[i])) return files[i];
+    }
+    return null;
+  }
+
+  function assignFile(f) {
+    try {
+      var dt = new DataTransfer();
+      dt.items.add(f);
+      file.files = dt.files;
+      camera.value = "";
+    } catch (err) {}
+    file.setCustomValidity("");
+    show(f);
+  }
+
+  var overTimer = 0;
+  function markOver(on) {
+    clearTimeout(overTimer);
+    if (on) {
+      wrap.classList.add("is-over");
+      return;
+    }
+    wrap.classList.remove("is-over");
+  }
+
+  document.addEventListener("dragenter", function (e) {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    markOver(true);
+  });
+  document.addEventListener("dragover", function (e) {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+    markOver(true);
+    overTimer = setTimeout(function () {
+      markOver(false);
+    }, 150);
+  });
+  document.addEventListener("dragleave", function (e) {
+    if (!hasFiles(e)) return;
+    if (e.relatedTarget) return;
+    markOver(false);
+  });
+  document.addEventListener("drop", function (e) {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    markOver(false);
+    var f = firstBill(e.dataTransfer.files);
+    if (!f) {
+      file.setCustomValidity("Choose a photo or a PDF of the bill.");
+      file.reportValidity();
+      return;
+    }
+    assignFile(f);
+  });
 
   form.addEventListener("submit", function (e) {
     if (!picked()) {
