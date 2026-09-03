@@ -10,48 +10,59 @@
   <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/app.css">
 </head>
-<body>
+<body{{if .Page.Admin}} class="is-admin"{{end}}>
+  {{if .Page.Admin}}
   <input class="nav-open" id="nav-open" type="checkbox">
+  {{end}}
   <header class="topbar">
-    <label class="nav-toggle" for="nav-open" aria-label="Open menu">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M4 7h16M4 12h16M4 17h16"/></svg>
-    </label>
-    <a class="wordmark" href="/">Bulkly</a>
+    <div class="topbar-inner">
+      {{if .Page.Admin}}
+      <label class="nav-toggle" for="nav-open" aria-label="Open menu">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </label>
+      {{end}}
+      <a class="wordmark" href="/">Bulkly</a>
+      {{if not .Page.Admin}}
+      <a class="topbar-admin" href="/admin">Admin</a>
+      {{end}}
+    </div>
   </header>
+  {{if .Page.Admin}}
   <label class="nav-backdrop" for="nav-open" aria-hidden="true"></label>
   <aside class="rail">
     <a class="wordmark" href="/">Bulkly</a>
     <nav>
-      <a href="/">
+      <a href="/admin">
         <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M4 8.2 12 4l8 4.2v9.6L12 22 4 17.8zM12 12.2V22M4 8.2l8 4 8-4"/></svg>
         Products
       </a>
-      <a href="/receipts">
+      <a href="/admin/receipts">
         <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M7 3.5h10v17l-1.6-1.1-1.6 1.1-1.6-1.1-1.6 1.1-1.6-1.1-1.6 1.1zM9 8h6M9 12h6M9 16h3.5"/></svg>
         Receipts
       </a>
-      <a href="/units">
+      <a href="/admin/units">
         <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M12 3.5v3M8 6.5h8M6.5 20.5h11l-1.7-9.2a4 4 0 0 0-7.6 0z"/></svg>
         Units
       </a>
-      <a href="/companies">
+      <a href="/admin/companies">
         <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M4.5 20.5h15v-9.5l-7.5-5-7.5 5zM10 20.5v-6h4v6M8 11.5h.5M12 11.5h.5M16 11.5h.5"/></svg>
         Companies
       </a>
-      <a href="/aliases">
+      <a href="/admin/aliases">
         <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="m4.5 13 8.2-8.2a2 2 0 0 1 2.8 0l3.7 3.7a2 2 0 0 1 0 2.8L11 19.5H4.5zM8 15.5h.5"/></svg>
         Aliases
       </a>
-      <a href="/admin">
+      <a href="/admin/settings">
         <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M4.5 7h15M7 7a2.2 2.2 0 1 0 0-4.4A2.2 2.2 0 0 0 7 7zM4.5 17h15M17 17a2.2 2.2 0 1 0 0-4.4A2.2 2.2 0 0 0 17 17z"/></svg>
-        Admin
+        Settings
       </a>
-      <a class="nav-add" href="/products/new">
+      <a class="nav-add" href="/admin/products/new">
         <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M12 5v14M5 12h14"/></svg>
         Add product
       </a>
     </nav>
   </aside>
+  {{end}}
   <main class="sheet">
     {{if .Page.Error}}<p class="banner" role="alert">{{.Page.Error}}</p>{{end}}
 {{end}}

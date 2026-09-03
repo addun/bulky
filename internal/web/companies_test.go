@@ -29,7 +29,7 @@ func TestReceiptReviewOffersCreateCompanyWhenUnmatched(t *testing.T) {
 		t.Fatal(err)
 	}
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/receipts/"+itoa(r.ID), nil)
+	req := httptest.NewRequest(http.MethodGet, "/admin/receipts/"+itoa(r.ID), nil)
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d", rec.Code)
@@ -38,10 +38,10 @@ func TestReceiptReviewOffersCreateCompanyWhenUnmatched(t *testing.T) {
 	if !strings.Contains(body, "Create company") {
 		t.Fatal("unmatched OCR address should offer create")
 	}
-	if !strings.Contains(body, `/companies/new?`) || !strings.Contains(body, "prefill%5Bname%5D=Biedronka") {
+	if !strings.Contains(body, `/admin/companies/new?`) || !strings.Contains(body, "prefill%5Bname%5D=Biedronka") {
 		t.Fatal("create link should pass OCR fields as prefill query params")
 	}
-	if !strings.Contains(body, "next=%2Freceipts%2F"+itoa(r.ID)) && !strings.Contains(body, "next=/receipts/"+itoa(r.ID)) {
+	if !strings.Contains(body, "next=%2Fadmin%2Freceipts%2F"+itoa(r.ID)) && !strings.Contains(body, "next=/admin/receipts/"+itoa(r.ID)) {
 		t.Fatal("create link should return to this receipt")
 	}
 }
@@ -65,7 +65,7 @@ func TestCreateCompanyPrefillsFromQueryAndReturnsToReceipt(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	next := "/receipts/" + itoa(r.ID)
+	next := "/admin/receipts/" + itoa(r.ID)
 	q := url.Values{
 		prefillQuery("name"):            {"Biedronka"},
 		prefillQuery("street_name"):     {"Kościuszki"},
@@ -75,7 +75,7 @@ func TestCreateCompanyPrefillsFromQueryAndReturnsToReceipt(t *testing.T) {
 		"next":                          {next},
 	}
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/companies/new?"+q.Encode(), nil)
+	req := httptest.NewRequest(http.MethodGet, "/admin/companies/new?"+q.Encode(), nil)
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d", rec.Code)
@@ -98,7 +98,7 @@ func TestCreateCompanyPrefillsFromQueryAndReturnsToReceipt(t *testing.T) {
 		"next":             {next},
 	}
 	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodPost, "/companies", strings.NewReader(form.Encode()))
+	req = httptest.NewRequest(http.MethodPost, "/admin/companies", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusSeeOther {
@@ -151,10 +151,10 @@ func TestCreateCompanyDoesNotSelectUnrelatedShop(t *testing.T) {
 		"building_number": {"1"},
 		"postal_code":     {"00-001"},
 		"city":            {"Warszawa"},
-		"next":            {"/receipts/" + itoa(r.ID)},
+		"next":            {"/admin/receipts/" + itoa(r.ID)},
 	}
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/companies", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/admin/companies", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusSeeOther {
@@ -162,7 +162,7 @@ func TestCreateCompanyDoesNotSelectUnrelatedShop(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodGet, "/receipts/"+itoa(r.ID), nil)
+	req = httptest.NewRequest(http.MethodGet, "/admin/receipts/"+itoa(r.ID), nil)
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d", rec.Code)
@@ -195,25 +195,25 @@ func TestCreateCompanyRejectsOffsiteNext(t *testing.T) {
 		"building_number": {"10"},
 		"postal_code":     {"40-001"},
 		"city":            {"Katowice"},
-		"next":            {"https://evil.example/receipts/1"},
+		"next":            {"https://evil.example/admin/receipts/1"},
 	}
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/companies", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/admin/companies", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status %d", rec.Code)
 	}
-	if rec.Header().Get("Location") != "/companies" {
+	if rec.Header().Get("Location") != "/admin/companies" {
 		t.Fatalf("location %s", rec.Header().Get("Location"))
 	}
 }
 
 func TestReceiptReturnPath(t *testing.T) {
-	if got := receiptReturnPath("/receipts/12"); got != "/receipts/12" {
+	if got := receiptReturnPath("/admin/receipts/12"); got != "/admin/receipts/12" {
 		t.Fatalf("ok: %q", got)
 	}
-	for _, bad := range []string{"", "/companies", "/receipts/12/edit", "/receipts/12?x=1", "//evil", "https://x/receipts/1", "/receipts/12/../companies"} {
+	for _, bad := range []string{"", "/admin/companies", "/admin/receipts/12/edit", "/admin/receipts/12?x=1", "//evil", "https://x/admin/receipts/1", "/admin/receipts/12/../admin/companies"} {
 		if got := receiptReturnPath(bad); got != "" {
 			t.Fatalf("bad %q -> %q", bad, got)
 		}

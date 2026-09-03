@@ -1,0 +1,43 @@
+{{template "header" .}}
+<article class="product-head">
+  {{if .Product.ImagePath.Valid}}
+    <img class="hero" src="/images/{{.Product.ImagePath.String}}" alt="">
+  {{else}}
+    <span class="hero hero-empty" aria-hidden="true"></span>
+  {{end}}
+  <div>
+    <h1>{{.Product.Name}}</h1>
+  </div>
+</article>
+
+<section class="price-stats">
+  <div>
+    <p class="eyebrow">Last</p>
+    {{if .Last}}
+      <p class="price-stat">{{money .Last.Price}} / {{$.Product.UnitName}}</p>
+      <p class="meta">{{date .Last.BoughtOn}}</p>
+    {{else}}
+      <p class="price-stat">—</p>
+    {{end}}
+  </div>
+  <div>
+    <p class="eyebrow">Lowest · 30 days</p>
+    {{if .Low30}}
+      <p class="price-stat">{{money .Low30.Price}} / {{$.Product.UnitName}}</p>
+      <p class="meta">{{date .Low30.BoughtOn}}</p>
+    {{else}}
+      <p class="price-stat">—</p>
+      <p class="meta">No prices in the last 30 days</p>
+    {{end}}
+  </div>
+</section>
+
+<section>
+  <h2>Last 365 days</h2>
+  {{if .HasChart}}
+    <div class="price-chart" data-price-chart="{{.ChartJSON}}" data-chart-from="{{.ChartFrom}}" data-chart-to="{{.ChartTo}}" data-chart-symbol="{{.Page.Symbol}}"></div>
+  {{else}}
+    <p class="empty">No prices in the last year.</p>
+  {{end}}
+</section>
+{{template "footer" .}}

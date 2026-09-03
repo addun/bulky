@@ -18,7 +18,7 @@ func (s *Server) units(c *gin.Context) {
 		return
 	}
 	c.HTML(http.StatusOK, "units.html", gin.H{
-		"Page":  s.page("Units", "", c.Query("error")),
+		"Page":  s.adminPage("Units", "", c.Query("error")),
 		"Units": list,
 	})
 }
@@ -26,18 +26,18 @@ func (s *Server) units(c *gin.Context) {
 func (s *Server) createUnit(c *gin.Context) {
 	_, err := s.store.CreateUnit(c.PostForm("name"))
 	if errors.Is(err, store.ErrInvalidUnit) {
-		c.Redirect(http.StatusSeeOther, "/units?error="+url.QueryEscape("Name is required."))
+		c.Redirect(http.StatusSeeOther, "/admin/units?error="+url.QueryEscape("Name is required."))
 		return
 	}
 	if errors.Is(err, store.ErrDuplicate) {
-		c.Redirect(http.StatusSeeOther, "/units?error="+url.QueryEscape("That unit already exists."))
+		c.Redirect(http.StatusSeeOther, "/admin/units?error="+url.QueryEscape("That unit already exists."))
 		return
 	}
 	if err != nil {
-		c.Redirect(http.StatusSeeOther, "/units?error="+url.QueryEscape("Could not save the unit."))
+		c.Redirect(http.StatusSeeOther, "/admin/units?error="+url.QueryEscape("Could not save the unit."))
 		return
 	}
-	c.Redirect(http.StatusSeeOther, "/units")
+	c.Redirect(http.StatusSeeOther, "/admin/units")
 }
 
 func (s *Server) editUnit(c *gin.Context) {
@@ -56,7 +56,7 @@ func (s *Server) editUnit(c *gin.Context) {
 		return
 	}
 	c.HTML(http.StatusOK, "unit_form.html", gin.H{
-		"Page": s.page("Rename unit", "", ""),
+		"Page": s.adminPage("Rename unit", "", ""),
 		"Unit": u,
 	})
 }
@@ -74,14 +74,14 @@ func (s *Server) updateUnit(c *gin.Context) {
 	}
 	if errors.Is(err, store.ErrInvalidUnit) {
 		c.HTML(http.StatusUnprocessableEntity, "unit_form.html", gin.H{
-			"Page": s.page("Rename unit", "", "Name is required."),
+			"Page": s.adminPage("Rename unit", "", "Name is required."),
 			"Unit": store.Unit{ID: id, Name: strings.TrimSpace(c.PostForm("name"))},
 		})
 		return
 	}
 	if errors.Is(err, store.ErrDuplicate) {
 		c.HTML(http.StatusUnprocessableEntity, "unit_form.html", gin.H{
-			"Page": s.page("Rename unit", "", "That unit already exists."),
+			"Page": s.adminPage("Rename unit", "", "That unit already exists."),
 			"Unit": store.Unit{ID: id, Name: strings.TrimSpace(c.PostForm("name"))},
 		})
 		return
@@ -90,7 +90,7 @@ func (s *Server) updateUnit(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "could not save unit")
 		return
 	}
-	c.Redirect(http.StatusSeeOther, "/units")
+	c.Redirect(http.StatusSeeOther, "/admin/units")
 }
 
 func (s *Server) confirmDeleteUnit(c *gin.Context) {
@@ -109,15 +109,15 @@ func (s *Server) confirmDeleteUnit(c *gin.Context) {
 		return
 	}
 	if u.ProductCount > 0 {
-		c.Redirect(http.StatusSeeOther, "/units?error="+url.QueryEscape("Cannot delete “"+u.Name+"” while a product still uses it."))
+		c.Redirect(http.StatusSeeOther, "/admin/units?error="+url.QueryEscape("Cannot delete “"+u.Name+"” while a product still uses it."))
 		return
 	}
 	c.HTML(http.StatusOK, "confirm.html", gin.H{
-		"Page":    s.page("Delete unit", "", ""),
+		"Page":    s.adminPage("Delete unit", "", ""),
 		"Title":   "Delete unit “" + u.Name + "”?",
 		"Body":    "This only removes the unit from the list. No products use it.",
-		"Action":  "/units/" + itoa(id) + "/delete",
-		"Cancel":  "/units",
+		"Action":  "/admin/units/" + itoa(id) + "/delete",
+		"Cancel":  "/admin/units",
 		"Confirm": "Delete unit",
 	})
 }
@@ -134,12 +134,12 @@ func (s *Server) deleteUnit(c *gin.Context) {
 		return
 	}
 	if errors.Is(err, store.ErrUnitInUse) {
-		c.Redirect(http.StatusSeeOther, "/units?error="+url.QueryEscape("Cannot delete a unit while a product still uses it."))
+		c.Redirect(http.StatusSeeOther, "/admin/units?error="+url.QueryEscape("Cannot delete a unit while a product still uses it."))
 		return
 	}
 	if err != nil {
 		c.String(http.StatusInternalServerError, "could not delete unit")
 		return
 	}
-	c.Redirect(http.StatusSeeOther, "/units")
+	c.Redirect(http.StatusSeeOther, "/admin/units")
 }

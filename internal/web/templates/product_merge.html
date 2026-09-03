@@ -3,9 +3,9 @@
 <p class="lede">Pick the product to keep. You will see a summary before anything is removed.</p>
 {{if not .Targets}}
   <p class="hint">There is no other product to merge into.</p>
-  <p><a href="/products/{{.Product.ID}}">Cancel</a></p>
+  <p><a href="/admin/products/{{.Product.ID}}">Cancel</a></p>
 {{else}}
-<form class="stack" method="post" action="/products/{{.Product.ID}}/merge-with">
+<form class="stack" method="post" action="/admin/products/{{.Product.ID}}/merge-with">
   <label>Merge into
     <select name="into_id" required>
       <option value="">Select…</option>
@@ -16,7 +16,7 @@
   </label>
   <div class="actions">
     <button type="submit" class="btn btn-tag">Continue</button>
-    <a href="/products/{{.Product.ID}}">Cancel</a>
+    <a href="/admin/products/{{.Product.ID}}">Cancel</a>
   </div>
 </form>
 {{end}}

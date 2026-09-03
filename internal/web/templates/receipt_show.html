@@ -9,7 +9,7 @@
 <div class="receipt-layout">
   {{if .Receipt.ImagePath}}
   <figure class="receipt-slip">
-    <img src="/receipts/{{.Receipt.ID}}/preview" alt="Uploaded bill">
+    <img src="/admin/receipts/{{.Receipt.ID}}/preview" alt="Uploaded bill">
     <figcaption class="hint">The bill you uploaded</figcaption>
   </figure>
   {{end}}
@@ -18,7 +18,7 @@
     <section>
       <div class="page-head">
         <h2>Visit</h2>
-        <a href="/receipts/{{.Receipt.ID}}/edit">Edit</a>
+        <a href="/admin/receipts/{{.Receipt.ID}}/edit">Edit</a>
       </div>
       <p class="meta">
         {{if .BoughtOn}}{{datetime .BoughtOn}}{{else}}No date{{end}}
@@ -33,7 +33,7 @@
       <ul class="ledger">
         {{range .Purchases}}
         <li>
-          <a class="row" href="/products/{{.ProductID}}">
+          <a class="row" href="/admin/products/{{.ProductID}}">
             {{if .ImagePath.Valid}}
               <img class="thumb" src="/images/{{.ImagePath.String}}" alt="">
             {{else}}
@@ -54,8 +54,8 @@
           </a>
           <p class="history-foot">
             <span class="tight">
-              <a href="/purchases/{{.ID}}/edit">Edit</a>
-              <a class="danger" href="/purchases/{{.ID}}/delete">Delete</a>
+              <a href="/admin/purchases/{{.ID}}/edit">Edit</a>
+              <a class="danger" href="/admin/purchases/{{.ID}}/delete">Delete</a>
             </span>
           </p>
         </li>

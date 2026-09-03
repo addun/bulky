@@ -23,7 +23,7 @@ func TestProductsPageFuzzySearch(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/?q=tortova", nil)
+	req := httptest.NewRequest(http.MethodGet, "/admin?q=tortova", nil)
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d", rec.Code)
@@ -37,7 +37,7 @@ func TestProductsPageFuzzySearch(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodGet, "/?q=maka", nil)
+	req = httptest.NewRequest(http.MethodGet, "/admin?q=maka", nil)
 	srv.Handler().ServeHTTP(rec, req)
 	body = rec.Body.String()
 	if !strings.Contains(body, `<strong>Cake flour</strong>`) {
@@ -56,7 +56,7 @@ func TestMergeFormOmitsCurrentProduct(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/products/"+itoa(rice.ID)+"/merge-with", nil)
+	req := httptest.NewRequest(http.MethodGet, "/admin/products/"+itoa(rice.ID)+"/merge-with", nil)
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d", rec.Code)
@@ -65,7 +65,7 @@ func TestMergeFormOmitsCurrentProduct(t *testing.T) {
 	if !strings.Contains(body, `Merge Rice?`) {
 		t.Fatal("expected merge heading")
 	}
-	if !strings.Contains(body, `/products/`+itoa(rice.ID)+`/merge-with`) {
+	if !strings.Contains(body, `/admin/products/`+itoa(rice.ID)+`/merge-with`) {
 		t.Fatal("picker should continue to the summary")
 	}
 	if !strings.Contains(body, `value="`+itoa(flour.ID)+`"`) {
@@ -79,12 +79,12 @@ func TestMergeFormOmitsCurrentProduct(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodGet, "/products/"+itoa(rice.ID), nil)
+	req = httptest.NewRequest(http.MethodGet, "/admin/products/"+itoa(rice.ID), nil)
 	srv.Handler().ServeHTTP(rec, req)
-	if !strings.Contains(rec.Body.String(), `/products/`+itoa(rice.ID)+`/merge-with`) {
+	if !strings.Contains(rec.Body.String(), `/admin/products/`+itoa(rice.ID)+`/merge-with`) {
 		t.Fatal("product page should link to merge")
 	}
-	if strings.Contains(rec.Body.String(), `/products/`+itoa(rice.ID)+`/change-unit`) {
+	if strings.Contains(rec.Body.String(), `/admin/products/`+itoa(rice.ID)+`/change-unit`) {
 		t.Fatal("product page should not link to change unit")
 	}
 }
@@ -101,13 +101,13 @@ func TestMergeConfirmShowsSummary(t *testing.T) {
 
 	form := url.Values{"into_id": {itoa(flour.ID)}}
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/products/"+itoa(rice.ID)+"/merge-with", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/admin/products/"+itoa(rice.ID)+"/merge-with", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("redirect status %d", rec.Code)
 	}
-	want := "/products/" + itoa(rice.ID) + "/merge-with/" + itoa(flour.ID) + "/"
+	want := "/admin/products/" + itoa(rice.ID) + "/merge-with/" + itoa(flour.ID) + "/"
 	if loc := rec.Header().Get("Location"); loc != want {
 		t.Fatalf("location %q", loc)
 	}
@@ -149,12 +149,12 @@ func TestMergeProductRedirectsToKeeper(t *testing.T) {
 		t.Fatal(err)
 	}
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/products/"+itoa(rice.ID)+"/merge-with/"+itoa(flour.ID)+"/", nil)
+	req := httptest.NewRequest(http.MethodPost, "/admin/products/"+itoa(rice.ID)+"/merge-with/"+itoa(flour.ID)+"/", nil)
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
 	}
-	if loc := rec.Header().Get("Location"); loc != "/products/"+itoa(flour.ID) {
+	if loc := rec.Header().Get("Location"); loc != "/admin/products/"+itoa(flour.ID) {
 		t.Fatalf("location %q", loc)
 	}
 	if _, err := st.GetProduct(rice.ID); err == nil {
@@ -177,7 +177,7 @@ func TestMergeProductRejectsUnitMismatch(t *testing.T) {
 		t.Fatal(err)
 	}
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/products/"+itoa(sugar.ID)+"/merge-with/"+itoa(flour.ID)+"/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/admin/products/"+itoa(sugar.ID)+"/merge-with/"+itoa(flour.ID)+"/", nil)
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("status %d", rec.Code)
@@ -187,7 +187,7 @@ func TestMergeProductRejectsUnitMismatch(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodPost, "/products/"+itoa(sugar.ID)+"/merge-with/"+itoa(flour.ID)+"/", nil)
+	req = httptest.NewRequest(http.MethodPost, "/admin/products/"+itoa(sugar.ID)+"/merge-with/"+itoa(flour.ID)+"/", nil)
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("status %d", rec.Code)
@@ -220,7 +220,7 @@ func TestProductFormSavesExtraUnits(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/products/new", nil)
+	req := httptest.NewRequest(http.MethodGet, "/admin/products/new", nil)
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d", rec.Code)
@@ -237,7 +237,7 @@ func TestProductFormSavesExtraUnits(t *testing.T) {
 		"extra_factor":  {"1.5"},
 	}
 	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodPost, "/products", strings.NewReader(form.Encode()))
+	req = httptest.NewRequest(http.MethodPost, "/admin/products", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusSeeOther {
@@ -257,7 +257,7 @@ func TestProductFormSavesExtraUnits(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodGet, "/products/"+itoa(p.ID)+"/edit", nil)
+	req = httptest.NewRequest(http.MethodGet, "/admin/products/"+itoa(p.ID)+"/edit", nil)
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("edit status %d", rec.Code)
@@ -269,7 +269,7 @@ func TestProductFormSavesExtraUnits(t *testing.T) {
 	if !strings.Contains(body, `selected>`+liter.Name) && !strings.Contains(body, `value="`+itoa(liter.ID)+`" selected`) {
 		t.Fatalf("edit form should select litres: %s", body)
 	}
-	if !strings.Contains(body, `/products/`+itoa(p.ID)+`/change-unit`) {
+	if !strings.Contains(body, `/admin/products/`+itoa(p.ID)+`/change-unit`) {
 		t.Fatal("edit form should link to change unit")
 	}
 	if strings.Contains(body, `id="purchase-unit"`) {
@@ -306,7 +306,7 @@ func TestProductShowUsesPurchaseUnit(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/admin", nil)
 	srv.Handler().ServeHTTP(rec, req)
 	list := rec.Body.String()
 	if !strings.Contains(list, `class="meta">szt`) {
@@ -317,7 +317,7 @@ func TestProductShowUsesPurchaseUnit(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodGet, "/products/"+itoa(p.ID), nil)
+	req = httptest.NewRequest(http.MethodGet, "/admin/products/"+itoa(p.ID), nil)
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d", rec.Code)
@@ -334,7 +334,7 @@ func TestProductShowUsesPurchaseUnit(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodGet, "/products/"+itoa(p.ID)+"/purchases/new", nil)
+	req = httptest.NewRequest(http.MethodGet, "/admin/products/"+itoa(p.ID)+"/purchases/new", nil)
 	srv.Handler().ServeHTTP(rec, req)
 	if !strings.Contains(rec.Body.String(), "Package size (szt)") {
 		t.Fatal("purchase form should use the purchase unit")
@@ -372,7 +372,7 @@ func TestMergeProductRejectsConversionConflict(t *testing.T) {
 		t.Fatal(err)
 	}
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/products/"+itoa(b.ID)+"/merge-with/"+itoa(a.ID)+"/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/admin/products/"+itoa(b.ID)+"/merge-with/"+itoa(a.ID)+"/", nil)
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("status %d", rec.Code)
@@ -416,7 +416,7 @@ func TestChangeProductUnitFormAndSave(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/products/"+itoa(p.ID)+"/change-unit", nil)
+	req := httptest.NewRequest(http.MethodGet, "/admin/products/"+itoa(p.ID)+"/change-unit", nil)
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d", rec.Code)
@@ -449,13 +449,13 @@ func TestChangeProductUnitFormAndSave(t *testing.T) {
 		"unit_id": {itoa(liter.ID)},
 	}
 	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodPost, "/products/"+itoa(p.ID)+"/change-unit", strings.NewReader(form.Encode()))
+	req = httptest.NewRequest(http.MethodPost, "/admin/products/"+itoa(p.ID)+"/change-unit", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
 	}
-	if loc := rec.Header().Get("Location"); loc != "/products/"+itoa(p.ID) {
+	if loc := rec.Header().Get("Location"); loc != "/admin/products/"+itoa(p.ID) {
 		t.Fatalf("location: %s", loc)
 	}
 
@@ -496,7 +496,7 @@ func TestChangeProductUnitRequiresExtra(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/products/"+itoa(p.ID)+"/change-unit", nil)
+	req := httptest.NewRequest(http.MethodGet, "/admin/products/"+itoa(p.ID)+"/change-unit", nil)
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d", rec.Code)
@@ -507,7 +507,7 @@ func TestChangeProductUnitRequiresExtra(t *testing.T) {
 
 	form := url.Values{"unit_id": {itoa(liter.ID)}}
 	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodPost, "/products/"+itoa(p.ID)+"/change-unit", strings.NewReader(form.Encode()))
+	req = httptest.NewRequest(http.MethodPost, "/admin/products/"+itoa(p.ID)+"/change-unit", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnprocessableEntity {

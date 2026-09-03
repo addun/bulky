@@ -25,3 +25,15 @@ func TestSearchNameAndAlias(t *testing.T) {
 		t.Fatal("empty")
 	}
 }
+
+func TestSearchContiguousQueryBeatsTokenHit(t *testing.T) {
+	enchanted := Search("hanted Red len", "enchanted Red lentils")
+	darkRed := Search("hanted Red len", "Buckwheat DarkRed 84")
+	chickpeas := Search("hanted Red len", "Chickpeas IndianRed 25")
+	if enchanted <= darkRed || enchanted <= chickpeas {
+		t.Fatalf("contiguous %v should outrank token hits %v %v", enchanted, darkRed, chickpeas)
+	}
+	if enchanted <= containScore {
+		t.Fatalf("contiguous should beat flat contain: %v", enchanted)
+	}
+}
