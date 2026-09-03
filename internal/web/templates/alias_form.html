@@ -1,6 +1,6 @@
 {{template "header" .}}
 <h1>{{if .New}}Add alias{{else}}Edit alias{{end}}</h1>
-<form class="stack" method="post" action="{{if .New}}/aliases{{else}}/aliases/{{.Alias.ID}}{{end}}">
+<form class="stack" method="post" action="{{if .New}}/admin/aliases{{else}}/admin/aliases/{{.Alias.ID}}{{end}}">
   {{if .FromProduct}}<input type="hidden" name="from_product" value="{{.FromProduct}}">{{end}}
   <fieldset class="form-group">
     <legend>For</legend>
@@ -31,7 +31,7 @@
     <label>Alias <input name="alias" required placeholder="Mąka tortowa 1kg" value="{{.Alias.Alias}}" autofocus></label>
   </fieldset>
   {{if not .Products}}
-    <p class="hint">No products yet. <a href="/products/new">Add a product</a> first.</p>
+    <p class="hint">No products yet. <a href="/admin/products/new">Add a product</a> first.</p>
   {{end}}
   <div class="form-actions">
     <button type="submit" class="btn btn-tag">{{if .New}}Add alias{{else}}Save alias{{end}}</button>

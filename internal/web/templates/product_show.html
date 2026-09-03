@@ -8,9 +8,9 @@
   <div>
     <h1>{{.Product.Name}}</h1>
     <p class="product-actions">
-      <a class="btn btn-tag" href="/products/{{.Product.ID}}/purchases/new">Add</a>
-      <a href="/products/{{.Product.ID}}/edit">Edit</a>
-      <a href="/aliases?product={{.Product.ID}}">Aliases</a>
+      <a class="btn btn-tag" href="/admin/products/{{.Product.ID}}/purchases/new">Add</a>
+      <a href="/admin/products/{{.Product.ID}}/edit">Edit</a>
+      <a href="/admin/aliases?product={{.Product.ID}}">Aliases</a>
     </p>
   </div>
 </article>
@@ -58,7 +58,7 @@
         </p>
         <p class="history-foot">
           {{if $buy.ReceiptID}}
-            <a class="history-slip" href="/receipts/{{$buy.ReceiptID}}">
+            <a class="history-slip" href="/admin/receipts/{{$buy.ReceiptID}}">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M7 3.5h10v17l-1.6-1.1-1.6 1.1-1.6-1.1-1.6 1.1-1.6-1.1-1.6 1.1zM9 8h6M9 12h6M9 16h3.5"/></svg>
               Receipt {{$buy.ReceiptID}}
             </a>
@@ -66,8 +66,8 @@
             <span class="history-noslip">No receipt</span>
           {{end}}
           <span class="tight">
-            <a href="/purchases/{{$buy.ID}}/edit">Edit</a>
-            <a class="danger" href="/purchases/{{$buy.ID}}/delete">Delete</a>
+            <a href="/admin/purchases/{{$buy.ID}}/edit">Edit</a>
+            <a class="danger" href="/admin/purchases/{{$buy.ID}}/delete">Delete</a>
           </span>
         </p>
       </li>
@@ -77,7 +77,7 @@
 </section>
 
 <p class="danger-zone">
-  <a class="danger" href="/products/{{.Product.ID}}/merge-with">Merge</a>
-  <a class="danger" href="/products/{{.Product.ID}}/delete">Delete product</a>
+  <a class="danger" href="/admin/products/{{.Product.ID}}/merge-with">Merge</a>
+  <a class="danger" href="/admin/products/{{.Product.ID}}/delete">Delete product</a>
 </p>
 {{template "footer" .}}

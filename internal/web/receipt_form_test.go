@@ -346,7 +346,7 @@ func TestReceiptReviewTemplateExecutes(t *testing.T) {
 	if strings.Contains(body, `name="quantity_0"`) {
 		t.Fatal("quantity should be calculated from packs")
 	}
-	if !strings.Contains(body, `src="/receipts/3/preview"`) {
+	if !strings.Contains(body, `src="/admin/receipts/3/preview"`) {
 		t.Fatal("preview should be nested under the receipt")
 	}
 	if !strings.Contains(body, `name="receipt_name_0"`) || !strings.Contains(body, "RYZ") {
@@ -386,7 +386,7 @@ func TestReceiptsPageRendersWhenUnconfigured(t *testing.T) {
 		t.Fatal(err)
 	}
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/receipts", nil)
+	req := httptest.NewRequest(http.MethodGet, "/admin/receipts", nil)
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d", rec.Code)
@@ -404,7 +404,7 @@ func TestReceiptsPageRendersWhenUnconfigured(t *testing.T) {
 	if strings.Contains(body, `name="bill"`) {
 		t.Fatal("unconfigured page should not show the upload field")
 	}
-	if !strings.Contains(body, `href="/receipts"`) {
+	if !strings.Contains(body, `href="/admin/receipts"`) {
 		t.Fatal("missing receipts nav")
 	}
 	if !strings.Contains(body, "No receipts yet.") {
@@ -416,7 +416,7 @@ func TestReceiptsPageRendersWhenUnconfigured(t *testing.T) {
 		t.Fatal(err)
 	}
 	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodGet, "/receipts", nil)
+	req = httptest.NewRequest(http.MethodGet, "/admin/receipts", nil)
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("key-only status %d", rec.Code)
@@ -433,7 +433,7 @@ func TestReceiptsPageRendersWhenUnconfigured(t *testing.T) {
 		t.Fatal(err)
 	}
 	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodGet, "/receipts", nil)
+	req = httptest.NewRequest(http.MethodGet, "/admin/receipts", nil)
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("configured status %d", rec.Code)
@@ -481,7 +481,7 @@ func TestReceiptsPageListsReceipts(t *testing.T) {
 		t.Fatal(err)
 	}
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/receipts", nil)
+	req := httptest.NewRequest(http.MethodGet, "/admin/receipts", nil)
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d", rec.Code)
@@ -490,13 +490,13 @@ func TestReceiptsPageListsReceipts(t *testing.T) {
 	if strings.Contains(body, "No receipts yet.") {
 		t.Fatal("should list receipts")
 	}
-	if !strings.Contains(body, `href="/receipts/`+itoa(r.ID)+`"`) {
+	if !strings.Contains(body, `href="/admin/receipts/`+itoa(r.ID)+`"`) {
 		t.Fatal("missing receipt link")
 	}
 	if !strings.Contains(body, "To confirm") {
 		t.Fatal("missing status")
 	}
-	if !strings.Contains(body, `src="/receipts/`+itoa(r.ID)+`/preview"`) {
+	if !strings.Contains(body, `src="/admin/receipts/`+itoa(r.ID)+`/preview"`) {
 		t.Fatal("preview should be nested under the receipt")
 	}
 }
@@ -520,7 +520,7 @@ func TestReceiptReviewLoadsReceiptJSON(t *testing.T) {
 		t.Fatal(err)
 	}
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/receipts/"+itoa(r.ID), nil)
+	req := httptest.NewRequest(http.MethodGet, "/admin/receipts/"+itoa(r.ID), nil)
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
@@ -578,7 +578,7 @@ func TestReceiptShowListsAssignedPurchases(t *testing.T) {
 		t.Fatal(err)
 	}
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/receipts/"+itoa(r.ID)+"?imported=2", nil)
+	req := httptest.NewRequest(http.MethodGet, "/admin/receipts/"+itoa(r.ID)+"?imported=2", nil)
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
@@ -605,7 +605,7 @@ func TestReceiptShowListsAssignedPurchases(t *testing.T) {
 	if strings.Contains(body, ">Total<") {
 		t.Fatal("show page should not list a bill total")
 	}
-	if !strings.Contains(body, `href="/receipts/`+itoa(r.ID)+`/edit"`) {
+	if !strings.Contains(body, `href="/admin/receipts/`+itoa(r.ID)+`/edit"`) {
 		t.Fatal("visit should link to edit")
 	}
 	if strings.Contains(body, `name="company_id"`) {
@@ -649,7 +649,7 @@ func TestReceiptEditUpdatesVisit(t *testing.T) {
 		t.Fatal(err)
 	}
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/receipts/"+itoa(r.ID), nil)
+	req := httptest.NewRequest(http.MethodGet, "/admin/receipts/"+itoa(r.ID), nil)
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d", rec.Code)
@@ -658,12 +658,12 @@ func TestReceiptEditUpdatesVisit(t *testing.T) {
 	if !strings.Contains(body, "No company") {
 		t.Fatal("expected missing company on the visit")
 	}
-	if !strings.Contains(body, `href="/receipts/`+itoa(r.ID)+`/edit"`) {
+	if !strings.Contains(body, `href="/admin/receipts/`+itoa(r.ID)+`/edit"`) {
 		t.Fatal("expected edit link")
 	}
 
 	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodGet, "/receipts/"+itoa(r.ID)+"/edit", nil)
+	req = httptest.NewRequest(http.MethodGet, "/admin/receipts/"+itoa(r.ID)+"/edit", nil)
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("edit status %d", rec.Code)
@@ -681,13 +681,13 @@ func TestReceiptEditUpdatesVisit(t *testing.T) {
 
 	form := url.Values{"company_id": {itoa(co.ID)}, "bought_on": {"2026-08-22"}, "bought_at": {"14:32"}}
 	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodPost, "/receipts/"+itoa(r.ID)+"/edit", strings.NewReader(form.Encode()))
+	req = httptest.NewRequest(http.MethodPost, "/admin/receipts/"+itoa(r.ID)+"/edit", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status %d", rec.Code)
 	}
-	if loc := rec.Header().Get("Location"); loc != "/receipts/"+itoa(r.ID) {
+	if loc := rec.Header().Get("Location"); loc != "/admin/receipts/"+itoa(r.ID) {
 		t.Fatalf("location %q", loc)
 	}
 
@@ -700,7 +700,7 @@ func TestReceiptEditUpdatesVisit(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodGet, "/receipts/"+itoa(r.ID), nil)
+	req = httptest.NewRequest(http.MethodGet, "/admin/receipts/"+itoa(r.ID), nil)
 	srv.Handler().ServeHTTP(rec, req)
 	body = rec.Body.String()
 	if strings.Contains(body, "No company") {
@@ -764,7 +764,7 @@ func TestReceiptReviewFillsAmountAndCompany(t *testing.T) {
 		t.Fatal(err)
 	}
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/receipts/"+itoa(r.ID), nil)
+	req := httptest.NewRequest(http.MethodGet, "/admin/receipts/"+itoa(r.ID), nil)
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
@@ -801,7 +801,7 @@ func TestPickFormFileUsesCameraField(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)
-	req := httptest.NewRequest(http.MethodPost, "/receipts", &body)
+	req := httptest.NewRequest(http.MethodPost, "/admin/receipts", &body)
 	req.Header.Set("Content-Type", w.FormDataContentType())
 	c.Request = req
 

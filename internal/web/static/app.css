@@ -44,6 +44,37 @@ body {
 
 .topbar {
   display: none;
+  background: var(--ink);
+  color: #f6f3ea;
+}
+
+.topbar-inner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 0.75rem 1.6rem;
+}
+
+body:not(.is-admin) {
+  grid-template-columns: 1fr;
+}
+
+body:not(.is-admin) .topbar {
+  display: block;
+}
+
+.topbar-admin {
+  margin-left: auto;
+  color: #f6f3ea;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.topbar-admin:hover {
+  color: var(--tag);
 }
 
 .nav-backdrop {
@@ -792,18 +823,111 @@ code {
   clip: rect(0 0 0 0);
 }
 
+.lookup input[type="search"] {
+  width: 100%;
+  font: inherit;
+  font-size: 1.15rem;
+  padding: 0.85rem 0.9rem;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: inherit;
+}
+
+.lookup-results {
+  margin-top: 0.85rem;
+}
+
+.lookup-results a.is-current {
+  background: rgba(255, 212, 0, 0.18);
+}
+
+.lookup-empty[hidden] {
+  display: none;
+}
+
+.price-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem 1.5rem;
+  margin: 0 0 0.5rem;
+}
+
+.price-stat {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 1.25rem;
+  font-weight: 500;
+  color: var(--pine);
+  margin: 0;
+}
+
+.price-chart {
+  width: 100%;
+}
+
+.price-chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.price-chart .axis {
+  fill: var(--muted);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+}
+
+.price-chart .grid {
+  stroke: var(--line);
+  stroke-width: 1px;
+  vector-effect: non-scaling-stroke;
+  shape-rendering: crispEdges;
+}
+
+.price-chart .grid-y {
+  stroke: #c5d2de;
+}
+
+.price-chart .grid-y-minor {
+  stroke: #d7e1ea;
+}
+
+.price-chart .grid-x {
+  stroke: #d0dbe6;
+}
+
+.price-chart .grid-x.is-year {
+  stroke: var(--line);
+}
+
+.price-chart .frame {
+  fill: none;
+  stroke: var(--line);
+  stroke-width: 1px;
+  vector-effect: non-scaling-stroke;
+  shape-rendering: crispEdges;
+}
+
+.price-chart .line {
+  fill: none;
+  stroke: var(--pine);
+  stroke-width: 1px;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.price-chart .dot {
+  fill: var(--pine);
+  r: 1px;
+}
+
 @media (max-width: 800px) {
   body {
     grid-template-columns: 1fr;
   }
 
   .topbar {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.75rem 1rem;
-    background: var(--ink);
-    color: #f6f3ea;
+    display: block;
     position: sticky;
     top: 0;
     z-index: 20;
@@ -858,6 +982,10 @@ code {
 
   .product-head {
     flex-direction: column;
+  }
+
+  .price-stats {
+    grid-template-columns: 1fr;
   }
 
   .page-head,

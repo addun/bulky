@@ -24,7 +24,7 @@ func TestAliasesPageFiltersByProduct(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/aliases?product="+itoa(flour.ID), nil)
+	req := httptest.NewRequest(http.MethodGet, "/admin/aliases?product="+itoa(flour.ID), nil)
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
@@ -39,10 +39,10 @@ func TestAliasesPageFiltersByProduct(t *testing.T) {
 	if !strings.Contains(body, "Aliases for Cake flour") {
 		t.Fatal("expected filtered heading")
 	}
-	if !strings.Contains(body, `href="/aliases"`) || !strings.Contains(body, "All aliases") {
+	if !strings.Contains(body, `href="/admin/aliases"`) || !strings.Contains(body, "All aliases") {
 		t.Fatal("expected link back to the full list")
 	}
-	if !strings.Contains(body, `href="/aliases/new?product=`+itoa(flour.ID)+`"`) {
+	if !strings.Contains(body, `href="/admin/aliases/new?product=`+itoa(flour.ID)+`"`) {
 		t.Fatal("filtered page should link to a new alias for this product")
 	}
 	if strings.Contains(body, `name="alias"`) {
@@ -50,7 +50,7 @@ func TestAliasesPageFiltersByProduct(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodGet, "/aliases", nil)
+	req = httptest.NewRequest(http.MethodGet, "/admin/aliases", nil)
 	srv.Handler().ServeHTTP(rec, req)
 	body = rec.Body.String()
 	if !strings.Contains(body, "Tortowa") || !strings.Contains(body, "Ryz") {
@@ -65,7 +65,7 @@ func TestAliasesPageUnknownProduct(t *testing.T) {
 		t.Fatal(err)
 	}
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/aliases?product=999", nil)
+	req := httptest.NewRequest(http.MethodGet, "/admin/aliases?product=999", nil)
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("status %d", rec.Code)
@@ -84,14 +84,14 @@ func TestCreateAliasStaysOnProductFilter(t *testing.T) {
 		"alias":        {"Mąka tortowa"},
 	}
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/aliases", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/admin/aliases", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status %d", rec.Code)
 	}
 	loc := rec.Header().Get("Location")
-	if loc != "/aliases?product="+itoa(flour.ID) {
+	if loc != "/admin/aliases?product="+itoa(flour.ID) {
 		t.Fatalf("location %q", loc)
 	}
 }

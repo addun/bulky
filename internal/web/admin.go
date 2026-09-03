@@ -25,7 +25,7 @@ func (s *Server) updateAdmin(c *gin.Context) {
 		s.renderAdmin(c, http.StatusInternalServerError, "Could not save settings.")
 		return
 	}
-	c.Redirect(http.StatusSeeOther, "/admin")
+	c.Redirect(http.StatusSeeOther, "/admin/settings")
 }
 
 func (s *Server) renderAdmin(c *gin.Context, status int, errMsg string) {
@@ -35,7 +35,7 @@ func (s *Server) renderAdmin(c *gin.Context, status int, errMsg string) {
 		return
 	}
 	c.HTML(status, "admin.html", gin.H{
-		"Page":     s.page("Admin", "", errMsg),
+		"Page":     s.adminPage("Settings", "", errMsg),
 		"OCRModel": model,
 	})
 }

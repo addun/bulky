@@ -5,10 +5,10 @@
   <p class="banner">The reader is off until you set <code>OCR_API_KEY</code> (OpenAI) or <code>OCR_BASE_URL</code> (any OpenAI-compatible vision API, including a local server).</p>
 {{end}}
 {{if not .Model}}
-  <p class="banner">Set the AI model under <a href="/admin">Admin</a> so the reader can run.</p>
+  <p class="banner">Set the AI model under <a href="/admin/settings">Settings</a> so the reader can run.</p>
 {{end}}
 {{if and .Configured .Model}}
-<form class="stack scan-form" method="post" action="/receipts" enctype="multipart/form-data" id="receipt-upload">
+<form class="stack scan-form" method="post" action="/admin/receipts" enctype="multipart/form-data" id="receipt-upload">
   <div class="scan-drop" id="scan-drop">
     <p class="scan-heading">Photo or PDF of the bill</p>
     <p class="hint">Drop a file here, take a photo, or choose one · jpeg, png, webp, gif or pdf · up to 10 MB</p>
@@ -37,12 +37,12 @@
     {{range .Receipts}}
     <li>
       {{if or (eq .Status "ready") (eq .Status "migrated")}}
-      <a class="row" href="/receipts/{{.ID}}">
+      <a class="row" href="/admin/receipts/{{.ID}}">
       {{else}}
       <div class="row">
       {{end}}
         {{if .ImagePath}}
-          <img class="thumb thumb-slip" src="/receipts/{{.ID}}/preview" alt="">
+          <img class="thumb thumb-slip" src="/admin/receipts/{{.ID}}/preview" alt="">
         {{else}}
           <span class="thumb thumb-empty" aria-hidden="true"></span>
         {{end}}

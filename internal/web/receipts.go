@@ -21,7 +21,7 @@ func (s *Server) receipts(c *gin.Context) {
 
 func (s *Server) scanReceipt(c *gin.Context) {
 	if !s.reader.Configured() {
-		c.Redirect(http.StatusSeeOther, "/receipts?error="+url.QueryEscape("Set OCR_API_KEY or OCR_BASE_URL so the reader can run."))
+		c.Redirect(http.StatusSeeOther, "/admin/receipts?error="+url.QueryEscape("Set OCR_API_KEY or OCR_BASE_URL so the reader can run."))
 		return
 	}
 	model, err := s.ocrModel()
@@ -30,7 +30,7 @@ func (s *Server) scanReceipt(c *gin.Context) {
 		return
 	}
 	if model == "" {
-		c.Redirect(http.StatusSeeOther, "/receipts?error="+url.QueryEscape("Set the AI model under Admin so the reader can run."))
+		c.Redirect(http.StatusSeeOther, "/admin/receipts?error="+url.QueryEscape("Set the AI model under Admin so the reader can run."))
 		return
 	}
 	fh, err := pickFormFile(c, "bill", "bill_camera")
@@ -100,7 +100,7 @@ func (s *Server) scanReceipt(c *gin.Context) {
 		s.renderReceipts(c, http.StatusInternalServerError, "Could not save the AI response.")
 		return
 	}
-	c.Redirect(http.StatusSeeOther, "/receipts/"+itoa(receipt.ID))
+	c.Redirect(http.StatusSeeOther, "/admin/receipts/"+itoa(receipt.ID))
 }
 
 func (s *Server) showReceipt(c *gin.Context) {
@@ -213,7 +213,7 @@ func (s *Server) confirmReceipt(c *gin.Context) {
 		s.renderReceiptReview(c, http.StatusUnprocessableEntity, view, products, units, companies, msg)
 		return
 	}
-	c.Redirect(http.StatusSeeOther, "/receipts/"+itoa(id)+"?imported="+itoa(int64(res.Purchases)))
+	c.Redirect(http.StatusSeeOther, "/admin/receipts/"+itoa(id)+"?imported="+itoa(int64(res.Purchases)))
 }
 
 func (s *Server) editReceipt(c *gin.Context) {
@@ -232,7 +232,7 @@ func (s *Server) editReceipt(c *gin.Context) {
 		return
 	}
 	if receipt.Status != store.ReceiptMigrated {
-		c.Redirect(http.StatusSeeOther, "/receipts/"+itoa(id))
+		c.Redirect(http.StatusSeeOther, "/admin/receipts/"+itoa(id))
 		return
 	}
 	s.renderReceiptEdit(c, http.StatusOK, receipt, "", 0, c.Query("error"))
@@ -254,7 +254,7 @@ func (s *Server) updateReceiptVisit(c *gin.Context) {
 		return
 	}
 	if receipt.Status != store.ReceiptMigrated {
-		c.Redirect(http.StatusSeeOther, "/receipts/"+itoa(id))
+		c.Redirect(http.StatusSeeOther, "/admin/receipts/"+itoa(id))
 		return
 	}
 	boughtOn, err := store.NormalizeBoughtOn(store.JoinBoughtOn(c.PostForm("bought_on"), c.PostForm("bought_at")))
@@ -272,13 +272,13 @@ func (s *Server) updateReceiptVisit(c *gin.Context) {
 		if errors.Is(err, store.ErrInvalidCompany) {
 			msg = "Choose a company."
 		} else if errors.Is(err, store.ErrReceiptNotReady) {
-			c.Redirect(http.StatusSeeOther, "/receipts/"+itoa(id))
+			c.Redirect(http.StatusSeeOther, "/admin/receipts/"+itoa(id))
 			return
 		}
 		s.renderReceiptEdit(c, http.StatusUnprocessableEntity, receipt, boughtOn, companyID, msg)
 		return
 	}
-	c.Redirect(http.StatusSeeOther, "/receipts/"+itoa(id))
+	c.Redirect(http.StatusSeeOther, "/admin/receipts/"+itoa(id))
 }
 
 func (s *Server) receiptPreview(c *gin.Context) {
@@ -317,7 +317,7 @@ func (s *Server) renderReceipts(c *gin.Context, status int, errMsg string) {
 		return
 	}
 	c.HTML(status, "receipts.html", gin.H{
-		"Page":       s.page("Receipts", "", errMsg),
+		"Page":       s.adminPage("Receipts", "", errMsg),
 		"Configured": s.reader.Configured(),
 		"Model":      model,
 		"Receipts":   list,
@@ -326,7 +326,7 @@ func (s *Server) renderReceipts(c *gin.Context, status int, errMsg string) {
 
 func (s *Server) renderReceiptReview(c *gin.Context, status int, view receiptView, products []store.ProductListItem, units []store.Unit, companies []store.Company, errMsg string) {
 	c.HTML(status, "receipt_review.html", gin.H{
-		"Page":      s.page("Confirm bill", "", errMsg),
+		"Page":      s.adminPage("Confirm bill", "", errMsg),
 		"View":      view,
 		"Products":  products,
 		"Units":     units,
@@ -352,7 +352,7 @@ func (s *Server) renderReceiptShow(c *gin.Context, status int, receipt store.Rec
 	boughtOn = store.JoinBoughtOn(boughtOn, boughtAt)
 	imported := int(formInt64Query(c, "imported"))
 	c.HTML(status, "receipt_show.html", gin.H{
-		"Page":      s.page("Receipt", "", errMsg),
+		"Page":      s.adminPage("Receipt", "", errMsg),
 		"Receipt":   receipt,
 		"Purchases": buys,
 		"BoughtOn":  boughtOn,
@@ -387,7 +387,7 @@ func (s *Server) renderReceiptEdit(c *gin.Context, status int, receipt store.Rec
 	}
 	boughtOn = store.JoinBoughtOn(boughtOn, boughtAt)
 	c.HTML(status, "receipt_edit.html", gin.H{
-		"Page":      s.page("Edit visit", "", errMsg),
+		"Page":      s.adminPage("Edit visit", "", errMsg),
 		"Receipt":   receipt,
 		"BoughtOn":  boughtOn,
 		"BoughtAt":  boughtAt,

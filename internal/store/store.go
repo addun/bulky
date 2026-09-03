@@ -223,6 +223,20 @@ func (s *Store) ImagesDir() string {
 	return filepath.Join(s.dataDir, "images")
 }
 
+// ImmediateTx runs fn in one SQLite transaction. The pool is a single
+// connection, so later queries on Store use the same txn.
+func (s *Store) ImmediateTx(fn func() error) error {
+	if _, err := s.db.Exec("BEGIN IMMEDIATE"); err != nil {
+		return err
+	}
+	if err := fn(); err != nil {
+		_, _ = s.db.Exec("ROLLBACK")
+		return err
+	}
+	_, err := s.db.Exec("COMMIT")
+	return err
+}
+
 func nowRFC3339() string {
 	return time.Now().UTC().Format(time.RFC3339)
 }

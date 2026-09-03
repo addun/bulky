@@ -3,7 +3,7 @@
 <p class="banner">Saved {{.Imported}} purchase{{if ne .Imported 1}}s{{end}} from the bill.</p>
 {{end}}
 <div class="toolbar">
-  <form class="search" method="get" action="/">
+  <form class="search" method="get" action="/admin">
     <label class="sr" for="q">Search</label>
     <input id="q" name="q" type="search" value="{{.Page.Query}}" placeholder="Find a product" autocomplete="off">
     <button type="submit" class="btn btn-tag">Search</button>
@@ -16,14 +16,14 @@
       <p>No product matches “{{.Page.Query}}”.</p>
     {{else}}
       <p>Nothing on the list yet.</p>
-      <p><a href="/products/new">Add the first product you buy in bulk</a>, or <a href="/receipts">scan a bill</a>.</p>
+      <p><a href="/admin/products/new">Add the first product you buy in bulk</a>, or <a href="/admin/receipts">scan a bill</a>.</p>
     {{end}}
   </div>
 {{else}}
   <ul class="ledger">
     {{range .Products}}
     <li>
-      <a class="row" href="/products/{{.ID}}">
+      <a class="row" href="/admin/products/{{.ID}}">
         {{if .ImagePath.Valid}}
           <img class="thumb" src="/images/{{.ImagePath.String}}" alt="">
         {{else}}

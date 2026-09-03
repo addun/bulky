@@ -1,9 +1,9 @@
 {{template "header" .}}
 <h1>{{if .New}}Add new purchase{{else if .Purchase.IsPrice}}Edit price{{else}}Edit purchase{{end}}</h1>
 <p class="lede">{{.Product.Name}}</p>
-<form class="stack" method="post" action="{{if .New}}/products/{{.Product.ID}}/purchases{{else}}/purchases/{{.Purchase.ID}}{{end}}" data-pack-form data-pack-unit="{{.Product.UnitName}}" data-pack-symbol="{{.Page.Symbol}}" data-conversions="{{.Product.PackConversionsJSON}}">
+<form class="stack" method="post" action="{{if .New}}/admin/products/{{.Product.ID}}/purchases{{else}}/admin/purchases/{{.Purchase.ID}}{{end}}" data-pack-form data-pack-unit="{{.Product.UnitName}}" data-pack-symbol="{{.Page.Symbol}}" data-conversions="{{.Product.PackConversionsJSON}}">
   {{if and (not .New) .Purchase.ReceiptID}}
-  <p class="meta">From <a href="/receipts/{{.Purchase.ReceiptID}}">receipt {{.Purchase.ReceiptID}}</a></p>
+  <p class="meta">From <a href="/admin/receipts/{{.Purchase.ReceiptID}}">receipt {{.Purchase.ReceiptID}}</a></p>
   {{end}}
 
   <fieldset class="form-group">
@@ -36,7 +36,7 @@
       </select>
     </label>
     {{if not .Companies}}
-      <p class="hint">No companies yet. You can still save, or <a href="/companies/new">add a company</a> first.</p>
+      <p class="hint">No companies yet. You can still save, or <a href="/admin/companies/new">add a company</a> first.</p>
     {{end}}
   </fieldset>
 
@@ -44,7 +44,7 @@
   <div class="form-actions">
     <button type="submit" class="btn btn-tag" name="kind" value="purchase">Save purchase</button>
     <button type="submit" class="btn btn-plain" name="kind" value="price">Log price</button>
-    <a href="/products/{{.Product.ID}}">Cancel</a>
+    <a href="/admin/products/{{.Product.ID}}">Cancel</a>
   </div>
   {{else}}
   <fieldset class="form-group">
@@ -54,7 +54,7 @@
   </fieldset>
   <div class="form-actions">
     <button type="submit" class="btn btn-tag">Save</button>
-    <a href="/products/{{.Product.ID}}">Cancel</a>
+    <a href="/admin/products/{{.Product.ID}}">Cancel</a>
   </div>
   {{end}}
 </form>

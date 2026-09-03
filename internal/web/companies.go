@@ -18,7 +18,7 @@ func (s *Server) companies(c *gin.Context) {
 		return
 	}
 	c.HTML(http.StatusOK, "companies.html", gin.H{
-		"Page":      s.page("Companies", "", c.Query("error")),
+		"Page":      s.adminPage("Companies", "", c.Query("error")),
 		"Companies": list,
 	})
 }
@@ -44,7 +44,7 @@ func (s *Server) createCompany(c *gin.Context) {
 		c.Redirect(http.StatusSeeOther, next)
 		return
 	}
-	c.Redirect(http.StatusSeeOther, "/companies")
+	c.Redirect(http.StatusSeeOther, "/admin/companies")
 }
 
 func (s *Server) editCompany(c *gin.Context) {
@@ -63,7 +63,7 @@ func (s *Server) editCompany(c *gin.Context) {
 		return
 	}
 	c.HTML(http.StatusOK, "company_form.html", gin.H{
-		"Page":    s.page("Edit company", "", ""),
+		"Page":    s.adminPage("Edit company", "", ""),
 		"Company": co,
 		"New":     false,
 	})
@@ -84,7 +84,7 @@ func (s *Server) updateCompany(c *gin.Context) {
 	form := store.Company{ID: id, Name: name, StreetName: street, BuildingNumber: building, ApartmentNumber: apartment, PostalCode: postal, City: city}
 	if msg := companyFormError(err); msg != "" {
 		c.HTML(http.StatusUnprocessableEntity, "company_form.html", gin.H{
-			"Page":    s.page("Edit company", "", msg),
+			"Page":    s.adminPage("Edit company", "", msg),
 			"Company": form,
 			"New":     false,
 		})
@@ -94,7 +94,7 @@ func (s *Server) updateCompany(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "could not save company")
 		return
 	}
-	c.Redirect(http.StatusSeeOther, "/companies")
+	c.Redirect(http.StatusSeeOther, "/admin/companies")
 }
 
 func (s *Server) confirmDeleteCompany(c *gin.Context) {
@@ -113,15 +113,15 @@ func (s *Server) confirmDeleteCompany(c *gin.Context) {
 		return
 	}
 	if co.PurchaseCount > 0 {
-		c.Redirect(http.StatusSeeOther, "/companies?error="+url.QueryEscape("Cannot delete “"+co.Name+"” while a purchase still uses it."))
+		c.Redirect(http.StatusSeeOther, "/admin/companies?error="+url.QueryEscape("Cannot delete “"+co.Name+"” while a purchase still uses it."))
 		return
 	}
 	c.HTML(http.StatusOK, "confirm.html", gin.H{
-		"Page":    s.page("Delete company", "", ""),
+		"Page":    s.adminPage("Delete company", "", ""),
 		"Title":   "Delete company “" + co.Name + "”?",
 		"Body":    "This only removes the company from the list. No purchases use it.",
-		"Action":  "/companies/" + itoa(id) + "/delete",
-		"Cancel":  "/companies",
+		"Action":  "/admin/companies/" + itoa(id) + "/delete",
+		"Cancel":  "/admin/companies",
 		"Confirm": "Delete company",
 	})
 }
@@ -138,14 +138,14 @@ func (s *Server) deleteCompany(c *gin.Context) {
 		return
 	}
 	if errors.Is(err, store.ErrCompanyInUse) {
-		c.Redirect(http.StatusSeeOther, "/companies?error="+url.QueryEscape("Cannot delete a company while a purchase still uses it."))
+		c.Redirect(http.StatusSeeOther, "/admin/companies?error="+url.QueryEscape("Cannot delete a company while a purchase still uses it."))
 		return
 	}
 	if err != nil {
 		c.String(http.StatusInternalServerError, "could not delete company")
 		return
 	}
-	c.Redirect(http.StatusSeeOther, "/companies")
+	c.Redirect(http.StatusSeeOther, "/admin/companies")
 }
 
 func (s *Server) resolveCompanyForm(c *gin.Context) (int64, string) {
@@ -198,10 +198,10 @@ func receiptReturnPath(s string) string {
 		return ""
 	}
 	path := u.Path
-	if !strings.HasPrefix(path, "/receipts/") {
+	if !strings.HasPrefix(path, "/admin/receipts/") {
 		return ""
 	}
-	id := strings.TrimPrefix(path, "/receipts/")
+	id := strings.TrimPrefix(path, "/admin/receipts/")
 	if id == "" || strings.ContainsAny(id, "/.") {
 		return ""
 	}
@@ -210,7 +210,7 @@ func receiptReturnPath(s string) string {
 			return ""
 		}
 	}
-	return "/receipts/" + id
+	return "/admin/receipts/" + id
 }
 
 func companyFormError(err error) string {
@@ -246,7 +246,7 @@ func (s *Server) renderCompanyForm(c *gin.Context, status int, co store.Company,
 		title = "Add company"
 	}
 	c.HTML(status, "company_form.html", gin.H{
-		"Page":    s.page(title, "", errMsg),
+		"Page":    s.adminPage(title, "", errMsg),
 		"Company": co,
 		"New":     isNew,
 		"Next":    next,

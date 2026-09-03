@@ -3,7 +3,7 @@
 <p class="lede">Date and company for this bill.</p>
 <p class="hint">Saving applies these values to every product assigned to this receipt.</p>
 
-<form class="stack" method="post" action="/receipts/{{.Receipt.ID}}/edit">
+<form class="stack" method="post" action="/admin/receipts/{{.Receipt.ID}}/edit">
   <fieldset class="form-group">
     <legend>When</legend>
     <div class="form-row">
@@ -23,12 +23,12 @@
         {{end}}
       </select>
     </label>
-    {{if not .Companies}}<p class="hint">No companies yet. You can still save, or <a href="/companies/new">add a company</a> first.</p>{{end}}
+    {{if not .Companies}}<p class="hint">No companies yet. You can still save, or <a href="/admin/companies/new">add a company</a> first.</p>{{end}}
   </fieldset>
 
   <div class="actions">
     <button type="submit" class="btn btn-tag">Save visit</button>
-    <a href="/receipts/{{.Receipt.ID}}">Cancel</a>
+    <a href="/admin/receipts/{{.Receipt.ID}}">Cancel</a>
   </div>
 </form>
 {{template "footer" .}}

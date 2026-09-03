@@ -1,6 +1,6 @@
 {{template "header" .}}
-<h1>Admin</h1>
-<form class="stack" method="post" action="/admin">
+<h1>Settings</h1>
+<form class="stack" method="post" action="/admin/settings">
   <label>Model <input name="ocr_model" required value="{{.OCRModel}}" autofocus></label>
   <p class="hint"><a href="https://developers.openai.com/api/docs/models/all" target="_blank" rel="noopener">All models</a></p>
   <div class="form-actions">
