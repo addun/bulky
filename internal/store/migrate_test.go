@@ -19,7 +19,7 @@ func TestOpenFreshSeedsAndVersions(t *testing.T) {
 	defer s.Close()
 
 	assertCurrentSchema(t, s.db)
-	assertGooseVersion(t, s.db, 9)
+	assertGooseVersion(t, s.db, 10)
 
 	units, err := s.ListUnits()
 	if err != nil {
@@ -54,7 +54,7 @@ func TestOpenSecondBootNoops(t *testing.T) {
 	defer s.Close()
 
 	assertCurrentSchema(t, s.db)
-	assertGooseVersion(t, s.db, 9)
+	assertGooseVersion(t, s.db, 10)
 
 	units, err := s.ListUnits()
 	if err != nil {
@@ -123,7 +123,7 @@ VALUES (1, '2024-01-02', '10', '20.50', '2024-01-02T00:00:00Z');
 	defer s.Close()
 
 	assertCurrentSchema(t, s.db)
-	assertGooseVersion(t, s.db, 9)
+	assertGooseVersion(t, s.db, 10)
 
 	var n int
 	if err := s.db.QueryRow(`SELECT COUNT(*) FROM purchases`).Scan(&n); err != nil {
@@ -185,7 +185,7 @@ func TestOpenAddsKindWhenGooseAlreadyAtReceipts(t *testing.T) {
 	if !hasColumn(t, s.db, "purchases", "kind") {
 		t.Fatal("purchases missing kind after reopen")
 	}
-	assertGooseVersion(t, s.db, 9)
+	assertGooseVersion(t, s.db, 10)
 	if _, err := s.ListProducts(""); err != nil {
 		t.Fatalf("ListProducts: %v", err)
 	}
@@ -230,7 +230,7 @@ func TestOpenRenamesRecipesToReceipts(t *testing.T) {
 	defer s.Close()
 
 	assertCurrentSchema(t, s.db)
-	assertGooseVersion(t, s.db, 9)
+	assertGooseVersion(t, s.db, 10)
 }
 
 func TestPurchaseCompanyOptional(t *testing.T) {
@@ -381,7 +381,7 @@ func assertCurrentSchema(t *testing.T, db *sql.DB) {
 	if tableExists(t, db, "ocr_scans") || tableExists(t, db, "ocr_scan_lines") || tableExists(t, db, "recipes") {
 		t.Fatal("ocr_scans and recipes tables should be gone")
 	}
-	for _, col := range []string{"image_path", "raw_response", "status", "created_at"} {
+	for _, col := range []string{"image_path", "raw_response", "status", "error_message", "created_at"} {
 		if !hasColumn(t, db, "receipts", col) {
 			t.Fatalf("receipts missing %s", col)
 		}
