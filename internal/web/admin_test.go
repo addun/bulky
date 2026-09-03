@@ -23,13 +23,13 @@ func TestAdminPageAndSave(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/admin", nil)
+	req := httptest.NewRequest(http.MethodGet, "/admin/settings", nil)
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d", rec.Code)
 	}
 	body := rec.Body.String()
-	if !strings.Contains(body, "<h1>Admin</h1>") {
+	if !strings.Contains(body, "<h1>Settings</h1>") {
 		t.Fatal("missing heading")
 	}
 	if !strings.Contains(body, `name="ocr_model"`) {
@@ -47,18 +47,18 @@ func TestAdminPageAndSave(t *testing.T) {
 
 	form := url.Values{"ocr_model": {"gpt-4o-mini"}}
 	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodPost, "/admin", strings.NewReader(form.Encode()))
+	req = httptest.NewRequest(http.MethodPost, "/admin/settings", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("save status %d", rec.Code)
 	}
-	if rec.Header().Get("Location") != "/admin" {
+	if rec.Header().Get("Location") != "/admin/settings" {
 		t.Fatalf("location %s", rec.Header().Get("Location"))
 	}
 
 	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodGet, "/admin", nil)
+	req = httptest.NewRequest(http.MethodGet, "/admin/settings", nil)
 	srv.Handler().ServeHTTP(rec, req)
 	body = rec.Body.String()
 	if !strings.Contains(body, `value="gpt-4o-mini"`) {
@@ -78,7 +78,7 @@ func TestAdminRejectsEmptyModel(t *testing.T) {
 	}
 	form := url.Values{"ocr_model": {"  "}}
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/admin", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/admin/settings", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnprocessableEntity {
@@ -107,7 +107,7 @@ func TestScanReceiptRequiresModel(t *testing.T) {
 		t.Fatal(err)
 	}
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/receipts", nil)
+	req := httptest.NewRequest(http.MethodPost, "/admin/receipts", nil)
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status %d", rec.Code)

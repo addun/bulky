@@ -40,7 +40,7 @@ func searchScore(q, l string) float64 {
 		return 1
 	}
 	if strings.Contains(l, q) {
-		return containScore
+		return substringScore(q, l)
 	}
 	best := similarity(q, l)
 	for _, tok := range strings.Fields(l) {
@@ -65,6 +65,18 @@ func searchScore(q, l string) float64 {
 		return 0
 	}
 	return best
+}
+
+func substringScore(q, l string) float64 {
+	nl := runeLen(l)
+	if nl == 0 {
+		return 0
+	}
+	cover := float64(runeLen(q)) / float64(nl)
+	if cover > 1 {
+		cover = 1
+	}
+	return containScore + (1-containScore)*cover
 }
 
 func stripTrailingSize(s string) string {

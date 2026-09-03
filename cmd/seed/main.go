@@ -13,13 +13,29 @@ import (
 func main() {
 	dataDir := flag.String("data-dir", getenv("DATA_DIR", "./data"), "SQLite directory (same as cmd/bulkly)")
 	seed := flag.Uint64("seed", 0, "gofakeit seed; 0 picks a random one and prints it")
-	companies := flag.Int("companies", 8, "fake companies to insert")
-	products := flag.Int("products", 24, "fake products to insert")
-	purchases := flag.Int("purchases", 80, "fake purchases and prices to insert")
+	companies := flag.Int("companies", 16, "fake companies to insert")
+	products := flag.Int("products", 100, "fake products to insert")
+	history := flag.Int("history-per-product", 250, "fake purchases and prices per product")
+	clampOnly := flag.Bool("clamp-prices", false, "rescale existing unit prices into 1–100 zł without inserting")
 	flag.Parse()
 
-	if *companies < 0 || *products < 1 || *purchases < 0 {
-		log.Fatal("need at least 1 product; companies and purchases must be >= 0")
+	st, err := store.Open(*dataDir)
+	if err != nil {
+		log.Fatalf("open store: %v", err)
+	}
+	defer st.Close()
+
+	if *clampOnly {
+		n, err := clampExistingUnitPrices(st)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("rescaled %d purchases into 1–100 zł in %s\n", n, *dataDir)
+		return
+	}
+
+	if *companies < 0 || *products < 1 || *history < 0 {
+		log.Fatal("need at least 1 product; companies and history-per-product must be >= 0")
 	}
 
 	usedSeed := *seed
@@ -28,16 +44,10 @@ func main() {
 	}
 	fmt.Printf("gofakeit seed: %d\n", usedSeed)
 
-	st, err := store.Open(*dataDir)
-	if err != nil {
-		log.Fatalf("open store: %v", err)
-	}
-	defer st.Close()
-
 	stats, err := fakeSeed(st, gofakeit.New(usedSeed), fakeConfig{
-		Companies: *companies,
-		Products:  *products,
-		Purchases: *purchases,
+		Companies:         *companies,
+		Products:          *products,
+		HistoryPerProduct: *history,
 	})
 	if err != nil {
 		log.Fatal(err)

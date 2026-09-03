@@ -1,6 +1,6 @@
 {{template "header" .}}
 <h1>{{if .New}}Add product{{else}}Edit {{.Product.Name}}{{end}}</h1>
-<form class="stack" method="post" action="{{if .New}}/products{{else}}/products/{{.Product.ID}}{{end}}" enctype="multipart/form-data" id="product-form">
+<form class="stack" method="post" action="{{if .New}}/admin/products{{else}}/admin/products/{{.Product.ID}}{{end}}" enctype="multipart/form-data" id="product-form">
   <label>
     Name
     <input name="name" required value="{{.Product.Name}}" autofocus>
@@ -16,11 +16,11 @@
     </select>
   </label>
   {{if not .Units}}
-    <p class="hint">No units yet. <a href="/units">Add a unit</a> first.</p>
+    <p class="hint">No units yet. <a href="/admin/units">Add a unit</a> first.</p>
   {{end}}
   {{else}}
   <input type="hidden" name="unit_id" value="{{.Product.UnitID}}">
-  <p>Purchase unit <strong data-locked-primary-unit>{{.Product.UnitName}}</strong> · <a href="/products/{{.Product.ID}}/change-unit">Change unit</a></p>
+  <p>Purchase unit <strong data-locked-primary-unit>{{.Product.UnitName}}</strong> · <a href="/admin/products/{{.Product.ID}}/change-unit">Change unit</a></p>
   {{end}}
 
   <fieldset class="form-group">
@@ -57,7 +57,7 @@
   {{end}}
   <div class="actions">
     <button type="submit" class="btn btn-tag">{{if .New}}Save product{{else}}Save changes{{end}}</button>
-    <a href="{{if .New}}/{{else}}/products/{{.Product.ID}}{{end}}">Cancel</a>
+    <a href="{{if .New}}/admin{{else}}/admin/products/{{.Product.ID}}{{end}}">Cancel</a>
   </div>
 </form>
 <template id="extra-unit-template">

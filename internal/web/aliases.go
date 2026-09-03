@@ -41,7 +41,7 @@ func (s *Server) aliases(c *gin.Context) {
 		formID = filter.ID
 	}
 	c.HTML(http.StatusOK, "aliases.html", gin.H{
-		"Page":         s.page("Aliases", "", c.Query("error")),
+		"Page":         s.adminPage("Aliases", "", c.Query("error")),
 		"Aliases":      list,
 		"Filter":       filter,
 		"ProductQuery": aliasesQuerySuffix(formID),
@@ -180,12 +180,12 @@ func (s *Server) confirmDeleteAlias(c *gin.Context) {
 		return
 	}
 	from := formInt64Query(c, "product")
-	action := "/aliases/" + itoa(id) + "/delete"
+	action := "/admin/aliases/" + itoa(id) + "/delete"
 	if q := aliasesQuerySuffix(from); q != "" {
 		action += q
 	}
 	c.HTML(http.StatusOK, "confirm.html", gin.H{
-		"Page":    s.page("Delete alias", "", ""),
+		"Page":    s.adminPage("Delete alias", "", ""),
 		"Title":   "Delete alias “" + a.Alias + "”?",
 		"Body":    "This only removes the alternate name. The product stays.",
 		"Action":  action,
@@ -255,7 +255,7 @@ func (s *Server) renderAliasForm(c *gin.Context, status int, a store.ProductAlia
 		title = "Add alias"
 	}
 	c.HTML(status, "alias_form.html", gin.H{
-		"Page":          s.page(title, "", errMsg),
+		"Page":          s.adminPage(title, "", errMsg),
 		"Alias":         a,
 		"Products":      products,
 		"Companies":     companies,
@@ -268,9 +268,9 @@ func (s *Server) renderAliasForm(c *gin.Context, status int, a store.ProductAlia
 
 func aliasesPath(productID int64) string {
 	if productID <= 0 {
-		return "/aliases"
+		return "/admin/aliases"
 	}
-	return "/aliases?product=" + itoa(productID)
+	return "/admin/aliases?product=" + itoa(productID)
 }
 
 func aliasesQuerySuffix(productID int64) string {

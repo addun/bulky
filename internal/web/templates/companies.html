@@ -1,7 +1,7 @@
 {{template "header" .}}
 <div class="page-head">
   <h1>Companies</h1>
-  <a class="btn btn-tag" href="/companies/new">Add company</a>
+  <a class="btn btn-tag" href="/admin/companies/new">Add company</a>
 </div>
 
 {{if not .Companies}}
@@ -16,9 +16,9 @@
       </span>
       <span class="meta">{{.PurchaseCount}} purchase{{if ne .PurchaseCount 1}}s{{end}}</span>
       <span class="tight">
-        <a href="/companies/{{.ID}}/edit">Edit</a>
+        <a href="/admin/companies/{{.ID}}/edit">Edit</a>
         {{if eq .PurchaseCount 0}}
-          <a class="danger" href="/companies/{{.ID}}/delete">Delete</a>
+          <a class="danger" href="/admin/companies/{{.ID}}/delete">Delete</a>
         {{end}}
       </span>
     </li>

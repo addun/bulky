@@ -8,12 +8,12 @@
 <div class="receipt-layout">
   {{if .View.ImagePath}}
   <figure class="receipt-slip">
-    <img src="/receipts/{{.View.ReceiptID}}/preview" alt="Uploaded bill">
+    <img src="/admin/receipts/{{.View.ReceiptID}}/preview" alt="Uploaded bill">
     <figcaption class="hint">The bill you uploaded</figcaption>
   </figure>
   {{end}}
 
-  <form class="stack" method="post" action="/receipts/{{.View.ReceiptID}}" id="receipt-review">
+  <form class="stack" method="post" action="/admin/receipts/{{.View.ReceiptID}}" id="receipt-review">
     <input type="hidden" name="receipt_id" value="{{.View.ReceiptID}}">
     <input type="hidden" name="image_path" value="{{.View.ImagePath}}">
     <input type="hidden" name="notes" value="{{.View.Notes}}">
@@ -36,7 +36,7 @@
       </label>
       {{if .View.AddressLine}}<p class="hint">Address on the bill: {{.View.AddressLine}}</p>{{end}}
       {{if .View.CreateCompanyURL}}<p><a class="btn btn-ghost" href="{{.View.CreateCompanyURL}}">Create company</a></p>{{end}}
-      {{if and (not .Companies) (not .View.CreateCompanyURL)}}<p class="hint">No companies yet. You can still save, or <a href="/companies/new">add a company</a> first.</p>{{end}}
+      {{if and (not .Companies) (not .View.CreateCompanyURL)}}<p class="hint">No companies yet. You can still save, or <a href="/admin/companies/new">add a company</a> first.</p>{{end}}
       <input type="hidden" name="company_name" value="{{.View.CompanyName}}">
       <input type="hidden" name="street_name" value="{{.View.StreetName}}">
       <input type="hidden" name="building_number" value="{{.View.BuildingNumber}}">

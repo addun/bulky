@@ -73,8 +73,8 @@ func (v receiptView) CreateCompanyURL() string {
 	set("apartment_number", v.ApartmentNumber)
 	set("postal_code", v.PostalCode)
 	set("city", v.City)
-	q.Set("next", "/receipts/"+strconv.FormatInt(v.ReceiptID, 10))
-	return "/companies/new?" + q.Encode()
+	q.Set("next", "/admin/receipts/"+strconv.FormatInt(v.ReceiptID, 10))
+	return "/admin/companies/new?" + q.Encode()
 }
 
 type receiptLineView struct {

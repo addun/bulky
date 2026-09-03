@@ -1,10 +1,10 @@
 {{template "header" .}}
 <h1>Rename unit</h1>
-<form class="stack" method="post" action="/units/{{.Unit.ID}}">
+<form class="stack" method="post" action="/admin/units/{{.Unit.ID}}">
   <label>Name <input name="name" required value="{{.Unit.Name}}" autofocus></label>
   <div class="actions">
     <button type="submit" class="btn btn-tag">Save name</button>
-    <a href="/units">Cancel</a>
+    <a href="/admin/units">Cancel</a>
   </div>
 </form>
 {{template "footer" .}}

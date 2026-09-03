@@ -21,7 +21,7 @@ func (s *Server) index(c *gin.Context) {
 	errMsg := c.Query("error")
 	imported, _ := strconv.Atoi(c.Query("imported"))
 	c.HTML(http.StatusOK, "index.html", gin.H{
-		"Page":     s.page("Products", q, errMsg),
+		"Page":     s.adminPage("Products", q, errMsg),
 		"Products": items,
 		"Imported": imported,
 	})
@@ -34,7 +34,7 @@ func (s *Server) newProduct(c *gin.Context) {
 		return
 	}
 	c.HTML(http.StatusOK, "product_form.html", gin.H{
-		"Page":    s.page("Add product", "", ""),
+		"Page":    s.adminPage("Add product", "", ""),
 		"Units":   units,
 		"Product": store.Product{},
 		"New":     true,
@@ -62,7 +62,7 @@ func (s *Server) editProduct(c *gin.Context) {
 		return
 	}
 	c.HTML(http.StatusOK, "product_form.html", gin.H{
-		"Page":    s.page("Edit "+p.Name, "", ""),
+		"Page":    s.adminPage("Edit "+p.Name, "", ""),
 		"Units":   units,
 		"Product": p,
 		"New":     false,
@@ -87,7 +87,7 @@ func (s *Server) saveProduct(c *gin.Context, id int64) {
 	units, _ := s.store.ListUnits()
 	renderErr := func(msg string, p store.Product) {
 		c.HTML(http.StatusUnprocessableEntity, "product_form.html", gin.H{
-			"Page":    s.page(ifThen(id == 0, "Add product", "Edit product"), "", msg),
+			"Page":    s.adminPage(ifThen(id == 0, "Add product", "Edit product"), "", msg),
 			"Units":   units,
 			"Product": p,
 			"New":     id == 0,
@@ -146,7 +146,7 @@ func (s *Server) saveProduct(c *gin.Context, id int64) {
 			renderErr("Could not save the product.", draft)
 			return
 		}
-		c.Redirect(http.StatusSeeOther, "/products/"+itoa(p.ID))
+		c.Redirect(http.StatusSeeOther, "/admin/products/"+itoa(p.ID))
 		return
 	}
 
@@ -185,7 +185,7 @@ func (s *Server) saveProduct(c *gin.Context, id int64) {
 	if clearImage && imgName == "" && cur.ImagePath.Valid {
 		s.deleteImage(cur.ImagePath.String)
 	}
-	c.Redirect(http.StatusSeeOther, "/products/"+itoa(id))
+	c.Redirect(http.StatusSeeOther, "/admin/products/"+itoa(id))
 }
 
 func parseExtraUnits(c *gin.Context, purchaseUnitID int64) ([]store.ProductConversion, string) {
@@ -277,7 +277,7 @@ func (s *Server) changeProductUnit(c *gin.Context) {
 		s.renderChangeUnit(c, http.StatusUnprocessableEntity, p, unitID, msg)
 		return
 	}
-	c.Redirect(http.StatusSeeOther, "/products/"+itoa(id))
+	c.Redirect(http.StatusSeeOther, "/admin/products/"+itoa(id))
 }
 
 func (s *Server) renderChangeUnit(c *gin.Context, status int, p store.Product, newUnitID int64, errMsg string) {
@@ -287,7 +287,7 @@ func (s *Server) renderChangeUnit(c *gin.Context, status int, p store.Product, n
 		return
 	}
 	c.HTML(status, "product_change_unit.html", gin.H{
-		"Page":      s.page("Change unit for "+p.Name, "", errMsg),
+		"Page":      s.adminPage("Change unit for "+p.Name, "", errMsg),
 		"Product":   p,
 		"NewUnitID": newUnitID,
 		"History":   len(buys),
@@ -321,7 +321,7 @@ func (s *Server) showProduct(c *gin.Context) {
 	}
 	errMsg := c.Query("error")
 	c.HTML(http.StatusOK, "product_show.html", gin.H{
-		"Page":        s.page(p.Name, "", errMsg),
+		"Page":        s.adminPage(p.Name, "", errMsg),
 		"Product":     p,
 		"Purchases":   purchases,
 		"CompanyByID": companiesByID(companies),
@@ -401,7 +401,7 @@ func (s *Server) mergeProductConfirm(c *gin.Context) {
 		return
 	}
 	c.HTML(http.StatusOK, "product_merge_confirm.html", gin.H{
-		"Page": s.page("Merge "+plan.From.Name, "", ""),
+		"Page": s.adminPage("Merge "+plan.From.Name, "", ""),
 		"Plan": plan,
 	})
 }
@@ -429,7 +429,7 @@ func (s *Server) mergeProduct(c *gin.Context) {
 	keeper, img, err := s.store.MergeProducts(intoID, id)
 	if err == nil {
 		s.deleteImage(img)
-		c.Redirect(http.StatusSeeOther, "/products/"+itoa(keeper.ID))
+		c.Redirect(http.StatusSeeOther, "/admin/products/"+itoa(keeper.ID))
 		return
 	}
 	msg := mergeFormError(err)
@@ -441,7 +441,7 @@ func (s *Server) mergeProduct(c *gin.Context) {
 }
 
 func mergeWithPath(fromID, intoID int64) string {
-	return "/products/" + itoa(fromID) + "/merge-with/" + itoa(intoID) + "/"
+	return "/admin/products/" + itoa(fromID) + "/merge-with/" + itoa(intoID) + "/"
 }
 
 func mergeFormError(err error) string {
@@ -474,7 +474,7 @@ func (s *Server) renderMergeForm(c *gin.Context, status int, p store.Product, in
 		targets = append(targets, it)
 	}
 	c.HTML(status, "product_merge.html", gin.H{
-		"Page":    s.page("Merge "+p.Name, "", errMsg),
+		"Page":    s.adminPage("Merge "+p.Name, "", errMsg),
 		"Product": p,
 		"Targets": targets,
 		"IntoID":  intoID,
@@ -497,11 +497,11 @@ func (s *Server) confirmDeleteProduct(c *gin.Context) {
 		return
 	}
 	c.HTML(http.StatusOK, "confirm.html", gin.H{
-		"Page":    s.page("Delete "+p.Name, "", ""),
+		"Page":    s.adminPage("Delete "+p.Name, "", ""),
 		"Title":   "Delete " + p.Name + "?",
 		"Body":    "This removes the product and every purchase and price recorded for it. The unit stays.",
-		"Action":  "/products/" + itoa(id) + "/delete",
-		"Cancel":  "/products/" + itoa(id),
+		"Action":  "/admin/products/" + itoa(id) + "/delete",
+		"Cancel":  "/admin/products/" + itoa(id),
 		"Confirm": "Delete product",
 	})
 }
@@ -522,7 +522,7 @@ func (s *Server) deleteProduct(c *gin.Context) {
 		return
 	}
 	s.deleteImage(img)
-	c.Redirect(http.StatusSeeOther, "/")
+	c.Redirect(http.StatusSeeOther, "/admin")
 }
 
 func ifThen[T any](cond bool, a, b T) T {

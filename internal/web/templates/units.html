@@ -2,7 +2,7 @@
 <h1>Units</h1>
 <p class="lede">Products pick a purchase unit from this list. Seeded with kg and g; add anything else you need. On a product you can also add extra units so a bill printed in another unit still matches.</p>
 
-<form class="inline" method="post" action="/units">
+<form class="inline" method="post" action="/admin/units">
   <label class="grow">New unit <input name="name" required placeholder="l, szt, bottle…"></label>
   <button type="submit" class="btn btn-tag">Add unit</button>
 </form>
@@ -16,9 +16,9 @@
       <span class="unit-name">{{.Name}}</span>
       <span class="meta">{{.ProductCount}} product{{if ne .ProductCount 1}}s{{end}}</span>
       <span class="tight">
-        <a href="/units/{{.ID}}/edit">Rename</a>
+        <a href="/admin/units/{{.ID}}/edit">Rename</a>
         {{if eq .ProductCount 0}}
-          <a class="danger" href="/units/{{.ID}}/delete">Delete</a>
+          <a class="danger" href="/admin/units/{{.ID}}/delete">Delete</a>
         {{end}}
       </span>
     </li>

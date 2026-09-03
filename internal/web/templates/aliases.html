@@ -3,12 +3,12 @@
   {{if .Filter}}
   <div>
     <h1>Aliases for {{.Filter.Name}}</h1>
-    <p class="hint"><a href="/aliases">All aliases</a></p>
+    <p class="hint"><a href="/admin/aliases">All aliases</a></p>
   </div>
-  <a class="btn btn-tag" href="/aliases/new?product={{.Filter.ID}}">Add alias</a>
+  <a class="btn btn-tag" href="/admin/aliases/new?product={{.Filter.ID}}">Add alias</a>
   {{else}}
   <h1>Aliases</h1>
-  <a class="btn btn-tag" href="/aliases/new">Add alias</a>
+  <a class="btn btn-tag" href="/admin/aliases/new">Add alias</a>
   {{end}}
 </div>
 
@@ -23,8 +23,8 @@
         <span class="meta">{{.ProductName}}{{if .CompanyID}} · {{.CompanyName}}{{else}} · any shop{{end}}</span>
       </span>
       <span class="tight">
-        <a href="/aliases/{{.ID}}/edit{{$.ProductQuery}}">Edit</a>
-        <a class="danger" href="/aliases/{{.ID}}/delete{{$.ProductQuery}}">Delete</a>
+        <a href="/admin/aliases/{{.ID}}/edit{{$.ProductQuery}}">Edit</a>
+        <a class="danger" href="/admin/aliases/{{.ID}}/delete{{$.ProductQuery}}">Delete</a>
       </span>
     </li>
     {{end}}

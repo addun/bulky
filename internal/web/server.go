@@ -38,6 +38,7 @@ type page struct {
 	Symbol   string
 	Currency string
 	Today    string
+	Admin    bool
 }
 
 func New(st *store.Store, cfg Config) (*Server, error) {
@@ -78,62 +79,65 @@ func (s *Server) routes() {
 	s.engine.StaticFS("/static", http.FS(static))
 	s.engine.Static("/images", s.store.ImagesDir())
 
-	s.engine.GET("/", s.index)
+	s.engine.GET("/", s.home)
+	s.engine.GET("/api/products/suggestions", s.productSuggestions)
+	s.engine.GET("/products/:id", s.showLookup)
 
-	s.engine.GET("/admin", s.admin)
-	s.engine.POST("/admin", s.updateAdmin)
+	s.engine.GET("/admin", s.index)
+	s.engine.GET("/admin/settings", s.admin)
+	s.engine.POST("/admin/settings", s.updateAdmin)
 
-	s.engine.GET("/receipts", s.receipts)
-	s.engine.POST("/receipts", s.scanReceipt)
-	s.engine.GET("/receipts/:id/preview", s.receiptPreview)
-	s.engine.GET("/receipts/:id/edit", s.editReceipt)
-	s.engine.POST("/receipts/:id/edit", s.updateReceiptVisit)
-	s.engine.GET("/receipts/:id", s.showReceipt)
-	s.engine.POST("/receipts/:id", s.confirmReceipt)
+	s.engine.GET("/admin/receipts", s.receipts)
+	s.engine.POST("/admin/receipts", s.scanReceipt)
+	s.engine.GET("/admin/receipts/:id/preview", s.receiptPreview)
+	s.engine.GET("/admin/receipts/:id/edit", s.editReceipt)
+	s.engine.POST("/admin/receipts/:id/edit", s.updateReceiptVisit)
+	s.engine.GET("/admin/receipts/:id", s.showReceipt)
+	s.engine.POST("/admin/receipts/:id", s.confirmReceipt)
 
-	s.engine.GET("/units", s.units)
-	s.engine.POST("/units", s.createUnit)
-	s.engine.GET("/units/:id/edit", s.editUnit)
-	s.engine.POST("/units/:id", s.updateUnit)
-	s.engine.GET("/units/:id/delete", s.confirmDeleteUnit)
-	s.engine.POST("/units/:id/delete", s.deleteUnit)
+	s.engine.GET("/admin/units", s.units)
+	s.engine.POST("/admin/units", s.createUnit)
+	s.engine.GET("/admin/units/:id/edit", s.editUnit)
+	s.engine.POST("/admin/units/:id", s.updateUnit)
+	s.engine.GET("/admin/units/:id/delete", s.confirmDeleteUnit)
+	s.engine.POST("/admin/units/:id/delete", s.deleteUnit)
 
-	s.engine.GET("/companies", s.companies)
-	s.engine.GET("/companies/new", s.newCompany)
-	s.engine.POST("/companies", s.createCompany)
-	s.engine.GET("/companies/:id/edit", s.editCompany)
-	s.engine.POST("/companies/:id", s.updateCompany)
-	s.engine.GET("/companies/:id/delete", s.confirmDeleteCompany)
-	s.engine.POST("/companies/:id/delete", s.deleteCompany)
+	s.engine.GET("/admin/companies", s.companies)
+	s.engine.GET("/admin/companies/new", s.newCompany)
+	s.engine.POST("/admin/companies", s.createCompany)
+	s.engine.GET("/admin/companies/:id/edit", s.editCompany)
+	s.engine.POST("/admin/companies/:id", s.updateCompany)
+	s.engine.GET("/admin/companies/:id/delete", s.confirmDeleteCompany)
+	s.engine.POST("/admin/companies/:id/delete", s.deleteCompany)
 
-	s.engine.GET("/aliases", s.aliases)
-	s.engine.GET("/aliases/new", s.newAlias)
-	s.engine.POST("/aliases", s.createAlias)
-	s.engine.GET("/aliases/:id/edit", s.editAlias)
-	s.engine.POST("/aliases/:id", s.updateAlias)
-	s.engine.GET("/aliases/:id/delete", s.confirmDeleteAlias)
-	s.engine.POST("/aliases/:id/delete", s.deleteAlias)
+	s.engine.GET("/admin/aliases", s.aliases)
+	s.engine.GET("/admin/aliases/new", s.newAlias)
+	s.engine.POST("/admin/aliases", s.createAlias)
+	s.engine.GET("/admin/aliases/:id/edit", s.editAlias)
+	s.engine.POST("/admin/aliases/:id", s.updateAlias)
+	s.engine.GET("/admin/aliases/:id/delete", s.confirmDeleteAlias)
+	s.engine.POST("/admin/aliases/:id/delete", s.deleteAlias)
 
-	s.engine.GET("/products/new", s.newProduct)
-	s.engine.POST("/products", s.createProduct)
-	s.engine.GET("/products/:id", s.showProduct)
-	s.engine.GET("/products/:id/edit", s.editProduct)
-	s.engine.POST("/products/:id", s.updateProduct)
-	s.engine.GET("/products/:id/change-unit", s.changeProductUnitForm)
-	s.engine.POST("/products/:id/change-unit", s.changeProductUnit)
-	s.engine.GET("/products/:id/merge-with", s.mergeProductForm)
-	s.engine.POST("/products/:id/merge-with", s.mergeProductRedirect)
-	s.engine.GET("/products/:id/merge-with/:into/", s.mergeProductConfirm)
-	s.engine.POST("/products/:id/merge-with/:into/", s.mergeProduct)
-	s.engine.GET("/products/:id/delete", s.confirmDeleteProduct)
-	s.engine.POST("/products/:id/delete", s.deleteProduct)
-	s.engine.GET("/products/:id/purchases/new", s.newPurchase)
-	s.engine.POST("/products/:id/purchases", s.createPurchase)
+	s.engine.GET("/admin/products/new", s.newProduct)
+	s.engine.POST("/admin/products", s.createProduct)
+	s.engine.GET("/admin/products/:id", s.showProduct)
+	s.engine.GET("/admin/products/:id/edit", s.editProduct)
+	s.engine.POST("/admin/products/:id", s.updateProduct)
+	s.engine.GET("/admin/products/:id/change-unit", s.changeProductUnitForm)
+	s.engine.POST("/admin/products/:id/change-unit", s.changeProductUnit)
+	s.engine.GET("/admin/products/:id/merge-with", s.mergeProductForm)
+	s.engine.POST("/admin/products/:id/merge-with", s.mergeProductRedirect)
+	s.engine.GET("/admin/products/:id/merge-with/:into/", s.mergeProductConfirm)
+	s.engine.POST("/admin/products/:id/merge-with/:into/", s.mergeProduct)
+	s.engine.GET("/admin/products/:id/delete", s.confirmDeleteProduct)
+	s.engine.POST("/admin/products/:id/delete", s.deleteProduct)
+	s.engine.GET("/admin/products/:id/purchases/new", s.newPurchase)
+	s.engine.POST("/admin/products/:id/purchases", s.createPurchase)
 
-	s.engine.GET("/purchases/:id/edit", s.editPurchase)
-	s.engine.POST("/purchases/:id", s.updatePurchase)
-	s.engine.GET("/purchases/:id/delete", s.confirmDeletePurchase)
-	s.engine.POST("/purchases/:id/delete", s.deletePurchase)
+	s.engine.GET("/admin/purchases/:id/edit", s.editPurchase)
+	s.engine.POST("/admin/purchases/:id", s.updatePurchase)
+	s.engine.GET("/admin/purchases/:id/delete", s.confirmDeletePurchase)
+	s.engine.POST("/admin/purchases/:id/delete", s.deletePurchase)
 }
 
 func (s *Server) page(title, query, errMsg string) page {
@@ -145,6 +149,12 @@ func (s *Server) page(title, query, errMsg string) page {
 		Currency: s.cfg.Currency,
 		Today:    time.Now().Format("2006-01-02"),
 	}
+}
+
+func (s *Server) adminPage(title, query, errMsg string) page {
+	p := s.page(title, query, errMsg)
+	p.Admin = true
+	return p
 }
 
 func itoa(id int64) string {

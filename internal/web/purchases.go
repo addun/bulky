@@ -57,7 +57,7 @@ func (s *Server) createPurchase(c *gin.Context) {
 		renderErr(purchaseSaveError(err))
 		return
 	}
-	c.Redirect(http.StatusSeeOther, "/products/"+itoa(prod.ID))
+	c.Redirect(http.StatusSeeOther, "/admin/products/"+itoa(prod.ID))
 }
 
 func (s *Server) editPurchase(c *gin.Context) {
@@ -138,7 +138,7 @@ func (s *Server) updatePurchase(c *gin.Context) {
 		renderErr(purchaseSaveError(err))
 		return
 	}
-	c.Redirect(http.StatusSeeOther, "/products/"+itoa(p.ProductID))
+	c.Redirect(http.StatusSeeOther, "/admin/products/"+itoa(p.ProductID))
 }
 
 func (s *Server) confirmDeletePurchase(c *gin.Context) {
@@ -168,11 +168,11 @@ func (s *Server) confirmDeletePurchase(c *gin.Context) {
 		body = "The product stays. Only this price is removed from the history."
 	}
 	c.HTML(http.StatusOK, "confirm.html", gin.H{
-		"Page":    s.page("Delete "+noun, "", ""),
+		"Page":    s.adminPage("Delete "+noun, "", ""),
 		"Title":   "Delete this " + noun + " of " + prod.Name + "?",
 		"Body":    body,
-		"Action":  "/purchases/" + itoa(id) + "/delete",
-		"Cancel":  "/products/" + itoa(p.ProductID),
+		"Action":  "/admin/purchases/" + itoa(id) + "/delete",
+		"Cancel":  "/admin/products/" + itoa(p.ProductID),
 		"Confirm": "Delete " + noun,
 	})
 }
@@ -196,7 +196,7 @@ func (s *Server) deletePurchase(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "could not delete")
 		return
 	}
-	c.Redirect(http.StatusSeeOther, "/products/"+itoa(p.ProductID))
+	c.Redirect(http.StatusSeeOther, "/admin/products/"+itoa(p.ProductID))
 }
 
 func parseKind(c *gin.Context) (store.PurchaseKind, string) {
@@ -243,7 +243,7 @@ func (s *Server) renderPurchaseForm(c *gin.Context, status int, prod store.Produ
 		title = editPurchaseTitle(p)
 	}
 	c.HTML(status, "purchase_form.html", gin.H{
-		"Page":         s.page(title, "", errMsg),
+		"Page":         s.adminPage(title, "", errMsg),
 		"Product":      prod,
 		"Purchase":     p,
 		"Companies":    companies,
