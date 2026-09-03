@@ -10,7 +10,6 @@
   {{if .Receipt.ImagePath}}
   <figure class="receipt-slip">
     <img src="/admin/receipts/{{.Receipt.ID}}/preview" alt="Uploaded bill">
-    <figcaption class="hint">The bill you uploaded</figcaption>
   </figure>
   {{end}}
 
@@ -61,10 +60,6 @@
         </li>
         {{end}}
       </ul>
-      <p class="receipt-total">
-        <span>Total</span>
-        <span class="row-amt">{{money .Total}}</span>
-      </p>
     {{end}}
   </div>
 </div>
