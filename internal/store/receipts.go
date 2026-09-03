@@ -20,11 +20,12 @@ var (
 )
 
 type Receipt struct {
-	ID          int64
-	ImagePath   string
-	RawResponse string
-	Status      string
-	CreatedAt   string
+	ID           int64
+	ImagePath    string
+	RawResponse  string
+	Status       string
+	ErrorMessage string
+	CreatedAt    string
 }
 
 func (s *Store) CreateReceipt(imagePath string) (Receipt, error) {
@@ -33,7 +34,7 @@ func (s *Store) CreateReceipt(imagePath string) (Receipt, error) {
 		return Receipt{}, errors.New("image is required")
 	}
 	res, err := s.db.Exec(
-		`INSERT INTO receipts (image_path, raw_response, status, created_at) VALUES (?, '', ?, ?)`,
+		`INSERT INTO receipts (image_path, raw_response, status, error_message, created_at) VALUES (?, '', ?, '', ?)`,
 		imagePath, ReceiptPending, nowRFC3339(),
 	)
 	if err != nil {
@@ -49,8 +50,8 @@ func (s *Store) CreateReceipt(imagePath string) (Receipt, error) {
 func (s *Store) GetReceipt(id int64) (Receipt, error) {
 	var r Receipt
 	err := s.db.QueryRow(
-		`SELECT id, image_path, raw_response, status, created_at FROM receipts WHERE id = ?`, id,
-	).Scan(&r.ID, &r.ImagePath, &r.RawResponse, &r.Status, &r.CreatedAt)
+		`SELECT id, image_path, raw_response, status, error_message, created_at FROM receipts WHERE id = ?`, id,
+	).Scan(&r.ID, &r.ImagePath, &r.RawResponse, &r.Status, &r.ErrorMessage, &r.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Receipt{}, ErrNotFound
 	}
@@ -66,13 +67,17 @@ func (r Receipt) StatusLabel() string {
 	case ReceiptFailed:
 		return "Failed"
 	default:
-		return "Pending"
+		return "Reading"
 	}
+}
+
+func (r Receipt) Reading() bool {
+	return r.Status == ReceiptPending
 }
 
 func (s *Store) ListReceipts() ([]Receipt, error) {
 	rows, err := s.db.Query(`
-SELECT id, image_path, status, created_at FROM receipts
+SELECT id, image_path, status, error_message, created_at FROM receipts
 ORDER BY id DESC`)
 	if err != nil {
 		return nil, err
@@ -81,7 +86,7 @@ ORDER BY id DESC`)
 	var out []Receipt
 	for rows.Next() {
 		var r Receipt
-		if err := rows.Scan(&r.ID, &r.ImagePath, &r.Status, &r.CreatedAt); err != nil {
+		if err := rows.Scan(&r.ID, &r.ImagePath, &r.Status, &r.ErrorMessage, &r.CreatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
@@ -89,9 +94,26 @@ ORDER BY id DESC`)
 	return out, rows.Err()
 }
 
+func (s *Store) ListPendingReceiptIDs() ([]int64, error) {
+	rows, err := s.db.Query(`SELECT id FROM receipts WHERE status = ? ORDER BY id`, ReceiptPending)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
+}
+
 func (s *Store) SaveAIResponse(id int64, rawJSON string) error {
 	res, err := s.db.Exec(
-		`UPDATE receipts SET raw_response = ?, status = ? WHERE id = ? AND status IN (?, ?)`,
+		`UPDATE receipts SET raw_response = ?, status = ?, error_message = '' WHERE id = ? AND status IN (?, ?)`,
 		rawJSON, ReceiptReady, id, ReceiptPending, ReceiptFailed,
 	)
 	if err != nil {
@@ -114,10 +136,10 @@ func (s *Store) SaveAIResponse(id int64, rawJSON string) error {
 	return nil
 }
 
-func (s *Store) FailReceipt(id int64) error {
+func (s *Store) FailReceipt(id int64, msg string) error {
 	res, err := s.db.Exec(
-		`UPDATE receipts SET status = ? WHERE id = ? AND status = ?`,
-		ReceiptFailed, id, ReceiptPending,
+		`UPDATE receipts SET status = ?, error_message = ? WHERE id = ? AND status = ?`,
+		ReceiptFailed, strings.TrimSpace(msg), id, ReceiptPending,
 	)
 	if err != nil {
 		return err
@@ -131,6 +153,31 @@ func (s *Store) FailReceipt(id int64) error {
 			return err
 		}
 		return ErrNotFound
+	}
+	return nil
+}
+
+func (s *Store) RequeueReceipt(id int64) error {
+	res, err := s.db.Exec(
+		`UPDATE receipts SET status = ?, error_message = '' WHERE id = ? AND status = ?`,
+		ReceiptPending, id, ReceiptFailed,
+	)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		r, getErr := s.GetReceipt(id)
+		if getErr != nil {
+			return getErr
+		}
+		if r.Status == ReceiptPending {
+			return nil
+		}
+		return ErrReceiptNotReady
 	}
 	return nil
 }
@@ -256,8 +303,8 @@ func patchBillVisitJSON(raw string, companyID int64, boughtOn string) (string, e
 func getReceiptTx(tx *sql.Tx, id int64) (Receipt, error) {
 	var r Receipt
 	err := tx.QueryRow(
-		`SELECT id, image_path, raw_response, status, created_at FROM receipts WHERE id = ?`, id,
-	).Scan(&r.ID, &r.ImagePath, &r.RawResponse, &r.Status, &r.CreatedAt)
+		`SELECT id, image_path, raw_response, status, error_message, created_at FROM receipts WHERE id = ?`, id,
+	).Scan(&r.ID, &r.ImagePath, &r.RawResponse, &r.Status, &r.ErrorMessage, &r.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Receipt{}, ErrNotFound
 	}

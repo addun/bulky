@@ -38,69 +38,51 @@ func (s *Server) scanReceipt(c *gin.Context) {
 		s.renderReceipts(c, http.StatusUnprocessableEntity, "Choose a photo or a PDF of the bill.")
 		return
 	}
-	if fh.Size > ocr.MaxImageBytes {
-		s.renderReceipts(c, http.StatusUnprocessableEntity, "File must be 10 MB or smaller.")
+
+	receipt, msg, status := s.acceptBillUpload(fh)
+	if msg != "" {
+		s.renderReceipts(c, status, msg)
 		return
+	}
+	s.enqueueOCR(receipt.ID)
+	c.Redirect(http.StatusSeeOther, "/admin/receipts/"+itoa(receipt.ID))
+}
+
+// acceptBillUpload stores one file as a pending receipt. A later multi-file
+// POST can call this once per file, enqueue each id, and send the user to
+// the list (or the first receipt).
+func (s *Server) acceptBillUpload(fh *multipart.FileHeader) (store.Receipt, string, int) {
+	if fh.Size > ocr.MaxImageBytes {
+		return store.Receipt{}, "File must be 10 MB or smaller.", http.StatusUnprocessableEntity
 	}
 	f, err := fh.Open()
 	if err != nil {
-		s.renderReceipts(c, http.StatusUnprocessableEntity, "Could not read the file.")
-		return
+		return store.Receipt{}, "Could not read the file.", http.StatusUnprocessableEntity
 	}
 	raw, err := io.ReadAll(io.LimitReader(f, ocr.MaxImageBytes+1))
 	f.Close()
 	if err != nil {
-		s.renderReceipts(c, http.StatusUnprocessableEntity, "Could not read the file.")
-		return
+		return store.Receipt{}, "Could not read the file.", http.StatusUnprocessableEntity
 	}
 	if int64(len(raw)) > ocr.MaxImageBytes {
-		s.renderReceipts(c, http.StatusUnprocessableEntity, "File must be 10 MB or smaller.")
-		return
+		return store.Receipt{}, "File must be 10 MB or smaller.", http.StatusUnprocessableEntity
 	}
 
 	jpeg, err := ocr.PreviewJPEG(raw)
 	if err != nil {
-		s.renderReceipts(c, http.StatusUnprocessableEntity, strings.TrimSuffix(err.Error(), ".")+".")
-		return
+		return store.Receipt{}, strings.TrimSuffix(err.Error(), ".") + ".", http.StatusUnprocessableEntity
 	}
-	imagePath, err := s.saveReceiptImage(jpeg)
+	imagePath, err := s.saveReceiptFiles(raw, jpeg)
 	if err != nil {
-		s.renderReceipts(c, http.StatusInternalServerError, "Could not store the bill.")
-		return
+		return store.Receipt{}, "Could not store the bill.", http.StatusInternalServerError
 	}
 
 	receipt, err := s.store.CreateReceipt(imagePath)
 	if err != nil {
-		s.deleteReceiptImage(imagePath)
-		s.renderReceipts(c, http.StatusInternalServerError, "Could not save the receipt.")
-		return
+		s.deleteReceiptFiles(imagePath)
+		return store.Receipt{}, "Could not save the receipt.", http.StatusInternalServerError
 	}
-
-	_, rawJSON, err := s.reader.WithModel(model).Extract(raw)
-	if err != nil {
-		_ = s.store.FailReceipt(receipt.ID)
-		msg := "Could not read the bill: " + err.Error()
-		if errors.Is(err, ocr.ErrNotABill) {
-			msg = "That file does not look like a bill. Try a clearer photo of the whole receipt, or another PDF."
-		} else if errors.Is(err, ocr.ErrNoLines) {
-			msg = "No products could be read from this bill. Try another photo or PDF."
-		} else if errors.Is(err, ocr.ErrNoPDFText) {
-			msg = "This PDF could not be turned into images. Install poppler or run Bulkly in Docker, or photograph the bill."
-		}
-		status := http.StatusBadGateway
-		if errors.Is(err, ocr.ErrNotABill) || errors.Is(err, ocr.ErrNoLines) || errors.Is(err, ocr.ErrNoPDFText) {
-			status = http.StatusUnprocessableEntity
-		}
-		s.renderReceipts(c, status, msg)
-		return
-	}
-
-	if err := s.store.SaveAIResponse(receipt.ID, string(rawJSON)); err != nil {
-		_ = s.store.FailReceipt(receipt.ID)
-		s.renderReceipts(c, http.StatusInternalServerError, "Could not save the AI response.")
-		return
-	}
-	c.Redirect(http.StatusSeeOther, "/admin/receipts/"+itoa(receipt.ID))
+	return receipt, "", 0
 }
 
 func (s *Server) showReceipt(c *gin.Context) {
@@ -118,8 +100,8 @@ func (s *Server) showReceipt(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "could not load the receipt")
 		return
 	}
-	if receipt.Status == store.ReceiptFailed || receipt.Status == store.ReceiptPending {
-		s.renderReceipts(c, http.StatusUnprocessableEntity, "This scan has no product list yet. Upload the bill again.")
+	if receipt.Status == store.ReceiptPending || receipt.Status == store.ReceiptFailed {
+		s.renderReceiptStatus(c, http.StatusOK, receipt, c.Query("error"))
 		return
 	}
 	if receipt.Status == store.ReceiptMigrated {
@@ -331,6 +313,63 @@ func (s *Server) renderReceiptReview(c *gin.Context, status int, view receiptVie
 		"Products":  products,
 		"Units":     units,
 		"Companies": companies,
+	})
+}
+
+func (s *Server) retryReceipt(c *gin.Context) {
+	id, ok := paramID(c, "id")
+	if !ok {
+		c.String(http.StatusNotFound, "not found")
+		return
+	}
+	receipt, err := s.store.GetReceipt(id)
+	if errors.Is(err, store.ErrNotFound) {
+		c.String(http.StatusNotFound, "not found")
+		return
+	}
+	if err != nil {
+		c.String(http.StatusInternalServerError, "could not load the receipt")
+		return
+	}
+	if receipt.Status != store.ReceiptFailed && receipt.Status != store.ReceiptPending {
+		c.Redirect(http.StatusSeeOther, "/admin/receipts/"+itoa(id))
+		return
+	}
+	if receipt.Status == store.ReceiptFailed {
+		if !s.reader.Configured() {
+			c.Redirect(http.StatusSeeOther, "/admin/receipts/"+itoa(id)+"?error="+url.QueryEscape("Set OCR_API_KEY or OCR_BASE_URL so the reader can run."))
+			return
+		}
+		model, err := s.ocrModel()
+		if err != nil {
+			c.Redirect(http.StatusSeeOther, "/admin/receipts/"+itoa(id)+"?error="+url.QueryEscape("Could not load settings."))
+			return
+		}
+		if model == "" {
+			c.Redirect(http.StatusSeeOther, "/admin/receipts/"+itoa(id)+"?error="+url.QueryEscape("Set the AI model under Admin so the reader can run."))
+			return
+		}
+		if _, err := s.loadReceiptSource(receipt.ImagePath); err != nil {
+			c.Redirect(http.StatusSeeOther, "/admin/receipts/"+itoa(id)+"?error="+url.QueryEscape("This bill is no longer on disk. Upload it again from Receipts."))
+			return
+		}
+		if err := s.store.RequeueReceipt(id); err != nil {
+			c.Redirect(http.StatusSeeOther, "/admin/receipts/"+itoa(id)+"?error="+url.QueryEscape("Could not start reading again."))
+			return
+		}
+	}
+	s.enqueueOCR(id)
+	c.Redirect(http.StatusSeeOther, "/admin/receipts/"+itoa(id))
+}
+
+func (s *Server) renderReceiptStatus(c *gin.Context, status int, receipt store.Receipt, errMsg string) {
+	page := s.adminPage("Receipt", "", errMsg)
+	if receipt.Reading() {
+		page.RefreshSeconds = 3
+	}
+	c.HTML(status, "receipt_status.html", gin.H{
+		"Page":    page,
+		"Receipt": receipt,
 	})
 }
 

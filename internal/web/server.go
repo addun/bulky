@@ -24,21 +24,23 @@ type Config struct {
 }
 
 type Server struct {
-	store  *store.Store
-	engine *gin.Engine
-	tmpl   *template.Template
-	cfg    Config
-	reader *ocr.Agent
+	store   *store.Store
+	engine  *gin.Engine
+	tmpl    *template.Template
+	cfg     Config
+	reader  *ocr.Agent
+	ocrJobs chan int64
 }
 
 type page struct {
-	Title    string
-	Query    string
-	Error    string
-	Symbol   string
-	Currency string
-	Today    string
-	Admin    bool
+	Title          string
+	Query          string
+	Error          string
+	Symbol         string
+	Currency       string
+	Today          string
+	Admin          bool
+	RefreshSeconds int
 }
 
 func New(st *store.Store, cfg Config) (*Server, error) {
@@ -63,6 +65,7 @@ func New(st *store.Store, cfg Config) (*Server, error) {
 	r.SetHTMLTemplate(tmpl)
 
 	s := &Server{store: st, engine: r, tmpl: tmpl, cfg: cfg, reader: ocr.New(cfg.OCR)}
+	s.startOCRWorker()
 	s.routes()
 	return s, nil
 }
@@ -92,6 +95,7 @@ func (s *Server) routes() {
 	s.engine.GET("/admin/receipts/:id/preview", s.receiptPreview)
 	s.engine.GET("/admin/receipts/:id/edit", s.editReceipt)
 	s.engine.POST("/admin/receipts/:id/edit", s.updateReceiptVisit)
+	s.engine.POST("/admin/receipts/:id/retry", s.retryReceipt)
 	s.engine.GET("/admin/receipts/:id", s.showReceipt)
 	s.engine.POST("/admin/receipts/:id", s.confirmReceipt)
 

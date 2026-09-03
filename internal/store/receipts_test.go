@@ -151,7 +151,7 @@ func TestFailReceipt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.FailReceipt(r.ID); err != nil {
+	if err := s.FailReceipt(r.ID, "No products could be read from this bill."); err != nil {
 		t.Fatal(err)
 	}
 	got, err := s.GetReceipt(r.ID)
@@ -161,11 +161,63 @@ func TestFailReceipt(t *testing.T) {
 	if got.Status != ReceiptFailed {
 		t.Fatalf("status %q", got.Status)
 	}
+	if got.ErrorMessage != "No products could be read from this bill." {
+		t.Fatalf("error: %q", got.ErrorMessage)
+	}
 	if _, err := s.MigrateReceipt(r.ID, BillImport{
 		BoughtOn: "2026-08-20",
 		Lines:    []BillLineInput{{ProductName: "X", UnitID: 1, Quantity: mustDec(t, "1"), Amount: mustDec(t, "1")}},
 	}, "{}"); err != ErrReceiptNotReady {
 		t.Fatalf("migrate failed receipt: %v", err)
+	}
+	if err := s.SaveAIResponse(r.ID, `{"lines":[]}`); err != nil {
+		t.Fatal(err)
+	}
+	got, err = s.GetReceipt(r.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != ReceiptReady || got.ErrorMessage != "" {
+		t.Fatalf("retry: %#v", got)
+	}
+}
+
+func TestRequeueReceipt(t *testing.T) {
+	dir := t.TempDir()
+	s, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	r, err := s.CreateReceipt("photo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.FailReceipt(r.ID, "blurry"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RequeueReceipt(r.ID); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.GetReceipt(r.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != ReceiptPending || got.ErrorMessage != "" {
+		t.Fatalf("requeue: %#v", got)
+	}
+	if err := s.RequeueReceipt(r.ID); err != nil {
+		t.Fatal(err)
+	}
+	ready, err := s.CreateReceipt("other")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SaveAIResponse(ready.ID, `{}`); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RequeueReceipt(ready.ID); err != ErrReceiptNotReady {
+		t.Fatalf("ready: %v", err)
 	}
 }
 
@@ -185,7 +237,7 @@ func TestListReceiptsNewestFirst(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.FailReceipt(first.ID); err != nil {
+	if err := s.FailReceipt(first.ID, "blurry"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -205,8 +257,19 @@ func TestListReceiptsNewestFirst(t *testing.T) {
 	if list[0].RawResponse != "" {
 		t.Fatal("list should not load raw JSON")
 	}
-	if list[0].StatusLabel() != "Pending" || list[1].StatusLabel() != "Failed" {
+	if list[0].StatusLabel() != "Reading" || list[1].StatusLabel() != "Failed" {
 		t.Fatalf("labels: %q %q", list[0].StatusLabel(), list[1].StatusLabel())
+	}
+	if list[1].ErrorMessage != "blurry" {
+		t.Fatalf("list error: %q", list[1].ErrorMessage)
+	}
+
+	pending, err := s.ListPendingReceiptIDs()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pending) != 1 || pending[0] != second.ID {
+		t.Fatalf("pending: %v", pending)
 	}
 }
 

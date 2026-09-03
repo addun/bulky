@@ -628,6 +628,6 @@
     }
     file.setCustomValidity("");
     btn.disabled = true;
-    btn.textContent = "Reading the bill…";
+    btn.textContent = "Uploading…";
   });
 })();

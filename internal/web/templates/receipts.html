@@ -36,11 +36,7 @@
   <ul class="ledger">
     {{range .Receipts}}
     <li>
-      {{if or (eq .Status "ready") (eq .Status "migrated")}}
       <a class="row" href="/admin/receipts/{{.ID}}">
-      {{else}}
-      <div class="row">
-      {{end}}
         {{if .ImagePath}}
           <img class="thumb thumb-slip" src="/admin/receipts/{{.ID}}/preview" alt="">
         {{else}}
@@ -50,11 +46,7 @@
           <strong>{{date .CreatedAt}}</strong>
           <span class="meta">{{.StatusLabel}}</span>
         </span>
-      {{if or (eq .Status "ready") (eq .Status "migrated")}}
       </a>
-      {{else}}
-      </div>
-      {{end}}
     </li>
     {{end}}
   </ul>

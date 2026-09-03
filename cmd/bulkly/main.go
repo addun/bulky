@@ -31,6 +31,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("web: %v", err)
 	}
+	srv.RecoverOCR()
 
 	log.Printf("bulkly listening on %s (data %s)", addr, dataDir)
 	if err := http.ListenAndServe(addr, srv.Handler()); err != nil {
