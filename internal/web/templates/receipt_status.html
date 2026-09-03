@@ -1,0 +1,28 @@
+{{template "header" .}}
+<h1>Receipt</h1>
+
+<div class="receipt-layout">
+  {{if .Receipt.ImagePath}}
+  <figure class="receipt-slip">
+    <img src="/admin/receipts/{{.Receipt.ID}}/preview" alt="Uploaded bill">
+  </figure>
+  {{end}}
+
+  <div>
+    <p class="eyebrow">{{.Receipt.StatusLabel}}</p>
+    {{if .Receipt.Reading}}
+      <p class="lede">Reading the bill. This can take a minute.</p>
+      <p class="hint">This page refreshes on its own. You can also <a href="/admin/receipts/{{.Receipt.ID}}">refresh it yourself</a>.</p>
+    {{else}}
+      {{if .Receipt.ErrorMessage}}<p class="banner" role="alert">{{.Receipt.ErrorMessage}}</p>{{end}}
+      <p class="lede">This scan has no product list yet.</p>
+      <form method="post" action="/admin/receipts/{{.Receipt.ID}}/retry">
+        <div class="actions">
+          <button type="submit" class="btn btn-tag">Read again</button>
+        </div>
+      </form>
+      <p class="hint">Or upload a new photo from <a href="/admin/receipts">Receipts</a>.</p>
+    {{end}}
+  </div>
+</div>
+{{template "footer" .}}
