@@ -35,8 +35,8 @@ func isPDF(b []byte) bool {
 	return bytes.Contains(b[:n], []byte("%PDF-"))
 }
 
-// PreviewJPEG turns an uploaded bill into a JPEG for the receipts list
-// and confirm screen. Photos are compressed as before. A PDF stacks every
+// PreviewJPEG turns an uploaded bill into a JPEG for the confirm screen.
+// Photos are compressed as before. A PDF stacks every
 // rasterized page (up to maxPDFPages) when pdftoppm is available, otherwise
 // a text slip.
 func PreviewJPEG(raw []byte) ([]byte, error) {
