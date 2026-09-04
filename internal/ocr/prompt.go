@@ -66,7 +66,7 @@ Rules:
 - QUANTITY & MULTI-PACKS:
   - The Ilość / qty column (the number before "x cena") is always package_count. "3 x18,55" → package_count "3". "5.000 x 3,29" → "5".
   - A weighed loose buy (produce/deli, sold per kg) like "Marchew  1.450 x 4,99" has package_count "1.450", package_size "1", and unit_name "kg". The scale weight is package_count, never package_size.
-  - If the till printed the same goods line several times (scanned once per pack: same name, pack size, qty, unit price, and line amount), emit ONE line with package_count, discount, and amount summed. Different scale weights stay separate.
+  - If the till printed the same goods line several times (scanned once per pack), emit one JSON line per printed row. Do not combine them. Different scale weights stay separate.
 
 - UNIT PRICE: unit_price is the normal shelf price for ONE pack / one unit as printed after "x". Copy it even when a VAT letter follows (3 x18,55 C → "18.55"). Empty string if that column is unreadable. Do not compute unit_price from the line total.
 

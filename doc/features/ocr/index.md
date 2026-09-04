@@ -32,7 +32,7 @@ Polish tills often print a shelf price, a promo on the next row, then the amount
 
 A store in your catalog that matches the printed store number, then the printed address (or a unique shop name) is pre-selected on the confirm screen. If nothing matches, **Create store** opens the store form filled from the till header (`prefill[name]`, `prefill[external_id]`, `prefill[street_name]`, and so on). Saving returns you to the bill; the new shop is selected only if it still matches what was read. You can still pick another.
 
-Quantity in the log is packs × pack size. A weighed loose buy (`Marchew  1.450 x 4,99` per kg) is 1.450 packs of size 1 kg — the scale weight is packs, not pack size. If a printed name includes a size (`Mąka 1kg`) and the qty column is 2, that is two 1 kg packs. The same till line scanned several times (five milks at 3,29) is stored as one line with packs and amount summed.
+Quantity in the log is packs × pack size. A weighed loose buy (`Marchew  1.450 x 4,99` per kg) is 1.450 packs of size 1 kg — the scale weight is packs, not pack size. If a printed name includes a size (`Mąka 1kg`) and the qty column is 2, that is two 1 kg packs. The same till line scanned several times (five milks at 3,29) stays as five separate rows.
 
 ## Confirm
 

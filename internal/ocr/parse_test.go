@@ -58,7 +58,7 @@ func TestParseBillKeepsExplicitPackSize(t *testing.T) {
 	}
 }
 
-func TestParseBillMergesRepeatScans(t *testing.T) {
+func TestParseBillKeepsRepeatScansSeparate(t *testing.T) {
 	raw := []byte(`{"lines":[
 		{"receipt_name":"Mleko UHT 1l","package_count":"1","package_size":"1","unit_name":"l","amount":"3.29"},
 		{"receipt_name":"Mleko UHT 1l","package_count":"1","package_size":"1","unit_name":"l","amount":"3.29"},
@@ -69,14 +69,16 @@ func TestParseBillMergesRepeatScans(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(bill.Lines) != 2 {
+	if len(bill.Lines) != 4 {
 		t.Fatalf("lines %d: %#v", len(bill.Lines), bill.Lines)
 	}
-	if bill.Lines[0].ReceiptName != "Mleko UHT 1l" || bill.Lines[0].PackageCount != "3" || bill.Lines[0].Amount != "9.87" {
-		t.Fatalf("merged milk: %#v", bill.Lines[0])
+	for i, name := range []string{"Mleko UHT 1l", "Mleko UHT 1l", "Chleb", "Mleko UHT 1l"} {
+		if bill.Lines[i].ReceiptName != name || bill.Lines[i].PackageCount != "1" {
+			t.Fatalf("line %d: %#v", i, bill.Lines[i])
+		}
 	}
-	if bill.Lines[1].ReceiptName != "Chleb" || bill.Lines[1].PackageCount != "1" {
-		t.Fatalf("chleb: %#v", bill.Lines[1])
+	if bill.Lines[0].Amount != "3.29" || bill.Lines[1].Amount != "3.29" || bill.Lines[3].Amount != "3.29" {
+		t.Fatalf("milk amounts: %#v", bill.Lines)
 	}
 }
 
