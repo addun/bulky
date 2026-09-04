@@ -35,17 +35,19 @@
   <aside class="rail">
     <a class="wordmark" href="/">Bulkly</a>
     <nav>
-      <a href="/admin">
-        <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M4 8.2 12 4l8 4.2v9.6L12 22 4 17.8zM12 12.2V22M4 8.2l8 4 8-4"/></svg>
-        Products
-      </a>
+      <details class="nav-group" open>
+        <summary>
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M4 8.2 12 4l8 4.2v9.6L12 22 4 17.8zM12 12.2V22M4 8.2l8 4 8-4"/></svg>
+          Catalog
+          <svg class="nav-group-arrow" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="m8 10 4 4 4-4"/></svg>
+        </summary>
+        <a href="/admin">Products</a>
+        <a href="/admin/units">Units</a>
+        <a href="/admin/aliases">Aliases</a>
+      </details>
       <a href="/admin/receipts">
         <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M7 3.5h10v17l-1.6-1.1-1.6 1.1-1.6-1.1-1.6 1.1-1.6-1.1-1.6 1.1zM9 8h6M9 12h6M9 16h3.5"/></svg>
         Receipts
-      </a>
-      <a href="/admin/units">
-        <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M12 3.5v3M8 6.5h8M6.5 20.5h11l-1.7-9.2a4 4 0 0 0-7.6 0z"/></svg>
-        Units
       </a>
       <details class="nav-group" open>
         <summary>
@@ -56,10 +58,6 @@
         <a href="/admin/retail-chains">Retail chains</a>
         <a href="/admin/stories">Stores</a>
       </details>
-      <a href="/admin/aliases">
-        <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="m4.5 13 8.2-8.2a2 2 0 0 1 2.8 0l3.7 3.7a2 2 0 0 1 0 2.8L11 19.5H4.5zM8 15.5h.5"/></svg>
-        Aliases
-      </a>
       <a href="/admin/settings">
         <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M4.5 7h15M7 7a2.2 2.2 0 1 0 0-4.4A2.2 2.2 0 0 0 7 7zM4.5 17h15M17 17a2.2 2.2 0 1 0 0-4.4A2.2 2.2 0 0 0 17 17z"/></svg>
         Settings

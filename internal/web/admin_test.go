@@ -144,4 +144,7 @@ func TestUnitsPageHasNoSubtitle(t *testing.T) {
 	if strings.Contains(body, "Products pick a purchase unit from this list") {
 		t.Fatal("units page should not have a subtitle")
 	}
+	if !strings.Contains(body, "Catalog") || !strings.Contains(body, `href="/admin"`) || !strings.Contains(body, `href="/admin/units"`) || !strings.Contains(body, `href="/admin/aliases"`) {
+		t.Fatal("nav should nest products, units, and aliases in a catalog group")
+	}
 }
