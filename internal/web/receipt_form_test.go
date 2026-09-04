@@ -542,8 +542,11 @@ func TestReceiptsPageListsReceipts(t *testing.T) {
 	if !strings.Contains(body, "To confirm") {
 		t.Fatal("missing status")
 	}
-	if !strings.Contains(body, `src="/admin/receipts/`+itoa(r.ID)+`/preview"`) {
-		t.Fatal("preview should be nested under the receipt")
+	if strings.Contains(body, `/preview`) {
+		t.Fatal("list should not load full receipt previews")
+	}
+	if !strings.Contains(body, `class="thumb thumb-empty"`) {
+		t.Fatal("list should show a placeholder thumb")
 	}
 }
 

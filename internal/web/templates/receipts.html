@@ -37,11 +37,7 @@
     {{range .Receipts}}
     <li>
       <a class="row" href="/admin/receipts/{{.ID}}">
-        {{if .ImagePath}}
-          <img class="thumb thumb-slip" src="/admin/receipts/{{.ID}}/preview" alt="">
-        {{else}}
-          <span class="thumb thumb-empty" aria-hidden="true"></span>
-        {{end}}
+        <span class="thumb thumb-empty" aria-hidden="true"></span>
         <span class="row-main">
           <strong>{{date .CreatedAt}}</strong>
           <span class="meta">{{.StatusLabel}}</span>
