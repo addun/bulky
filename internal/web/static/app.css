@@ -120,6 +120,51 @@ body:not(.is-admin) .topbar {
   padding: 0.55rem 0.65rem;
 }
 
+.rail nav details.nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.rail nav details.nav-group > summary {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  color: #f6f3ea;
+  font-weight: 500;
+  padding: 0.55rem 0.65rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.rail nav details.nav-group > summary::-webkit-details-marker,
+.rail nav details.nav-group > summary::marker {
+  display: none;
+  content: "";
+}
+
+.rail nav details.nav-group > summary .nav-group-arrow {
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-left: auto;
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+}
+
+.rail nav details.nav-group:not([open]) > summary .nav-group-arrow {
+  transform: rotate(-90deg);
+}
+
+.rail nav details.nav-group > summary:hover,
+.rail nav details.nav-group.is-current > summary {
+  background: rgba(255, 212, 0, 0.14);
+  color: var(--tag);
+}
+
+.rail nav details.nav-group > a {
+  padding-left: 2.6rem;
+}
+
 .rail nav a:hover,
 .rail nav a.is-current {
   background: rgba(255, 212, 0, 0.14);
@@ -456,7 +501,7 @@ label textarea {
   grid-template-columns: 1fr auto auto;
 }
 
-.company-addr {
+.story-addr {
   color: var(--muted);
 }
 

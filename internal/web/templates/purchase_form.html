@@ -27,16 +27,16 @@
     <legend>Paid</legend>
     <label>Amount ({{.Page.Currency}}) <input name="amount" required inputmode="decimal" placeholder="12.40" value="{{if not .Purchase.Amount.IsZero}}{{.Purchase.Amount}}{{end}}" data-pack-amount></label>
     <label>
-      Company
-      <select name="company_id">
+      Store
+      <select name="story_id">
         <option value="">None</option>
-        {{range .Companies}}
-        <option value="{{.ID}}" {{if eq .ID $.Purchase.CompanyID}}selected{{end}}>{{.Label}}</option>
+        {{range .Stories}}
+        <option value="{{.ID}}" {{if eq .ID $.Purchase.StoryID}}selected{{end}}>{{.Label}}</option>
         {{end}}
       </select>
     </label>
-    {{if not .Companies}}
-      <p class="hint">No companies yet. You can still save, or <a href="/admin/companies/new">add a company</a> first.</p>
+    {{if not .Stories}}
+      <p class="hint">No stores yet. You can still save, or <a href="/admin/stories/new">add a store</a> first.</p>
     {{end}}
   </fieldset>
 

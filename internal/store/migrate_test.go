@@ -19,7 +19,7 @@ func TestOpenFreshSeedsAndVersions(t *testing.T) {
 	defer s.Close()
 
 	assertCurrentSchema(t, s.db)
-	assertGooseVersion(t, s.db, 10)
+	assertGooseVersion(t, s.db, 14)
 
 	units, err := s.ListUnits()
 	if err != nil {
@@ -54,7 +54,7 @@ func TestOpenSecondBootNoops(t *testing.T) {
 	defer s.Close()
 
 	assertCurrentSchema(t, s.db)
-	assertGooseVersion(t, s.db, 10)
+	assertGooseVersion(t, s.db, 14)
 
 	units, err := s.ListUnits()
 	if err != nil {
@@ -65,7 +65,7 @@ func TestOpenSecondBootNoops(t *testing.T) {
 	}
 }
 
-func TestOpenAddsPurchaseCompanyID(t *testing.T) {
+func TestOpenAddsPurchaseStoryID(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "bulkly.db")
 	db, err := sql.Open("sqlite", dbPath)
@@ -123,7 +123,7 @@ VALUES (1, '2024-01-02', '10', '20.50', '2024-01-02T00:00:00Z');
 	defer s.Close()
 
 	assertCurrentSchema(t, s.db)
-	assertGooseVersion(t, s.db, 10)
+	assertGooseVersion(t, s.db, 14)
 
 	var n int
 	if err := s.db.QueryRow(`SELECT COUNT(*) FROM purchases`).Scan(&n); err != nil {
@@ -133,12 +133,12 @@ VALUES (1, '2024-01-02', '10', '20.50', '2024-01-02T00:00:00Z');
 		t.Fatalf("purchases: got %d want 1", n)
 	}
 
-	var companyID sql.NullInt64
-	if err := s.db.QueryRow(`SELECT company_id FROM purchases`).Scan(&companyID); err != nil {
+	var storyID sql.NullInt64
+	if err := s.db.QueryRow(`SELECT story_id FROM purchases`).Scan(&storyID); err != nil {
 		t.Fatal(err)
 	}
-	if companyID.Valid {
-		t.Fatalf("legacy purchase company_id: got %d want NULL", companyID.Int64)
+	if storyID.Valid {
+		t.Fatalf("legacy purchase story_id: got %d want NULL", storyID.Int64)
 	}
 
 	var kind string
@@ -185,7 +185,7 @@ func TestOpenAddsKindWhenGooseAlreadyAtReceipts(t *testing.T) {
 	if !hasColumn(t, s.db, "purchases", "kind") {
 		t.Fatal("purchases missing kind after reopen")
 	}
-	assertGooseVersion(t, s.db, 10)
+	assertGooseVersion(t, s.db, 14)
 	if _, err := s.ListProducts(""); err != nil {
 		t.Fatalf("ListProducts: %v", err)
 	}
@@ -230,10 +230,10 @@ func TestOpenRenamesRecipesToReceipts(t *testing.T) {
 	defer s.Close()
 
 	assertCurrentSchema(t, s.db)
-	assertGooseVersion(t, s.db, 10)
+	assertGooseVersion(t, s.db, 14)
 }
 
-func TestPurchaseCompanyOptional(t *testing.T) {
+func TestPurchaseStoryOptional(t *testing.T) {
 	dir := t.TempDir()
 	s, err := Open(dir)
 	if err != nil {
@@ -253,8 +253,8 @@ func TestPurchaseCompanyOptional(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if buy.CompanyID != 0 {
-		t.Fatalf("CompanyID: got %d want 0", buy.CompanyID)
+	if buy.StoryID != 0 {
+		t.Fatalf("StoryID: got %d want 0", buy.StoryID)
 	}
 	if buy.ReceiptID != 0 {
 		t.Fatalf("ReceiptID: got %d want 0", buy.ReceiptID)
@@ -353,18 +353,23 @@ func assertGooseVersion(t *testing.T, db *sql.DB, want int64) {
 
 func assertCurrentSchema(t *testing.T, db *sql.DB) {
 	t.Helper()
-	for _, table := range []string{"units", "products", "companies", "purchases", "receipts", "product_aliases", "product_unit_conversions", "settings", "goose_db_version"} {
+	for _, table := range []string{"units", "products", "stories", "retail_chains", "purchases", "receipts", "product_aliases", "product_unit_conversions", "settings", "goose_db_version"} {
 		if !tableExists(t, db, table) {
 			t.Fatalf("missing table %s", table)
 		}
 	}
-	for _, col := range []string{"street_name", "building_number", "apartment_number", "postal_code", "city"} {
-		if !hasColumn(t, db, "companies", col) {
-			t.Fatalf("companies missing %s", col)
+	for _, col := range []string{"street_name", "building_number", "apartment_number", "postal_code", "city", "retail_chain_id", "external_id"} {
+		if !hasColumn(t, db, "stories", col) {
+			t.Fatalf("stories missing %s", col)
 		}
 	}
-	if !hasColumn(t, db, "purchases", "company_id") {
-		t.Fatal("purchases missing company_id")
+	for _, col := range []string{"name", "legal_name", "tax_id"} {
+		if !hasColumn(t, db, "retail_chains", col) {
+			t.Fatalf("retail_chains missing %s", col)
+		}
+	}
+	if !hasColumn(t, db, "purchases", "story_id") {
+		t.Fatal("purchases missing story_id")
 	}
 	if !hasColumn(t, db, "purchases", "kind") {
 		t.Fatal("purchases missing kind")
@@ -389,10 +394,16 @@ func assertCurrentSchema(t *testing.T, db *sql.DB) {
 	if !hasColumn(t, db, "product_aliases", "alias") {
 		t.Fatal("product_aliases missing alias")
 	}
+	if !hasColumn(t, db, "product_aliases", "story_id") {
+		t.Fatal("product_aliases missing story_id")
+	}
+	if !hasColumn(t, db, "product_aliases", "retail_chain_id") {
+		t.Fatal("product_aliases missing retail_chain_id")
+	}
 	if !hasColumn(t, db, "product_unit_conversions", "factor") {
 		t.Fatal("product_unit_conversions missing factor")
 	}
-	for _, idx := range []string{"idx_products_name", "idx_purchases_product", "idx_companies_name", "idx_purchases_company", "idx_receipts_status", "idx_purchases_receipt", "idx_product_aliases_shop", "idx_product_aliases_global", "idx_product_aliases_product"} {
+	for _, idx := range []string{"idx_products_name", "idx_purchases_product", "idx_stories_name", "idx_purchases_story", "idx_stories_retail_chain", "idx_stories_external_id", "idx_receipts_status", "idx_purchases_receipt", "idx_product_aliases_shop", "idx_product_aliases_chain", "idx_product_aliases_global", "idx_product_aliases_product"} {
 		if !indexExists(t, db, idx) {
 			t.Fatalf("missing index %s", idx)
 		}

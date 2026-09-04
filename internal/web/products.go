@@ -314,18 +314,18 @@ func (s *Server) showProduct(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "could not load purchases")
 		return
 	}
-	companies, err := s.store.ListCompanies()
+	stories, err := s.store.ListStories()
 	if err != nil {
-		c.String(http.StatusInternalServerError, "could not load companies")
+		c.String(http.StatusInternalServerError, "could not load stores")
 		return
 	}
 	errMsg := c.Query("error")
 	c.HTML(http.StatusOK, "product_show.html", gin.H{
-		"Page":        s.adminPage(p.Name, "", errMsg),
-		"Product":     p,
-		"Purchases":   purchases,
-		"CompanyByID": companiesByID(companies),
-		"Years":       store.YearlySummaries(purchases),
+		"Page":      s.adminPage(p.Name, "", errMsg),
+		"Product":   p,
+		"Purchases": purchases,
+		"StoryByID": storiesByID(stories),
+		"Years":     store.YearlySummaries(purchases),
 	})
 }
 

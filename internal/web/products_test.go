@@ -14,7 +14,7 @@ import (
 
 func TestProductsPageFuzzySearch(t *testing.T) {
 	st, flour, _ := aliasPageFixture(t)
-	if _, err := st.CreateAlias(flour.ID, 0, "Mąka tortowa 1kg"); err != nil {
+	if _, err := st.CreateAlias(flour.ID, 0, 0, "Mąka tortowa 1kg"); err != nil {
 		t.Fatal(err)
 	}
 	srv, err := New(st, Config{})
@@ -91,7 +91,7 @@ func TestMergeFormOmitsCurrentProduct(t *testing.T) {
 
 func TestMergeConfirmShowsSummary(t *testing.T) {
 	st, flour, rice := aliasPageFixture(t)
-	if _, err := st.CreateAlias(rice.ID, 0, "Ryż"); err != nil {
+	if _, err := st.CreateAlias(rice.ID, 0, 0, "Ryż"); err != nil {
 		t.Fatal(err)
 	}
 	srv, err := New(st, Config{})

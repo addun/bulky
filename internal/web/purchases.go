@@ -12,7 +12,7 @@ import (
 )
 
 func (s *Server) newPurchase(c *gin.Context) {
-	prod, companies, ok := s.purchaseProduct(c)
+	prod, stories, ok := s.purchaseProduct(c)
 	if !ok {
 		return
 	}
@@ -21,11 +21,11 @@ func (s *Server) newPurchase(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "could not load pack size")
 		return
 	}
-	s.renderPurchaseForm(c, http.StatusOK, prod, newPurchaseDraft(hasLast, lastSize), companies, true, hasLast, lastSize, c.Query("error"))
+	s.renderPurchaseForm(c, http.StatusOK, prod, newPurchaseDraft(hasLast, lastSize), stories, true, hasLast, lastSize, c.Query("error"))
 }
 
 func (s *Server) createPurchase(c *gin.Context) {
-	prod, companies, ok := s.purchaseProduct(c)
+	prod, stories, ok := s.purchaseProduct(c)
 	if !ok {
 		return
 	}
@@ -36,7 +36,7 @@ func (s *Server) createPurchase(c *gin.Context) {
 	}
 	form := purchaseFromForm(c)
 	renderErr := func(msg string) {
-		s.renderPurchaseForm(c, http.StatusUnprocessableEntity, prod, form, companies, true, hasLast, lastSize, msg)
+		s.renderPurchaseForm(c, http.StatusUnprocessableEntity, prod, form, stories, true, hasLast, lastSize, msg)
 	}
 	boughtOn, qty, amount, packages, packSize, msg := s.parsePurchase(c)
 	if msg != "" {
@@ -48,12 +48,12 @@ func (s *Server) createPurchase(c *gin.Context) {
 		renderErr(msg)
 		return
 	}
-	companyID, msg := s.resolveCompanyForm(c)
+	storyID, msg := s.resolveStoryForm(c)
 	if msg != "" {
 		renderErr(msg)
 		return
 	}
-	if _, err := s.store.CreatePurchase(prod.ID, companyID, boughtOn, qty, amount, kind, packages, packSize); err != nil {
+	if _, err := s.store.CreatePurchase(prod.ID, storyID, boughtOn, qty, amount, kind, packages, packSize); err != nil {
 		renderErr(purchaseSaveError(err))
 		return
 	}
@@ -80,12 +80,12 @@ func (s *Server) editPurchase(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "could not load product")
 		return
 	}
-	companies, err := s.store.ListCompanies()
+	stories, err := s.store.ListStories()
 	if err != nil {
-		c.String(http.StatusInternalServerError, "could not load companies")
+		c.String(http.StatusInternalServerError, "could not load stores")
 		return
 	}
-	s.renderPurchaseForm(c, http.StatusOK, prod, p, companies, false, false, decimal.Zero, "")
+	s.renderPurchaseForm(c, http.StatusOK, prod, p, stories, false, false, decimal.Zero, "")
 }
 
 func (s *Server) updatePurchase(c *gin.Context) {
@@ -108,16 +108,16 @@ func (s *Server) updatePurchase(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "could not load product")
 		return
 	}
-	companies, err := s.store.ListCompanies()
+	stories, err := s.store.ListStories()
 	if err != nil {
-		c.String(http.StatusInternalServerError, "could not load companies")
+		c.String(http.StatusInternalServerError, "could not load stores")
 		return
 	}
 	form := purchaseFromForm(c)
 	form.ID = p.ID
 	form.ReceiptID = p.ReceiptID
 	renderErr := func(msg string) {
-		s.renderPurchaseForm(c, http.StatusUnprocessableEntity, prod, form, companies, false, false, decimal.Zero, msg)
+		s.renderPurchaseForm(c, http.StatusUnprocessableEntity, prod, form, stories, false, false, decimal.Zero, msg)
 	}
 	boughtOn, qty, amount, packages, packSize, msg := s.parsePurchase(c)
 	if msg != "" {
@@ -129,12 +129,12 @@ func (s *Server) updatePurchase(c *gin.Context) {
 		renderErr(msg)
 		return
 	}
-	companyID, msg := s.resolveCompanyForm(c)
+	storyID, msg := s.resolveStoryForm(c)
 	if msg != "" {
 		renderErr(msg)
 		return
 	}
-	if err := s.store.UpdatePurchase(id, companyID, boughtOn, qty, amount, kind, packages, packSize); err != nil {
+	if err := s.store.UpdatePurchase(id, storyID, boughtOn, qty, amount, kind, packages, packSize); err != nil {
 		renderErr(purchaseSaveError(err))
 		return
 	}
@@ -214,7 +214,7 @@ func editPurchaseTitle(p store.Purchase) string {
 	return "Edit purchase"
 }
 
-func (s *Server) purchaseProduct(c *gin.Context) (store.Product, []store.Company, bool) {
+func (s *Server) purchaseProduct(c *gin.Context) (store.Product, []store.Story, bool) {
 	id, ok := paramID(c, "id")
 	if !ok {
 		c.String(http.StatusNotFound, "not found")
@@ -229,15 +229,15 @@ func (s *Server) purchaseProduct(c *gin.Context) (store.Product, []store.Company
 		c.String(http.StatusInternalServerError, "could not load product")
 		return store.Product{}, nil, false
 	}
-	companies, err := s.store.ListCompanies()
+	stories, err := s.store.ListStories()
 	if err != nil {
-		c.String(http.StatusInternalServerError, "could not load companies")
+		c.String(http.StatusInternalServerError, "could not load stores")
 		return store.Product{}, nil, false
 	}
-	return prod, companies, true
+	return prod, stories, true
 }
 
-func (s *Server) renderPurchaseForm(c *gin.Context, status int, prod store.Product, p store.Purchase, companies []store.Company, isNew bool, hasLast bool, lastSize decimal.Decimal, errMsg string) {
+func (s *Server) renderPurchaseForm(c *gin.Context, status int, prod store.Product, p store.Purchase, stories []store.Story, isNew bool, hasLast bool, lastSize decimal.Decimal, errMsg string) {
 	title := "Add new purchase"
 	if !isNew {
 		title = editPurchaseTitle(p)
@@ -246,7 +246,7 @@ func (s *Server) renderPurchaseForm(c *gin.Context, status int, prod store.Produ
 		"Page":         s.adminPage(title, "", errMsg),
 		"Product":      prod,
 		"Purchase":     p,
-		"Companies":    companies,
+		"Stories":      stories,
 		"New":          isNew,
 		"HasLastPack":  hasLast,
 		"LastPackSize": lastSize,
@@ -264,9 +264,9 @@ func newPurchaseDraft(hasLast bool, lastSize decimal.Decimal) store.Purchase {
 
 func purchaseFromForm(c *gin.Context) store.Purchase {
 	p := store.Purchase{
-		BoughtOn:  store.JoinBoughtOn(c.PostForm("bought_on"), c.PostForm("bought_at")),
-		Kind:      store.PurchaseKind(c.PostForm("kind")),
-		CompanyID: formInt64(c, "company_id"),
+		BoughtOn: store.JoinBoughtOn(c.PostForm("bought_on"), c.PostForm("bought_at")),
+		Kind:     store.PurchaseKind(c.PostForm("kind")),
+		StoryID:  formInt64(c, "story_id"),
 	}
 	p.Amount, _ = parseDecimal(c.PostForm("amount"), 2, true)
 	p.PackageCount, _ = parseDecimal(c.PostForm("packages"), 8, false)

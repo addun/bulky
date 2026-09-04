@@ -3,6 +3,7 @@ package web
 import (
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -49,7 +50,7 @@ func (s *Server) aliases(c *gin.Context) {
 }
 
 func (s *Server) newAlias(c *gin.Context) {
-	products, companies, err := s.aliasLookups()
+	products, stories, chains, err := s.aliasLookups()
 	if err != nil {
 		c.String(http.StatusInternalServerError, "could not load the catalog")
 		return
@@ -70,22 +71,18 @@ func (s *Server) newAlias(c *gin.Context) {
 		locked = &p
 		form.ProductID = p.ID
 	}
-	s.renderAliasForm(c, http.StatusOK, form, products, companies, from, locked, true, "")
+	s.renderAliasForm(c, http.StatusOK, form, products, stories, chains, from, locked, true, "")
 }
 
 func (s *Server) createAlias(c *gin.Context) {
 	from := formInt64(c, "from_product")
-	form := store.ProductAlias{
-		ProductID: formInt64(c, "product_id"),
-		CompanyID: formInt64(c, "company_id"),
-		Alias:     strings.TrimSpace(c.PostForm("alias")),
-	}
+	form := aliasFormFromPost(c)
 	_, err := s.saveAliasFromForm(c, 0)
 	if err == nil {
 		c.Redirect(http.StatusSeeOther, aliasesPath(from))
 		return
 	}
-	products, companies, lookupErr := s.aliasLookups()
+	products, stories, chains, lookupErr := s.aliasLookups()
 	if lookupErr != nil {
 		c.String(http.StatusInternalServerError, "could not load the catalog")
 		return
@@ -100,7 +97,7 @@ func (s *Server) createAlias(c *gin.Context) {
 	if msg == "" {
 		msg = "Could not save the alias."
 	}
-	s.renderAliasForm(c, http.StatusUnprocessableEntity, form, products, companies, from, locked, true, msg)
+	s.renderAliasForm(c, http.StatusUnprocessableEntity, form, products, stories, chains, from, locked, true, msg)
 }
 
 func (s *Server) editAlias(c *gin.Context) {
@@ -118,13 +115,13 @@ func (s *Server) editAlias(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "could not load alias")
 		return
 	}
-	products, companies, err := s.aliasLookups()
+	products, stories, chains, err := s.aliasLookups()
 	if err != nil {
 		c.String(http.StatusInternalServerError, "could not load the catalog")
 		return
 	}
 	from := formInt64Query(c, "product")
-	s.renderAliasForm(c, http.StatusOK, a, products, companies, from, nil, false, "")
+	s.renderAliasForm(c, http.StatusOK, a, products, stories, chains, from, nil, false, "")
 }
 
 func (s *Server) updateAlias(c *gin.Context) {
@@ -141,20 +138,16 @@ func (s *Server) updateAlias(c *gin.Context) {
 		return
 	}
 	_, err := s.saveAliasFromForm(c, id)
-	products, companies, lookupErr := s.aliasLookups()
+	products, stories, chains, lookupErr := s.aliasLookups()
 	if lookupErr != nil {
 		c.String(http.StatusInternalServerError, "could not load the catalog")
 		return
 	}
 	from := formInt64(c, "from_product")
-	form := store.ProductAlias{
-		ID:        id,
-		ProductID: formInt64(c, "product_id"),
-		CompanyID: formInt64(c, "company_id"),
-		Alias:     strings.TrimSpace(c.PostForm("alias")),
-	}
+	form := aliasFormFromPost(c)
+	form.ID = id
 	if msg := aliasFormError(err); msg != "" {
-		s.renderAliasForm(c, http.StatusUnprocessableEntity, form, products, companies, from, nil, false, msg)
+		s.renderAliasForm(c, http.StatusUnprocessableEntity, form, products, stories, chains, from, nil, false, msg)
 		return
 	}
 	if err != nil {
@@ -185,7 +178,7 @@ func (s *Server) confirmDeleteAlias(c *gin.Context) {
 		action += q
 	}
 	c.HTML(http.StatusOK, "confirm.html", gin.H{
-		"Page":    s.adminPage("Delete alias", "", ""),
+		"Page":    s.adminPage("Delete alias “"+a.Alias+"”?", "", ""),
 		"Title":   "Delete alias “" + a.Alias + "”?",
 		"Body":    "This only removes the alternate name. The product stays.",
 		"Action":  action,
@@ -212,26 +205,71 @@ func (s *Server) deleteAlias(c *gin.Context) {
 	c.Redirect(http.StatusSeeOther, aliasesPath(formInt64Query(c, "product")))
 }
 
-func (s *Server) saveAliasFromForm(c *gin.Context, id int64) (store.ProductAlias, error) {
-	productID := formInt64(c, "product_id")
-	companyID := formInt64(c, "company_id")
-	alias := strings.TrimSpace(c.PostForm("alias"))
-	if id == 0 {
-		return s.store.CreateAlias(productID, companyID, alias)
+func aliasFormFromPost(c *gin.Context) store.ProductAlias {
+	storyID, chainID, _ := parseAliasScope(c.PostForm("scope"))
+	return store.ProductAlias{
+		ProductID:     formInt64(c, "product_id"),
+		StoryID:       storyID,
+		RetailChainID: chainID,
+		Alias:         strings.TrimSpace(c.PostForm("alias")),
 	}
-	return store.ProductAlias{}, s.store.UpdateAlias(id, productID, companyID, alias)
 }
 
-func (s *Server) aliasLookups() ([]store.ProductListItem, []store.Company, error) {
+func (s *Server) saveAliasFromForm(c *gin.Context, id int64) (store.ProductAlias, error) {
+	productID := formInt64(c, "product_id")
+	storyID, chainID, err := parseAliasScope(c.PostForm("scope"))
+	if err != nil {
+		return store.ProductAlias{}, err
+	}
+	alias := strings.TrimSpace(c.PostForm("alias"))
+	if id == 0 {
+		return s.store.CreateAlias(productID, storyID, chainID, alias)
+	}
+	return store.ProductAlias{}, s.store.UpdateAlias(id, productID, storyID, chainID, alias)
+}
+
+func parseAliasScope(raw string) (storyID, chainID int64, err error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0, 0, nil
+	}
+	kind, idStr, ok := strings.Cut(raw, ":")
+	if !ok {
+		return 0, 0, store.ErrInvalidStory
+	}
+	n, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil || n <= 0 {
+		switch kind {
+		case "chain":
+			return 0, 0, store.ErrInvalidRetailChain
+		default:
+			return 0, 0, store.ErrInvalidStory
+		}
+	}
+	switch kind {
+	case "story":
+		return n, 0, nil
+	case "chain":
+		return 0, n, nil
+	default:
+		return 0, 0, store.ErrInvalidStory
+	}
+}
+
+func (s *Server) aliasLookups() ([]store.ProductListItem, []store.Story, []store.RetailChain, error) {
 	products, err := s.store.ListProducts("")
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	companies, err := s.store.ListCompanies()
+	stories, err := s.store.ListStories()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	return products, companies, nil
+	chains, err := s.store.ListRetailChains()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return products, stories, chains, nil
 }
 
 func aliasFormError(err error) string {
@@ -240,16 +278,20 @@ func aliasFormError(err error) string {
 		return "Alias is required."
 	case errors.Is(err, store.ErrNotFound):
 		return "Choose a product."
-	case errors.Is(err, store.ErrInvalidCompany):
-		return "Choose a company."
+	case errors.Is(err, store.ErrInvalidStory):
+		return "Choose a store."
+	case errors.Is(err, store.ErrInvalidRetailChain):
+		return "Choose a retail chain."
+	case errors.Is(err, store.ErrAliasScope):
+		return "Choose either a chain or a store, not both."
 	case errors.Is(err, store.ErrDuplicate):
-		return "That alias already exists for this shop, or matches a product name."
+		return "That alias already exists for this scope, or matches a product name."
 	default:
 		return ""
 	}
 }
 
-func (s *Server) renderAliasForm(c *gin.Context, status int, a store.ProductAlias, products []store.ProductListItem, companies []store.Company, from int64, locked *store.Product, isNew bool, errMsg string) {
+func (s *Server) renderAliasForm(c *gin.Context, status int, a store.ProductAlias, products []store.ProductListItem, stories []store.Story, chains []store.RetailChain, from int64, locked *store.Product, isNew bool, errMsg string) {
 	title := "Edit alias"
 	if isNew {
 		title = "Add alias"
@@ -258,7 +300,8 @@ func (s *Server) renderAliasForm(c *gin.Context, status int, a store.ProductAlia
 		"Page":          s.adminPage(title, "", errMsg),
 		"Alias":         a,
 		"Products":      products,
-		"Companies":     companies,
+		"Stories":       stories,
+		"Chains":        chains,
 		"FromProduct":   from,
 		"LockedProduct": locked,
 		"Cancel":        aliasesPath(from),

@@ -12,6 +12,9 @@
     }
     if (current) a.classList.add("is-current");
   });
+  document.querySelectorAll(".rail nav details").forEach(function (d) {
+    if (d.querySelector("a.is-current")) d.classList.add("is-current");
+  });
 
   function parseNum(raw) {
     raw = String(raw || "").trim().replace(",", ".");

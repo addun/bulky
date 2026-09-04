@@ -3,27 +3,54 @@ package store
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"strings"
 )
 
 type ProductAlias struct {
-	ID          int64
-	ProductID   int64
-	ProductName string
-	CompanyID   int64
-	CompanyName string
-	Alias       string
+	ID              int64
+	ProductID       int64
+	ProductName     string
+	StoryID         int64
+	StoryName       string
+	RetailChainID   int64
+	RetailChainName string
+	Alias           string
+}
+
+func (a ProductAlias) ScopeValue() string {
+	switch {
+	case a.StoryID > 0:
+		return fmt.Sprintf("story:%d", a.StoryID)
+	case a.RetailChainID > 0:
+		return fmt.Sprintf("chain:%d", a.RetailChainID)
+	default:
+		return ""
+	}
+}
+
+func (a ProductAlias) ScopeLabel() string {
+	switch {
+	case a.StoryID > 0:
+		return a.StoryName
+	case a.RetailChainID > 0:
+		return a.RetailChainName
+	default:
+		return "any shop"
+	}
 }
 
 const aliasSelect = `
-SELECT a.id, a.product_id, p.name, a.company_id, COALESCE(c.name, ''), a.alias
+SELECT a.id, a.product_id, p.name, a.story_id, COALESCE(c.name, ''),
+       a.retail_chain_id, COALESCE(rc.name, ''), a.alias
 FROM product_aliases a
 JOIN products p ON p.id = a.product_id
-LEFT JOIN companies c ON c.id = a.company_id`
+LEFT JOIN stories c ON c.id = a.story_id
+LEFT JOIN retail_chains rc ON rc.id = a.retail_chain_id`
 
 func (s *Store) ListAliases() ([]ProductAlias, error) {
 	rows, err := s.db.Query(aliasSelect + `
-ORDER BY p.name COLLATE NOCASE, c.name COLLATE NOCASE, a.alias COLLATE NOCASE, a.id`)
+ORDER BY p.name COLLATE NOCASE, c.name COLLATE NOCASE, rc.name COLLATE NOCASE, a.alias COLLATE NOCASE, a.id`)
 	if err != nil {
 		return nil, err
 	}
@@ -34,7 +61,7 @@ ORDER BY p.name COLLATE NOCASE, c.name COLLATE NOCASE, a.alias COLLATE NOCASE, a
 func (s *Store) ListAliasesByProduct(productID int64) ([]ProductAlias, error) {
 	rows, err := s.db.Query(aliasSelect+`
 WHERE a.product_id = ?
-ORDER BY a.company_id IS NOT NULL, c.name COLLATE NOCASE, a.alias COLLATE NOCASE, a.id`, productID)
+ORDER BY a.story_id IS NOT NULL, a.retail_chain_id IS NOT NULL, c.name COLLATE NOCASE, rc.name COLLATE NOCASE, a.alias COLLATE NOCASE, a.id`, productID)
 	if err != nil {
 		return nil, err
 	}
@@ -46,21 +73,21 @@ func (s *Store) GetAlias(id int64) (ProductAlias, error) {
 	return scanAlias(s.db.QueryRow(aliasSelect+` WHERE a.id = ?`, id))
 }
 
-func (s *Store) CreateAlias(productID, companyID int64, alias string) (ProductAlias, error) {
-	return createAliasTx(s.db, productID, companyID, alias)
+func (s *Store) CreateAlias(productID, storyID, chainID int64, alias string) (ProductAlias, error) {
+	return createAliasTx(s.db, productID, storyID, chainID, alias)
 }
 
-func (s *Store) UpdateAlias(id, productID, companyID int64, alias string) error {
+func (s *Store) UpdateAlias(id, productID, storyID, chainID int64, alias string) error {
 	if _, err := s.GetAlias(id); err != nil {
 		return err
 	}
-	alias, company, err := prepareAliasTx(s.db, productID, companyID, alias)
+	alias, story, chain, err := prepareAliasTx(s.db, productID, storyID, chainID, alias)
 	if err != nil {
 		return err
 	}
 	res, err := s.db.Exec(
-		`UPDATE product_aliases SET product_id = ?, company_id = ?, alias = ? WHERE id = ?`,
-		productID, company, alias, id,
+		`UPDATE product_aliases SET product_id = ?, story_id = ?, retail_chain_id = ?, alias = ? WHERE id = ?`,
+		productID, story, chain, alias, id,
 	)
 	if err != nil {
 		if isUniqueErr(err) {
@@ -93,53 +120,74 @@ func (s *Store) DeleteAlias(id int64) error {
 	return nil
 }
 
-func prepareAliasTx(q queryRower, productID, companyID int64, alias string) (string, any, error) {
+func prepareAliasTx(q queryRower, productID, storyID, chainID int64, alias string) (string, any, any, error) {
 	alias = strings.TrimSpace(alias)
 	if alias == "" {
-		return "", nil, ErrInvalidAlias
+		return "", nil, nil, ErrInvalidAlias
+	}
+	if storyID != 0 && chainID != 0 {
+		return "", nil, nil, ErrAliasScope
 	}
 	var n int
 	if err := q.QueryRow(`SELECT COUNT(*) FROM products WHERE id = ?`, productID).Scan(&n); err != nil {
-		return "", nil, err
+		return "", nil, nil, err
 	}
 	if n == 0 {
-		return "", nil, ErrNotFound
+		return "", nil, nil, ErrNotFound
 	}
-	company, err := optionalCompanyArgTx(q, companyID)
+	story, err := optionalStoryArgTx(q, storyID)
 	if err != nil {
-		return "", nil, err
+		return "", nil, nil, err
+	}
+	chain, err := optionalChainArgTx(q, chainID)
+	if err != nil {
+		return "", nil, nil, err
 	}
 	if err := q.QueryRow(`SELECT COUNT(*) FROM products WHERE name = ? COLLATE NOCASE`, alias).Scan(&n); err != nil {
-		return "", nil, err
+		return "", nil, nil, err
 	}
 	if n > 0 {
-		return "", nil, ErrDuplicate
+		return "", nil, nil, ErrDuplicate
 	}
-	return alias, company, nil
+	return alias, story, chain, nil
 }
 
-func optionalCompanyArgTx(q queryRower, id int64) (any, error) {
+func optionalStoryArgTx(q queryRower, id int64) (any, error) {
 	if id == 0 {
 		return nil, nil
 	}
 	var n int
-	if err := q.QueryRow(`SELECT COUNT(*) FROM companies WHERE id = ?`, id).Scan(&n); err != nil {
+	if err := q.QueryRow(`SELECT COUNT(*) FROM stories WHERE id = ?`, id).Scan(&n); err != nil {
 		return nil, err
 	}
 	if n == 0 {
-		return nil, ErrInvalidCompany
+		return nil, ErrInvalidStory
 	}
 	return id, nil
 }
 
-func createAliasTx(db execRower, productID, companyID int64, alias string) (ProductAlias, error) {
-	alias, company, err := prepareAliasTx(db, productID, companyID, alias)
+func optionalChainArgTx(q queryRower, id int64) (any, error) {
+	if id == 0 {
+		return nil, nil
+	}
+	var n int
+	if err := q.QueryRow(`SELECT COUNT(*) FROM retail_chains WHERE id = ?`, id).Scan(&n); err != nil {
+		return nil, err
+	}
+	if n == 0 {
+		return nil, ErrInvalidRetailChain
+	}
+	return id, nil
+}
+
+func createAliasTx(db execRower, productID, storyID, chainID int64, alias string) (ProductAlias, error) {
+	alias, story, chain, err := prepareAliasTx(db, productID, storyID, chainID, alias)
 	if err != nil {
 		return ProductAlias{}, err
 	}
 	res, err := db.Exec(
-		`INSERT INTO product_aliases (product_id, company_id, alias) VALUES (?, ?, ?)`,
-		productID, company, alias,
+		`INSERT INTO product_aliases (product_id, story_id, retail_chain_id, alias) VALUES (?, ?, ?, ?)`,
+		productID, story, chain, alias,
 	)
 	if err != nil {
 		if isUniqueErr(err) {
@@ -180,19 +228,20 @@ func scanAliases(rows *sql.Rows) ([]ProductAlias, error) {
 
 func scanAlias(row rowScanner) (ProductAlias, error) {
 	var a ProductAlias
-	var companyID sql.NullInt64
-	err := row.Scan(&a.ID, &a.ProductID, &a.ProductName, &companyID, &a.CompanyName, &a.Alias)
+	var storyID, chainID sql.NullInt64
+	err := row.Scan(&a.ID, &a.ProductID, &a.ProductName, &storyID, &a.StoryName, &chainID, &a.RetailChainName, &a.Alias)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ProductAlias{}, ErrNotFound
 	}
 	if err != nil {
 		return ProductAlias{}, err
 	}
-	a.CompanyID = companyID.Int64
+	a.StoryID = storyID.Int64
+	a.RetailChainID = chainID.Int64
 	return a, nil
 }
 
-func productByAliasTx(q queryRower, alias string, companyID int64) (Product, error) {
+func productByAliasTx(q queryRower, alias string, storyID, chainID int64) (Product, error) {
 	alias = strings.TrimSpace(alias)
 	if alias == "" {
 		return Product{}, ErrNotFound
@@ -204,16 +253,33 @@ JOIN products p ON p.id = a.product_id
 JOIN units u ON u.id = p.unit_id
 WHERE a.alias = ? COLLATE NOCASE AND `
 	var row *sql.Row
-	if companyID > 0 {
-		row = q.QueryRow(qstr+`a.company_id = ?
+	switch {
+	case storyID > 0:
+		row = q.QueryRow(qstr+`a.story_id = ?
 ORDER BY a.id
-LIMIT 1`, alias, companyID)
-	} else {
-		row = q.QueryRow(qstr+`a.company_id IS NULL
+LIMIT 1`, alias, storyID)
+	case chainID > 0:
+		row = q.QueryRow(qstr+`a.retail_chain_id = ?
+ORDER BY a.id
+LIMIT 1`, alias, chainID)
+	default:
+		row = q.QueryRow(qstr+`a.story_id IS NULL AND a.retail_chain_id IS NULL
 ORDER BY a.id
 LIMIT 1`, alias)
 	}
 	return scanProductRow(row)
+}
+
+func storyChainIDTx(q queryRower, storyID int64) (int64, error) {
+	if storyID <= 0 {
+		return 0, nil
+	}
+	var chain sql.NullInt64
+	err := q.QueryRow(`SELECT retail_chain_id FROM stories WHERE id = ?`, storyID).Scan(&chain)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, nil
+	}
+	return chain.Int64, err
 }
 
 func scanProductRow(row *sql.Row) (Product, error) {

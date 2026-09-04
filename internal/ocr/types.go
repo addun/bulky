@@ -32,8 +32,9 @@ type Bill struct {
 	BoughtAt        string `json:"bought_at,omitempty"`
 	Notes           string `json:"notes"`
 	NotABill        bool   `json:"not_a_bill"`
-	CompanyID       int64  `json:"company_id,omitempty"`
-	CompanyName     string `json:"company_name,omitempty"`
+	StoryID         int64  `json:"company_id,omitempty"`
+	StoryName       string `json:"company_name,omitempty"`
+	ExternalID      string `json:"external_id,omitempty"`
 	StreetName      string `json:"street_name,omitempty"`
 	BuildingNumber  string `json:"building_number,omitempty"`
 	ApartmentNumber string `json:"apartment_number,omitempty"`

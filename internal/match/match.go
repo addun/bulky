@@ -23,11 +23,11 @@ var foldPolish = map[rune]rune{
 	'ó': 'o', 'ś': 's', 'ź': 'z', 'ż': 'z',
 }
 
-func Product(query string, shop, global, names []Label) (int64, bool) {
+func Product(query string, shop, chain, global, names []Label) (int64, bool) {
 	if strings.TrimSpace(query) == "" {
 		return 0, false
 	}
-	for _, pool := range [][]Label{shop, global, names} {
+	for _, pool := range [][]Label{shop, chain, global, names} {
 		id, res := exactPool(query, pool)
 		switch res {
 		case hit:

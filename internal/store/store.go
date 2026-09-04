@@ -19,19 +19,20 @@ import (
 var (
 	ErrNotFound           = errors.New("not found")
 	ErrUnitInUse          = errors.New("unit is in use")
-	ErrCompanyInUse       = errors.New("company is in use")
+	ErrStoryInUse         = errors.New("story is in use")
 	ErrDuplicate          = errors.New("already exists")
 	ErrInvalidUnit        = errors.New("invalid unit")
-	ErrInvalidCompany     = errors.New("invalid company")
-	ErrCompanyName        = errors.New("company name required")
-	ErrCompanyStreet      = errors.New("company street name required")
-	ErrCompanyBuilding    = errors.New("company building number required")
-	ErrCompanyPostal      = errors.New("company postal code required")
-	ErrCompanyCity        = errors.New("company city required")
+	ErrInvalidStory       = errors.New("invalid story")
+	ErrStoryName          = errors.New("story name required")
+	ErrStoryStreet        = errors.New("story street name required")
+	ErrStoryBuilding      = errors.New("story building number required")
+	ErrStoryPostal        = errors.New("story postal code required")
+	ErrStoryCity          = errors.New("story city required")
 	ErrInvalidKind        = errors.New("invalid purchase kind")
 	ErrIncompletePackage  = errors.New("packages and package size are both required")
 	ErrInvalidPackage     = errors.New("packages and package size must be greater than zero")
 	ErrInvalidAlias       = errors.New("alias is required")
+	ErrAliasScope         = errors.New("alias cannot be both story and chain")
 	ErrInvalidSetting     = errors.New("invalid setting")
 	ErrSameProduct        = errors.New("cannot merge a product into itself")
 	ErrUnitMismatch       = errors.New("products use different units")
@@ -39,13 +40,20 @@ var (
 	ErrConversionMismatch = errors.New("products convert to a unit differently")
 )
 
+const storySelect = `
+SELECT c.id, c.name, c.street_name, c.building_number, c.apartment_number, c.postal_code, c.city,
+       c.external_id, COALESCE(c.retail_chain_id, 0), COALESCE(rc.name, ''), COUNT(p.id)
+FROM stories c
+LEFT JOIN retail_chains rc ON rc.id = c.retail_chain_id
+LEFT JOIN purchases p ON p.story_id = c.id`
+
 const purchaseSelect = `
-SELECT p.id, p.product_id, p.company_id, p.kind, p.receipt_id, p.bought_on, p.quantity, p.amount, p.created_at,
+SELECT p.id, p.product_id, p.story_id, p.kind, p.receipt_id, p.bought_on, p.quantity, p.amount, p.created_at,
        p.package_count, p.package_size
 FROM purchases p`
 
 const receiptPurchaseSelect = `
-SELECT p.id, p.product_id, p.company_id, p.kind, p.receipt_id, p.bought_on, p.quantity, p.amount, p.created_at,
+SELECT p.id, p.product_id, p.story_id, p.kind, p.receipt_id, p.bought_on, p.quantity, p.amount, p.created_at,
        p.package_count, p.package_size, pr.name, u.name, pr.image_path
 FROM purchases p
 JOIN products pr ON pr.id = p.product_id
@@ -97,7 +105,7 @@ type ProductListItem struct {
 	PurchaseCount  int
 }
 
-type Company struct {
+type Story struct {
 	ID              int64
 	Name            string
 	StreetName      string
@@ -105,10 +113,13 @@ type Company struct {
 	ApartmentNumber string
 	PostalCode      string
 	City            string
+	ExternalID      string
+	RetailChainID   int64
+	RetailChainName string
 	PurchaseCount   int
 }
 
-func (c Company) StreetLine() string {
+func (c Story) StreetLine() string {
 	s := strings.TrimSpace(c.StreetName + " " + c.BuildingNumber)
 	if c.ApartmentNumber != "" {
 		s += "/" + c.ApartmentNumber
@@ -116,7 +127,7 @@ func (c Company) StreetLine() string {
 	return s
 }
 
-func (c Company) AddressLine() string {
+func (c Story) AddressLine() string {
 	street := c.StreetLine()
 	loc := strings.TrimSpace(c.PostalCode + " " + c.City)
 	switch {
@@ -129,7 +140,7 @@ func (c Company) AddressLine() string {
 	}
 }
 
-func (c Company) Label() string {
+func (c Story) Label() string {
 	addr := c.AddressLine()
 	if addr == "" {
 		return c.Name
@@ -140,7 +151,7 @@ func (c Company) Label() string {
 type Purchase struct {
 	ID           int64
 	ProductID    int64
-	CompanyID    int64
+	StoryID      int64
 	Kind         PurchaseKind
 	ReceiptID    int64
 	BoughtOn     string
@@ -304,21 +315,18 @@ func (s *Store) DeleteUnit(id int64) error {
 	return nil
 }
 
-func (s *Store) ListCompanies() ([]Company, error) {
-	rows, err := s.db.Query(`
-SELECT c.id, c.name, c.street_name, c.building_number, c.apartment_number, c.postal_code, c.city, COUNT(p.id)
-FROM companies c
-LEFT JOIN purchases p ON p.company_id = c.id
+func (s *Store) ListStories() ([]Story, error) {
+	rows, err := s.db.Query(storySelect + `
 GROUP BY c.id
 ORDER BY c.name COLLATE NOCASE, c.id`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Company
+	var out []Story
 	for rows.Next() {
-		var c Company
-		if err := rows.Scan(&c.ID, &c.Name, &c.StreetName, &c.BuildingNumber, &c.ApartmentNumber, &c.PostalCode, &c.City, &c.PurchaseCount); err != nil {
+		c, err := scanStoryRow(rows)
+		if err != nil {
 			return nil, err
 		}
 		out = append(out, c)
@@ -326,49 +334,45 @@ ORDER BY c.name COLLATE NOCASE, c.id`)
 	return out, rows.Err()
 }
 
-func (s *Store) GetCompany(id int64) (Company, error) {
-	var c Company
-	err := s.db.QueryRow(`
-SELECT c.id, c.name, c.street_name, c.building_number, c.apartment_number, c.postal_code, c.city, COUNT(p.id)
-FROM companies c
-LEFT JOIN purchases p ON p.company_id = c.id
+func (s *Store) GetStory(id int64) (Story, error) {
+	c, err := scanStoryRow(s.db.QueryRow(storySelect+`
 WHERE c.id = ?
-GROUP BY c.id`, id).Scan(&c.ID, &c.Name, &c.StreetName, &c.BuildingNumber, &c.ApartmentNumber, &c.PostalCode, &c.City, &c.PurchaseCount)
+GROUP BY c.id`, id))
 	if errors.Is(err, sql.ErrNoRows) {
-		return Company{}, ErrNotFound
+		return Story{}, ErrNotFound
 	}
 	return c, err
 }
 
-func (s *Store) CreateCompany(name, streetName, building, apartment, postalCode, city string) (Company, error) {
-	c, err := normalizeCompany(name, streetName, building, apartment, postalCode, city)
+func (s *Store) CreateStory(name, streetName, building, apartment, postalCode, city, externalID string, retailChainID int64) (Story, error) {
+	c, err := normalizeStory(name, streetName, building, apartment, postalCode, city, externalID)
 	if err != nil {
-		return Company{}, err
+		return Story{}, err
 	}
-	res, err := s.db.Exec(
-		`INSERT INTO companies (name, street_name, building_number, apartment_number, postal_code, city) VALUES (?, ?, ?, ?, ?, ?)`,
-		c.Name, c.StreetName, c.BuildingNumber, c.ApartmentNumber, c.PostalCode, c.City,
-	)
+	id, err := insertStory(s.db, c, retailChainID)
 	if err != nil {
-		return Company{}, err
+		return Story{}, err
 	}
-	id, err := res.LastInsertId()
-	if err != nil {
-		return Company{}, err
-	}
-	return s.GetCompany(id)
+	return s.GetStory(id)
 }
 
-func (s *Store) UpdateCompany(id int64, name, streetName, building, apartment, postalCode, city string) error {
-	c, err := normalizeCompany(name, streetName, building, apartment, postalCode, city)
+func (s *Store) UpdateStory(id int64, name, streetName, building, apartment, postalCode, city, externalID string, retailChainID int64) error {
+	c, err := normalizeStory(name, streetName, building, apartment, postalCode, city, externalID)
+	if err != nil {
+		return err
+	}
+	chain, err := optionalRetailChainArgTx(s.db, retailChainID)
 	if err != nil {
 		return err
 	}
 	res, err := s.db.Exec(
-		`UPDATE companies SET name = ?, street_name = ?, building_number = ?, apartment_number = ?, postal_code = ?, city = ? WHERE id = ?`,
-		c.Name, c.StreetName, c.BuildingNumber, c.ApartmentNumber, c.PostalCode, c.City, id,
+		`UPDATE stories SET name = ?, street_name = ?, building_number = ?, apartment_number = ?, postal_code = ?, city = ?, external_id = ?, retail_chain_id = ? WHERE id = ?`,
+		c.Name, c.StreetName, c.BuildingNumber, c.ApartmentNumber, c.PostalCode, c.City, c.ExternalID, chain, id,
 	)
 	if err != nil {
+		if isUniqueErr(err) {
+			return ErrDuplicate
+		}
 		return err
 	}
 	n, err := res.RowsAffected()
@@ -381,15 +385,39 @@ func (s *Store) UpdateCompany(id int64, name, streetName, building, apartment, p
 	return nil
 }
 
-func (s *Store) DeleteCompany(id int64) error {
-	c, err := s.GetCompany(id)
+func insertStory(db execRower, c Story, retailChainID int64) (int64, error) {
+	chain, err := optionalRetailChainArgTx(db, retailChainID)
+	if err != nil {
+		return 0, err
+	}
+	res, err := db.Exec(
+		`INSERT INTO stories (name, street_name, building_number, apartment_number, postal_code, city, external_id, retail_chain_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		c.Name, c.StreetName, c.BuildingNumber, c.ApartmentNumber, c.PostalCode, c.City, c.ExternalID, chain,
+	)
+	if err != nil {
+		if isUniqueErr(err) {
+			return 0, ErrDuplicate
+		}
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+func scanStoryRow(row rowScanner) (Story, error) {
+	var c Story
+	err := row.Scan(&c.ID, &c.Name, &c.StreetName, &c.BuildingNumber, &c.ApartmentNumber, &c.PostalCode, &c.City, &c.ExternalID, &c.RetailChainID, &c.RetailChainName, &c.PurchaseCount)
+	return c, err
+}
+
+func (s *Store) DeleteStory(id int64) error {
+	c, err := s.GetStory(id)
 	if err != nil {
 		return err
 	}
 	if c.PurchaseCount > 0 {
-		return ErrCompanyInUse
+		return ErrStoryInUse
 	}
-	res, err := s.db.Exec(`DELETE FROM companies WHERE id = ?`, id)
+	res, err := s.db.Exec(`DELETE FROM stories WHERE id = ?`, id)
 	if err != nil {
 		return err
 	}
@@ -695,14 +723,14 @@ func (s *Store) GetPurchase(id int64) (Purchase, error) {
 	return p, err
 }
 
-func (s *Store) CreatePurchase(productID, companyID int64, boughtOn string, quantity, amount decimal.Decimal, kind PurchaseKind, packages, packSize decimal.Decimal) (Purchase, error) {
+func (s *Store) CreatePurchase(productID, storyID int64, boughtOn string, quantity, amount decimal.Decimal, kind PurchaseKind, packages, packSize decimal.Decimal) (Purchase, error) {
 	if _, err := s.GetProduct(productID); err != nil {
 		return Purchase{}, err
 	}
 	if _, err := ParsePurchaseKind(string(kind)); err != nil {
 		return Purchase{}, err
 	}
-	company, err := s.optionalCompanyArg(companyID)
+	story, err := s.optionalStoryArg(storyID)
 	if err != nil {
 		return Purchase{}, err
 	}
@@ -711,8 +739,8 @@ func (s *Store) CreatePurchase(productID, companyID int64, boughtOn string, quan
 		return Purchase{}, err
 	}
 	res, err := s.db.Exec(
-		`INSERT INTO purchases (product_id, company_id, kind, receipt_id, bought_on, quantity, package_count, package_size, amount, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		productID, company, kind, nil, boughtOn, qty.String(), packCount, packSizeVal, amount.String(), nowRFC3339(),
+		`INSERT INTO purchases (product_id, story_id, kind, receipt_id, bought_on, quantity, package_count, package_size, amount, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		productID, story, kind, nil, boughtOn, qty.String(), packCount, packSizeVal, amount.String(), nowRFC3339(),
 	)
 	if err != nil {
 		return Purchase{}, err
@@ -724,11 +752,11 @@ func (s *Store) CreatePurchase(productID, companyID int64, boughtOn string, quan
 	return s.GetPurchase(id)
 }
 
-func (s *Store) UpdatePurchase(id, companyID int64, boughtOn string, quantity, amount decimal.Decimal, kind PurchaseKind, packages, packSize decimal.Decimal) error {
+func (s *Store) UpdatePurchase(id, storyID int64, boughtOn string, quantity, amount decimal.Decimal, kind PurchaseKind, packages, packSize decimal.Decimal) error {
 	if _, err := ParsePurchaseKind(string(kind)); err != nil {
 		return err
 	}
-	company, err := s.optionalCompanyArg(companyID)
+	story, err := s.optionalStoryArg(storyID)
 	if err != nil {
 		return err
 	}
@@ -737,8 +765,8 @@ func (s *Store) UpdatePurchase(id, companyID int64, boughtOn string, quantity, a
 		return err
 	}
 	res, err := s.db.Exec(
-		`UPDATE purchases SET company_id = ?, kind = ?, bought_on = ?, quantity = ?, package_count = ?, package_size = ?, amount = ? WHERE id = ?`,
-		company, kind, boughtOn, qty.String(), packCount, packSizeVal, amount.String(), id,
+		`UPDATE purchases SET story_id = ?, kind = ?, bought_on = ?, quantity = ?, package_count = ?, package_size = ?, amount = ? WHERE id = ?`,
+		story, kind, boughtOn, qty.String(), packCount, packSizeVal, amount.String(), id,
 	)
 	if err != nil {
 		return err
@@ -862,18 +890,18 @@ type purchaseProductCols struct {
 
 func scanPurchaseRow(row rowScanner, withProduct bool) (Purchase, purchaseProductCols, error) {
 	var p Purchase
-	var companyID, receiptID sql.NullInt64
+	var storyID, receiptID sql.NullInt64
 	var qty, amt, kind string
 	var packCount, packSize sql.NullString
 	var extra purchaseProductCols
-	dest := []any{&p.ID, &p.ProductID, &companyID, &kind, &receiptID, &p.BoughtOn, &qty, &amt, &p.CreatedAt, &packCount, &packSize}
+	dest := []any{&p.ID, &p.ProductID, &storyID, &kind, &receiptID, &p.BoughtOn, &qty, &amt, &p.CreatedAt, &packCount, &packSize}
 	if withProduct {
 		dest = append(dest, &extra.name, &extra.unit, &extra.image)
 	}
 	if err := row.Scan(dest...); err != nil {
 		return Purchase{}, extra, err
 	}
-	p.CompanyID = companyID.Int64
+	p.StoryID = storyID.Int64
 	p.Kind = PurchaseKind(kind)
 	p.ReceiptID = receiptID.Int64
 	q, err := decimal.NewFromString(qty)
@@ -903,42 +931,43 @@ func scanPurchaseRow(row rowScanner, withProduct bool) (Purchase, purchaseProduc
 	return p, extra, nil
 }
 
-func (s *Store) optionalCompanyArg(id int64) (any, error) {
+func (s *Store) optionalStoryArg(id int64) (any, error) {
 	if id == 0 {
 		return nil, nil
 	}
-	if _, err := s.GetCompany(id); err != nil {
+	if _, err := s.GetStory(id); err != nil {
 		if errors.Is(err, ErrNotFound) {
-			return nil, ErrInvalidCompany
+			return nil, ErrInvalidStory
 		}
 		return nil, err
 	}
 	return id, nil
 }
 
-func normalizeCompany(name, streetName, building, apartment, postalCode, city string) (Company, error) {
-	c := Company{
+func normalizeStory(name, streetName, building, apartment, postalCode, city, externalID string) (Story, error) {
+	c := Story{
 		Name:            strings.TrimSpace(name),
 		StreetName:      strings.TrimSpace(streetName),
 		BuildingNumber:  strings.TrimSpace(building),
 		ApartmentNumber: strings.TrimSpace(apartment),
 		PostalCode:      strings.TrimSpace(postalCode),
 		City:            strings.TrimSpace(city),
+		ExternalID:      strings.TrimSpace(externalID),
 	}
 	if c.Name == "" {
-		return Company{}, ErrCompanyName
+		return Story{}, ErrStoryName
 	}
 	if c.StreetName == "" {
-		return Company{}, ErrCompanyStreet
+		return Story{}, ErrStoryStreet
 	}
 	if c.BuildingNumber == "" {
-		return Company{}, ErrCompanyBuilding
+		return Story{}, ErrStoryBuilding
 	}
 	if c.PostalCode == "" {
-		return Company{}, ErrCompanyPostal
+		return Story{}, ErrStoryPostal
 	}
 	if c.City == "" {
-		return Company{}, ErrCompanyCity
+		return Story{}, ErrStoryCity
 	}
 	return c, nil
 }

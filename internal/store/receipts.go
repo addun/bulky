@@ -238,8 +238,8 @@ func (s *Store) MigrateReceipt(id int64, in BillImport, rawJSON string) (BillImp
 	return res, nil
 }
 
-func (s *Store) UpdateReceiptVisit(id, companyID int64, boughtOn string) error {
-	company, err := s.optionalCompanyArg(companyID)
+func (s *Store) UpdateReceiptVisit(id, storyID int64, boughtOn string) error {
+	story, err := s.optionalStoryArg(storyID)
 	if err != nil {
 		return err
 	}
@@ -259,10 +259,10 @@ func (s *Store) UpdateReceiptVisit(id, companyID int64, boughtOn string) error {
 		}
 		return ErrNotFound
 	}
-	if _, err := tx.Exec(`UPDATE purchases SET company_id = ?, bought_on = ? WHERE receipt_id = ?`, company, boughtOn, id); err != nil {
+	if _, err := tx.Exec(`UPDATE purchases SET story_id = ?, bought_on = ? WHERE receipt_id = ?`, story, boughtOn, id); err != nil {
 		return err
 	}
-	raw, err := patchBillVisitJSON(r.RawResponse, companyID, boughtOn)
+	raw, err := patchBillVisitJSON(r.RawResponse, storyID, boughtOn)
 	if err != nil {
 		return err
 	}
@@ -272,7 +272,7 @@ func (s *Store) UpdateReceiptVisit(id, companyID int64, boughtOn string) error {
 	return tx.Commit()
 }
 
-func patchBillVisitJSON(raw string, companyID int64, boughtOn string) (string, error) {
+func patchBillVisitJSON(raw string, storyID int64, boughtOn string) (string, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		raw = "{}"
@@ -288,8 +288,8 @@ func patchBillVisitJSON(raw string, companyID int64, boughtOn string) (string, e
 	} else {
 		delete(bill, "bought_at")
 	}
-	if companyID > 0 {
-		bill["company_id"] = companyID
+	if storyID > 0 {
+		bill["company_id"] = storyID
 	} else {
 		delete(bill, "company_id")
 	}
