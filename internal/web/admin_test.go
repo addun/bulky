@@ -120,3 +120,28 @@ func TestScanReceiptRequiresModel(t *testing.T) {
 		t.Fatalf("location %s", loc)
 	}
 }
+
+func TestUnitsPageHasNoSubtitle(t *testing.T) {
+	st, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	srv, err := New(st, Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/admin/units", nil)
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "<h1>Units</h1>") {
+		t.Fatal("missing heading")
+	}
+	if strings.Contains(body, "Products pick a purchase unit from this list") {
+		t.Fatal("units page should not have a subtitle")
+	}
+}

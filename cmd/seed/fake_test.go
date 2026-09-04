@@ -15,21 +15,21 @@ func TestFakeSeedInsertsRows(t *testing.T) {
 	}
 	t.Cleanup(func() { st.Close() })
 
-	cfg := fakeConfig{Companies: 3, Products: 5, HistoryPerProduct: 2}
+	cfg := fakeConfig{Stories: 3, Products: 5, HistoryPerProduct: 2}
 	stats, err := fakeSeed(st, gofakeit.New(8675309), cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if stats != (fakeStats{Companies: 3, Products: 5, Purchases: 10}) {
+	if stats != (fakeStats{Stories: 3, Products: 5, Purchases: 10}) {
 		t.Fatalf("stats: %+v", stats)
 	}
 
-	companies, err := st.ListCompanies()
+	stories, err := st.ListStories()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(companies) != 3 {
-		t.Fatalf("companies: got %d", len(companies))
+	if len(stories) != 3 {
+		t.Fatalf("stories: got %d", len(stories))
 	}
 
 	products, err := st.ListProducts("")
@@ -54,7 +54,7 @@ func TestFakeSeedInsertsRows(t *testing.T) {
 }
 
 func TestFakeSeedIsReproducible(t *testing.T) {
-	cfg := fakeConfig{Companies: 2, Products: 4, HistoryPerProduct: 3}
+	cfg := fakeConfig{Stories: 2, Products: 4, HistoryPerProduct: 3}
 
 	open := func(t *testing.T) *store.Store {
 		t.Helper()
@@ -100,7 +100,7 @@ func TestFakeSeedUnitPricesStayInRange(t *testing.T) {
 	}
 	t.Cleanup(func() { st.Close() })
 
-	if _, err := fakeSeed(st, gofakeit.New(1), fakeConfig{Companies: 1, Products: 4, HistoryPerProduct: 80}); err != nil {
+	if _, err := fakeSeed(st, gofakeit.New(1), fakeConfig{Stories: 1, Products: 4, HistoryPerProduct: 80}); err != nil {
 		t.Fatal(err)
 	}
 

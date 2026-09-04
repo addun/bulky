@@ -1,6 +1,6 @@
 {{template "header" .}}
 <h1>Edit visit</h1>
-<p class="lede">Date and company for this bill.</p>
+<p class="lede">Date and store for this bill.</p>
 <p class="hint">Saving applies these values to every product assigned to this receipt.</p>
 
 <form class="stack" method="post" action="/admin/receipts/{{.Receipt.ID}}/edit">
@@ -13,17 +13,17 @@
   </fieldset>
 
   <fieldset class="form-group">
-    <legend>Company</legend>
+    <legend>Store</legend>
     <label>
-      Company
-      <select name="company_id">
+      Store
+      <select name="story_id">
         <option value="">None</option>
-        {{range .Companies}}
-        <option value="{{.ID}}" {{if eq .ID $.Company.ID}}selected{{end}}>{{.Label}}</option>
+        {{range .Stories}}
+        <option value="{{.ID}}" {{if eq .ID $.Story.ID}}selected{{end}}>{{.Label}}</option>
         {{end}}
       </select>
     </label>
-    {{if not .Companies}}<p class="hint">No companies yet. You can still save, or <a href="/admin/companies/new">add a company</a> first.</p>{{end}}
+    {{if not .Stories}}<p class="hint">No stores yet. You can still save, or <a href="/admin/stories/new">add a store</a> first.</p>{{end}}
   </fieldset>
 
   <div class="actions">

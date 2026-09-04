@@ -20,7 +20,7 @@ The reader is for a receipt, invoice, or till bill. A photo that is not a bill, 
 
 The model copies what is printed. It does not calculate.
 
-- the shop name and address (street, building number, optional apartment, postal code, city)
+- the shop name, its own store number when printed, and address (street, building number, optional apartment, postal code, city)
 - the sale date and hour
 - each goods line: the till name, a cleaned name, VAT type (A, B, or C), how many packs, the size of one pack, the unit (kg, g, l, szt, and so on), the shelf unit price, any rabat, and the **final** line total when that figure is printed
 
@@ -30,13 +30,13 @@ If a line has a unit price and a rabat but no final paid figure, Bulkly fills th
 
 Polish tills often print a shelf price, a promo on the next row, then the amount actually paid. The reader copies those columns; it does not subtract the promo itself.
 
-A company in your catalog that matches the printed address (or a unique shop name) is pre-selected on the confirm screen. If nothing matches, **Create company** opens the company form filled from the till header (`prefill[name]`, `prefill[street_name]`, and so on). Saving returns you to the bill; the new shop is selected only if it still matches what was read. You can still pick another.
+A store in your catalog that matches the printed store number, then the printed address (or a unique shop name) is pre-selected on the confirm screen. If nothing matches, **Create store** opens the store form filled from the till header (`prefill[name]`, `prefill[external_id]`, `prefill[street_name]`, and so on). Saving returns you to the bill; the new shop is selected only if it still matches what was read. You can still pick another.
 
 Quantity in the log is packs × pack size. A weighed loose buy (`Marchew  1.450 x 4,99` per kg) is 1.450 packs of size 1 kg — the scale weight is packs, not pack size. If a printed name includes a size (`Mąka 1kg`) and the qty column is 2, that is two 1 kg packs. The same till line scanned several times (five milks at 3,29) is stored as one line with packs and amount summed.
 
 ## Confirm
 
-Open a scan that is **To confirm**. Check the date and hour, pick a company if you want one, and go through every line: include it or not, keep **New product** or choose an existing one, and fix name, unit, packs, pack size, and amount.
+Open a scan that is **To confirm**. Check the date and hour, pick a store if you want one, and go through every line: include it or not, keep **New product** or choose an existing one, and fix name, unit, packs, pack size, and amount.
 
 How printed names are matched to your catalog, and how a new product remembers the till wording, is in [Receipt matching](../receipt-matching/index.md). Aliases themselves are in [Product aliases](../product-aliases/index.md).
 

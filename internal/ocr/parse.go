@@ -26,7 +26,8 @@ func parseBill(raw []byte) (Bill, error) {
 		return Bill{}, fmt.Errorf("model returned invalid JSON")
 	}
 	bill.Notes = strings.TrimSpace(bill.Notes)
-	bill.CompanyName = strings.TrimSpace(bill.CompanyName)
+	bill.StoryName = strings.TrimSpace(bill.StoryName)
+	bill.ExternalID = strings.TrimSpace(bill.ExternalID)
 	bill.StreetName = stripStreetPrefix(bill.StreetName)
 	bill.BuildingNumber = strings.TrimSpace(bill.BuildingNumber)
 	bill.ApartmentNumber = strings.TrimSpace(bill.ApartmentNumber)
@@ -437,8 +438,9 @@ type rawBill struct {
 	BoughtAt        string    `json:"bought_at"`
 	Notes           string    `json:"notes"`
 	NotABill        bool      `json:"not_a_bill"`
-	CompanyID       flexInt   `json:"company_id"`
-	CompanyName     string    `json:"company_name"`
+	StoryID         flexInt   `json:"company_id"`
+	StoryName       string    `json:"company_name"`
+	ExternalID      string    `json:"external_id"`
 	StreetName      string    `json:"street_name"`
 	BuildingNumber  string    `json:"building_number"`
 	ApartmentNumber string    `json:"apartment_number"`
@@ -473,8 +475,9 @@ func (b *Bill) UnmarshalJSON(data []byte) error {
 	b.BoughtAt = raw.BoughtAt
 	b.Notes = raw.Notes
 	b.NotABill = raw.NotABill
-	b.CompanyID = int64(raw.CompanyID)
-	b.CompanyName = raw.CompanyName
+	b.StoryID = int64(raw.StoryID)
+	b.StoryName = raw.StoryName
+	b.ExternalID = raw.ExternalID
 	b.StreetName = raw.StreetName
 	b.BuildingNumber = raw.BuildingNumber
 	b.ApartmentNumber = raw.ApartmentNumber

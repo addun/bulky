@@ -20,8 +20,9 @@ type receiptView struct {
 	BoughtOn        string
 	BoughtAt        string
 	Notes           string
-	CompanyID       int64
-	CompanyName     string
+	StoryID         int64
+	StoryName       string
+	ExternalID      string
 	StreetName      string
 	BuildingNumber  string
 	ApartmentNumber string
@@ -35,7 +36,7 @@ func (v receiptView) Migrated() bool {
 }
 
 func (v receiptView) AddressLine() string {
-	c := store.Company{
+	c := store.Story{
 		StreetName:      v.StreetName,
 		BuildingNumber:  v.BuildingNumber,
 		ApartmentNumber: v.ApartmentNumber,
@@ -43,20 +44,20 @@ func (v receiptView) AddressLine() string {
 		City:            v.City,
 	}
 	addr := c.AddressLine()
-	if v.CompanyName == "" {
+	if v.StoryName == "" {
 		return addr
 	}
 	if addr == "" {
-		return v.CompanyName
+		return v.StoryName
 	}
-	return v.CompanyName + " — " + addr
+	return v.StoryName + " — " + addr
 }
 
-func (v receiptView) CreateCompanyURL() string {
-	if v.Migrated() || v.CompanyID != 0 || v.ReceiptID <= 0 {
+func (v receiptView) CreateStoryURL() string {
+	if v.Migrated() || v.StoryID != 0 || v.ReceiptID <= 0 {
 		return ""
 	}
-	if strings.TrimSpace(v.CompanyName) == "" && strings.TrimSpace(v.StreetName) == "" && strings.TrimSpace(v.City) == "" {
+	if strings.TrimSpace(v.StoryName) == "" && strings.TrimSpace(v.StreetName) == "" && strings.TrimSpace(v.City) == "" && strings.TrimSpace(v.ExternalID) == "" {
 		return ""
 	}
 	q := url.Values{}
@@ -65,14 +66,15 @@ func (v receiptView) CreateCompanyURL() string {
 			q.Set(prefillQuery(key), s)
 		}
 	}
-	set("name", v.CompanyName)
+	set("name", v.StoryName)
+	set("external_id", v.ExternalID)
 	set("street_name", v.StreetName)
 	set("building_number", v.BuildingNumber)
 	set("apartment_number", v.ApartmentNumber)
 	set("postal_code", v.PostalCode)
 	set("city", v.City)
 	q.Set("next", "/admin/receipts/"+strconv.FormatInt(v.ReceiptID, 10))
-	return "/admin/companies/new?" + q.Encode()
+	return "/admin/stories/new?" + q.Encode()
 }
 
 type receiptLineView struct {
@@ -89,23 +91,28 @@ type receiptLineView struct {
 	Discount     string
 }
 
-func hydrateBill(bill ocr.Bill, products []store.ProductListItem, units []store.Unit, aliases []store.ProductAlias) ocr.Bill {
+func hydrateBill(bill ocr.Bill, products []store.ProductListItem, units []store.Unit, aliases []store.ProductAlias, chainID int64) ocr.Bill {
 	productByID := map[int64]store.ProductListItem{}
 	var names []match.Label
 	for _, p := range products {
 		productByID[p.ID] = p
 		names = append(names, match.Label{ProductID: p.ID, Text: p.Name})
 	}
-	var shop, global []match.Label
+	var shop, chain, global []match.Label
 	for _, a := range aliases {
 		lab := match.Label{ProductID: a.ProductID, Text: a.Alias}
-		if a.CompanyID > 0 {
-			if a.CompanyID == bill.CompanyID {
+		switch {
+		case a.StoryID > 0:
+			if a.StoryID == bill.StoryID {
 				shop = append(shop, lab)
 			}
-			continue
+		case a.RetailChainID > 0:
+			if chainID > 0 && a.RetailChainID == chainID {
+				chain = append(chain, lab)
+			}
+		default:
+			global = append(global, lab)
 		}
-		global = append(global, lab)
 	}
 	unitByID := map[int64]store.Unit{}
 	unitByName := map[string]store.Unit{}
@@ -128,7 +135,7 @@ func hydrateBill(bill ocr.Bill, products []store.ProductListItem, units []store.
 			}
 		}
 		if line.ProductID == 0 {
-			if p, ok := matchLineProduct(line.ReceiptName, line.ProductName, shop, global, names, productByID); ok {
+			if p, ok := matchLineProduct(line.ReceiptName, line.ProductName, shop, chain, global, names, productByID); ok {
 				line.ProductID = p.ID
 				applyPurchaseUnit(&line, p.Product, fromUnit)
 			}
@@ -174,9 +181,9 @@ func applyPurchaseUnit(line *ocr.Line, p store.Product, fromUnit int64) {
 	line.UnitID = p.UnitID
 }
 
-func matchLineProduct(receiptName, productName string, shop, global, names []match.Label, products map[int64]store.ProductListItem) (store.ProductListItem, bool) {
+func matchLineProduct(receiptName, productName string, shop, chain, global, names []match.Label, products map[int64]store.ProductListItem) (store.ProductListItem, bool) {
 	for _, q := range []string{receiptName, productName} {
-		id, ok := match.Product(q, shop, global, names)
+		id, ok := match.Product(q, shop, chain, global, names)
 		if !ok {
 			continue
 		}
@@ -195,8 +202,9 @@ func billToView(bill ocr.Bill, receiptID int64, imagePath, status string) receip
 		BoughtOn:        bill.BoughtOn,
 		BoughtAt:        bill.BoughtAt,
 		Notes:           bill.Notes,
-		CompanyID:       bill.CompanyID,
-		CompanyName:     bill.CompanyName,
+		StoryID:         bill.StoryID,
+		StoryName:       bill.StoryName,
+		ExternalID:      bill.ExternalID,
 		StreetName:      bill.StreetName,
 		BuildingNumber:  bill.BuildingNumber,
 		ApartmentNumber: bill.ApartmentNumber,
@@ -226,7 +234,7 @@ func billToView(bill ocr.Bill, receiptID int64, imagePath, status string) receip
 	return view
 }
 
-func receiptToView(r store.Receipt, products []store.ProductListItem, units []store.Unit, companies []store.Company, aliases []store.ProductAlias) (receiptView, error) {
+func receiptToView(r store.Receipt, products []store.ProductListItem, units []store.Unit, stories []store.Story, aliases []store.ProductAlias) (receiptView, error) {
 	var bill ocr.Bill
 	if strings.TrimSpace(r.RawResponse) != "" {
 		parsed, err := ocr.Parse([]byte(r.RawResponse))
@@ -234,13 +242,13 @@ func receiptToView(r store.Receipt, products []store.ProductListItem, units []st
 			return receiptView{}, err
 		}
 		bill = parsed
-		if bill.CompanyID == 0 {
-			bill.CompanyID = matchCompany(bill, companies)
+		if bill.StoryID == 0 {
+			bill.StoryID = matchStory(bill, stories)
 		}
-		bill = hydrateBill(bill, products, units, aliases)
+		bill = hydrateBill(bill, products, units, aliases, storyChainID(bill.StoryID, stories))
 	}
 	view := billToView(bill, r.ID, r.ImagePath, r.Status)
-	view.CompanyID = knownCompanyID(view.CompanyID, companies)
+	view.StoryID = knownStoryID(view.StoryID, stories)
 	if view.BoughtOn == "" {
 		now := time.Now()
 		view.BoughtOn = now.Format("2006-01-02")
@@ -254,8 +262,9 @@ func viewToRawJSON(view receiptView) (string, error) {
 		BoughtOn:        view.BoughtOn,
 		BoughtAt:        view.BoughtAt,
 		Notes:           view.Notes,
-		CompanyID:       view.CompanyID,
-		CompanyName:     view.CompanyName,
+		StoryID:         view.StoryID,
+		StoryName:       view.StoryName,
+		ExternalID:      view.ExternalID,
 		StreetName:      view.StreetName,
 		BuildingNumber:  view.BuildingNumber,
 		ApartmentNumber: view.ApartmentNumber,
@@ -291,8 +300,9 @@ func parseReceiptView(get func(string) string) receiptView {
 		BoughtOn:        strings.TrimSpace(get("bought_on")),
 		BoughtAt:        strings.TrimSpace(get("bought_at")),
 		Notes:           strings.TrimSpace(get("notes")),
-		CompanyID:       formInt(get("company_id")),
-		CompanyName:     strings.TrimSpace(get("company_name")),
+		StoryID:         formInt(get("story_id")),
+		StoryName:       strings.TrimSpace(get("story_name")),
+		ExternalID:      strings.TrimSpace(get("external_id")),
 		StreetName:      strings.TrimSpace(get("street_name")),
 		BuildingNumber:  strings.TrimSpace(get("building_number")),
 		ApartmentNumber: strings.TrimSpace(get("apartment_number")),
@@ -344,7 +354,7 @@ func parseReceiptForm(get func(string) string, products []store.ProductListItem)
 		byID[p.ID] = p
 	}
 
-	in := store.BillImport{BoughtOn: boughtOn, CompanyID: view.CompanyID}
+	in := store.BillImport{BoughtOn: boughtOn, StoryID: view.StoryID}
 	for i, line := range view.Lines {
 		if !line.Include {
 			continue
@@ -391,11 +401,11 @@ func formInt(s string) int64 {
 	return v
 }
 
-func knownCompanyID(id int64, companies []store.Company) int64 {
+func knownStoryID(id int64, stories []store.Story) int64 {
 	if id <= 0 {
 		return 0
 	}
-	for _, c := range companies {
+	for _, c := range stories {
 		if c.ID == id {
 			return id
 		}
@@ -403,21 +413,36 @@ func knownCompanyID(id int64, companies []store.Company) int64 {
 	return 0
 }
 
-func matchCompany(bill ocr.Bill, companies []store.Company) int64 {
-	if id := matchCompanyAddress(bill, companies); id > 0 {
-		return id
+func storyChainID(storyID int64, stories []store.Story) int64 {
+	if storyID <= 0 {
+		return 0
 	}
-	return matchCompanyName(bill, companies)
+	for _, c := range stories {
+		if c.ID == storyID {
+			return c.RetailChainID
+		}
+	}
+	return 0
 }
 
-func matchCompanyAddress(bill ocr.Bill, companies []store.Company) int64 {
-	want := companyAddrKey(bill.StreetName, bill.BuildingNumber, bill.PostalCode, bill.City)
+func matchStory(bill ocr.Bill, stories []store.Story) int64 {
+	if id := matchStoryExternalID(bill, stories); id > 0 {
+		return id
+	}
+	if id := matchStoryAddress(bill, stories); id > 0 {
+		return id
+	}
+	return matchStoryName(bill, stories)
+}
+
+func matchStoryExternalID(bill ocr.Bill, stories []store.Story) int64 {
+	want := strings.TrimSpace(bill.ExternalID)
 	if want == "" {
 		return 0
 	}
 	var hit int64
-	for _, c := range companies {
-		if companyAddrKey(c.StreetName, c.BuildingNumber, c.PostalCode, c.City) != want {
+	for _, c := range stories {
+		if c.ExternalID == "" || !strings.EqualFold(c.ExternalID, want) {
 			continue
 		}
 		if hit != 0 && hit != c.ID {
@@ -428,14 +453,32 @@ func matchCompanyAddress(bill ocr.Bill, companies []store.Company) int64 {
 	return hit
 }
 
-func matchCompanyName(bill ocr.Bill, companies []store.Company) int64 {
-	name := match.Fold(bill.CompanyName)
+func matchStoryAddress(bill ocr.Bill, stories []store.Story) int64 {
+	want := storyAddrKey(bill.StreetName, bill.BuildingNumber, bill.PostalCode, bill.City)
+	if want == "" {
+		return 0
+	}
+	var hit int64
+	for _, c := range stories {
+		if storyAddrKey(c.StreetName, c.BuildingNumber, c.PostalCode, c.City) != want {
+			continue
+		}
+		if hit != 0 && hit != c.ID {
+			return 0
+		}
+		hit = c.ID
+	}
+	return hit
+}
+
+func matchStoryName(bill ocr.Bill, stories []store.Story) int64 {
+	name := match.Fold(bill.StoryName)
 	if name == "" {
 		return 0
 	}
 	city := match.Fold(bill.City)
 	var hit int64
-	for _, c := range companies {
+	for _, c := range stories {
 		if match.Fold(c.Name) != name {
 			continue
 		}
@@ -450,7 +493,7 @@ func matchCompanyName(bill ocr.Bill, companies []store.Company) int64 {
 	return hit
 }
 
-func companyAddrKey(street, building, postal, city string) string {
+func storyAddrKey(street, building, postal, city string) string {
 	street = match.Fold(stripStreetPrefix(street))
 	building = match.Fold(building)
 	postal = digitsOnly(postal)
@@ -485,7 +528,7 @@ func digitsOnly(s string) string {
 	return b.String()
 }
 
-func receiptVisitFacts(r store.Receipt, buys []store.ReceiptPurchase, companies []store.Company) (boughtOn, boughtAt, notes string, company store.Company) {
+func receiptVisitFacts(r store.Receipt, buys []store.ReceiptPurchase, stories []store.Story) (boughtOn, boughtAt, notes string, story store.Story) {
 	var bill ocr.Bill
 	if strings.TrimSpace(r.RawResponse) != "" {
 		if parsed, err := ocr.Parse([]byte(r.RawResponse)); err == nil {
@@ -495,21 +538,21 @@ func receiptVisitFacts(r store.Receipt, buys []store.ReceiptPurchase, companies 
 	notes = bill.Notes
 	boughtAt = bill.BoughtAt
 	if len(buys) > 0 {
-		return buys[0].BoughtOn, boughtAt, notes, companyByID(companies, buys[0].CompanyID)
+		return buys[0].BoughtOn, boughtAt, notes, storyByID(stories, buys[0].StoryID)
 	}
-	return bill.BoughtOn, boughtAt, notes, companyByID(companies, bill.CompanyID)
+	return bill.BoughtOn, boughtAt, notes, storyByID(stories, bill.StoryID)
 }
 
-func companyByID(companies []store.Company, id int64) store.Company {
+func storyByID(stories []store.Story, id int64) store.Story {
 	if id <= 0 {
-		return store.Company{}
+		return store.Story{}
 	}
-	for _, c := range companies {
+	for _, c := range stories {
 		if c.ID == id {
 			return c
 		}
 	}
-	return store.Company{}
+	return store.Story{}
 }
 
 func unitKey(s string) string {

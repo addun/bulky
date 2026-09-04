@@ -20,7 +20,7 @@
     <li>
       <span class="row-main">
         <span class="unit-name">{{.Alias}}</span>
-        <span class="meta">{{.ProductName}}{{if .CompanyID}} · {{.CompanyName}}{{else}} · any shop{{end}}</span>
+        <span class="meta">{{.ProductName}} · {{.ScopeLabel}}</span>
       </span>
       <span class="tight">
         <a href="/admin/aliases/{{.ID}}/edit{{$.ProductQuery}}">Edit</a>

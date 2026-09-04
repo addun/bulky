@@ -25,18 +25,19 @@
         <label>Hour <input type="time" name="bought_at" value="{{.View.BoughtAt}}"></label>
       </div>
       <label>
-        Company
-        <select name="company_id">
+        Store
+        <select name="story_id">
           <option value="">None</option>
-          {{range .Companies}}
-          <option value="{{.ID}}" {{if eq .ID $.View.CompanyID}}selected{{end}}>{{.Label}}</option>
+          {{range .Stories}}
+          <option value="{{.ID}}" {{if eq .ID $.View.StoryID}}selected{{end}}>{{.Label}}</option>
           {{end}}
         </select>
       </label>
       {{if .View.AddressLine}}<p class="hint">Address on the bill: {{.View.AddressLine}}</p>{{end}}
-      {{if .View.CreateCompanyURL}}<p><a class="btn btn-ghost" href="{{.View.CreateCompanyURL}}">Create company</a></p>{{end}}
-      {{if and (not .Companies) (not .View.CreateCompanyURL)}}<p class="hint">No companies yet. You can still save, or <a href="/admin/companies/new">add a company</a> first.</p>{{end}}
-      <input type="hidden" name="company_name" value="{{.View.CompanyName}}">
+      {{if .View.CreateStoryURL}}<p><a class="btn btn-ghost" href="{{.View.CreateStoryURL}}">Create store</a></p>{{end}}
+      {{if and (not .Stories) (not .View.CreateStoryURL)}}<p class="hint">No stores yet. You can still save, or <a href="/admin/stories/new">add a store</a> first.</p>{{end}}
+      <input type="hidden" name="story_name" value="{{.View.StoryName}}">
+      <input type="hidden" name="external_id" value="{{.View.ExternalID}}">
       <input type="hidden" name="street_name" value="{{.View.StreetName}}">
       <input type="hidden" name="building_number" value="{{.View.BuildingNumber}}">
       <input type="hidden" name="apartment_number" value="{{.View.ApartmentNumber}}">

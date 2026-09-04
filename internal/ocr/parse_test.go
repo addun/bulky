@@ -148,13 +148,13 @@ func TestParseBillDateAndHour(t *testing.T) {
 	}
 }
 
-func TestParseBillCompanyAddress(t *testing.T) {
-	raw := []byte(`{"company_name":"Biedronka","street_name":"ul. Kościuszki","building_number":"10","postal_code":"40001","city":"Katowice","lines":[{"receipt_name":"Chleb","package_count":"1","amount":"4.50"}]}`)
+func TestParseBillStoryAddress(t *testing.T) {
+	raw := []byte(`{"company_name":"Biedronka","external_id":"2615","street_name":"ul. Kościuszki","building_number":"10","postal_code":"40001","city":"Katowice","lines":[{"receipt_name":"Chleb","package_count":"1","amount":"4.50"}]}`)
 	bill, err := parseBill(raw)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if bill.CompanyName != "Biedronka" || bill.StreetName != "Kościuszki" || bill.BuildingNumber != "10" || bill.PostalCode != "40-001" || bill.City != "Katowice" {
+	if bill.StoryName != "Biedronka" || bill.ExternalID != "2615" || bill.StreetName != "Kościuszki" || bill.BuildingNumber != "10" || bill.PostalCode != "40-001" || bill.City != "Katowice" {
 		t.Fatalf("address: %#v", bill)
 	}
 }
@@ -197,14 +197,14 @@ func TestParseBillFillsAmountWithoutDiscount(t *testing.T) {
 	}
 }
 
-func TestParseBillPreservesCompanyID(t *testing.T) {
+func TestParseBillPreservesStoryID(t *testing.T) {
 	raw := []byte(`{"company_id":9,"bought_on":"2026-08-20","lines":[{"receipt_name":"Rice","package_count":"1","amount":"4.00"}]}`)
 	bill, err := parseBill(raw)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if bill.CompanyID != 9 {
-		t.Fatalf("company_id: %d", bill.CompanyID)
+	if bill.StoryID != 9 {
+		t.Fatalf("story_id: %d", bill.StoryID)
 	}
 }
 

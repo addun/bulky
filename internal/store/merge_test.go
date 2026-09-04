@@ -12,7 +12,7 @@ func TestMergePlanCountsHistoryAndAliases(t *testing.T) {
 	if _, err := s.CreatePurchase(rice.ID, lidl.ID, "2026-08-20", mustDec(t, "2"), mustDec(t, "9.90"), KindPurchase, decimal.Zero, decimal.Zero); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.CreateAlias(rice.ID, biedronka.ID, "Ryż biały"); err != nil {
+	if _, err := s.CreateAlias(rice.ID, biedronka.ID, 0, "Ryż biały"); err != nil {
 		t.Fatal(err)
 	}
 	plan, err := s.MergePlan(flour.ID, rice.ID)
@@ -39,10 +39,10 @@ func TestMergeProductsMovesPurchasesAndAliases(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.CreateAlias(rice.ID, biedronka.ID, "Ryż biały"); err != nil {
+	if _, err := s.CreateAlias(rice.ID, biedronka.ID, 0, "Ryż biały"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.CreateAlias(flour.ID, 0, "Tortowa"); err != nil {
+	if _, err := s.CreateAlias(flour.ID, 0, 0, "Tortowa"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -64,7 +64,7 @@ func TestMergeProductsMovesPurchasesAndAliases(t *testing.T) {
 	if err != nil || len(purchases) != 1 {
 		t.Fatalf("purchases: %v %#v", err, purchases)
 	}
-	if purchases[0].ID != buy.ID || purchases[0].ProductID != flour.ID || purchases[0].CompanyID != lidl.ID {
+	if purchases[0].ID != buy.ID || purchases[0].ProductID != flour.ID || purchases[0].StoryID != lidl.ID {
 		t.Fatalf("moved purchase: %#v", purchases[0])
 	}
 
@@ -74,7 +74,7 @@ func TestMergeProductsMovesPurchasesAndAliases(t *testing.T) {
 	}
 	got := map[string]int64{}
 	for _, a := range aliases {
-		got[a.Alias] = a.CompanyID
+		got[a.Alias] = a.StoryID
 	}
 	if got["Tortowa"] != 0 || got["Ryż biały"] != biedronka.ID || got["Rice"] != 0 {
 		t.Fatalf("aliases: %#v", aliases)

@@ -29,7 +29,7 @@ func TestHydrateBillMatchesCatalog(t *testing.T) {
 			{ReceiptName: "Ghost", ProductName: "Ghost", ProductID: 123, Skip: true},
 		},
 	}
-	got := hydrateBill(bill, products, units, nil)
+	got := hydrateBill(bill, products, units, nil, 0)
 	if got.Lines[0].ProductID != 4 || got.Lines[0].UnitID != 1 {
 		t.Fatalf("rice: %#v", got.Lines[0])
 	}
@@ -48,31 +48,77 @@ func TestHydrateBillMatchesAlias(t *testing.T) {
 	}
 	units := []store.Unit{{ID: 1, Name: "kg"}}
 	aliases := []store.ProductAlias{
-		{ProductID: 4, CompanyID: 0, Alias: "Tortowa"},
-		{ProductID: 5, CompanyID: 9, Alias: "Mąka"},
-		{ProductID: 4, CompanyID: 0, Alias: "Mąka"},
+		{ProductID: 4, StoryID: 0, Alias: "Tortowa"},
+		{ProductID: 5, StoryID: 9, Alias: "Mąka"},
+		{ProductID: 4, StoryID: 0, Alias: "Mąka"},
 	}
 
 	shop := hydrateBill(ocr.Bill{
-		CompanyID: 9,
-		Lines:     []ocr.Line{{ReceiptName: "MĄKA", ProductName: "", ProductID: 0, UnitName: "kg"}},
-	}, products, units, aliases)
+		StoryID: 9,
+		Lines:   []ocr.Line{{ReceiptName: "MĄKA", ProductName: "", ProductID: 0, UnitName: "kg"}},
+	}, products, units, aliases, 0)
 	if shop.Lines[0].ProductID != 5 {
 		t.Fatalf("shop alias should win: %#v", shop.Lines[0])
 	}
 
 	global := hydrateBill(ocr.Bill{
 		Lines: []ocr.Line{{ReceiptName: "Tortowa", ProductName: "", ProductID: 0, UnitName: "kg"}},
-	}, products, units, aliases)
+	}, products, units, aliases, 0)
 	if global.Lines[0].ProductID != 4 {
 		t.Fatalf("global: %#v", global.Lines[0])
 	}
 
 	unknownShop := hydrateBill(ocr.Bill{
 		Lines: []ocr.Line{{ReceiptName: "Mąka", ProductName: "", ProductID: 0, UnitName: "kg"}},
-	}, products, units, aliases)
+	}, products, units, aliases, 0)
 	if unknownShop.Lines[0].ProductID != 4 {
-		t.Fatalf("no company uses global only: %#v", unknownShop.Lines[0])
+		t.Fatalf("no story uses global only: %#v", unknownShop.Lines[0])
+	}
+}
+
+func TestHydrateBillMatchesChainAlias(t *testing.T) {
+	products := []store.ProductListItem{
+		{Product: store.Product{ID: 4, Name: "Cake flour", UnitID: 1, UnitName: "kg"}},
+		{Product: store.Product{ID: 5, Name: "Rice", UnitID: 1, UnitName: "kg"}},
+		{Product: store.Product{ID: 8, Name: "Oats", UnitID: 1, UnitName: "kg"}},
+	}
+	units := []store.Unit{{ID: 1, Name: "kg"}}
+	aliases := []store.ProductAlias{
+		{ProductID: 4, Alias: "Płatki"},
+		{ProductID: 5, RetailChainID: 2, Alias: "Płatki"},
+		{ProductID: 8, StoryID: 11, Alias: "Płatki"},
+		{ProductID: 4, RetailChainID: 3, Alias: "Płatki"},
+	}
+
+	story := hydrateBill(ocr.Bill{
+		StoryID: 11,
+		Lines:   []ocr.Line{{ReceiptName: "PŁATKI", ProductName: "", ProductID: 0, UnitName: "kg"}},
+	}, products, units, aliases, 2)
+	if story.Lines[0].ProductID != 8 {
+		t.Fatalf("story alias should win: %#v", story.Lines[0])
+	}
+
+	chain := hydrateBill(ocr.Bill{
+		StoryID: 12,
+		Lines:   []ocr.Line{{ReceiptName: "Płatki", ProductName: "", ProductID: 0, UnitName: "kg"}},
+	}, products, units, aliases, 2)
+	if chain.Lines[0].ProductID != 5 {
+		t.Fatalf("chain alias: %#v", chain.Lines[0])
+	}
+
+	otherChain := hydrateBill(ocr.Bill{
+		StoryID: 20,
+		Lines:   []ocr.Line{{ReceiptName: "Płatki", ProductName: "", ProductID: 0, UnitName: "kg"}},
+	}, products, units, aliases, 3)
+	if otherChain.Lines[0].ProductID != 4 {
+		t.Fatalf("other chain should not leak: %#v", otherChain.Lines[0])
+	}
+
+	noStory := hydrateBill(ocr.Bill{
+		Lines: []ocr.Line{{ReceiptName: "Płatki", ProductName: "", ProductID: 0, UnitName: "kg"}},
+	}, products, units, aliases, 0)
+	if noStory.Lines[0].ProductID != 4 {
+		t.Fatalf("no story uses global only: %#v", noStory.Lines[0])
 	}
 }
 
@@ -83,12 +129,12 @@ func TestHydrateBillRejectsFuzzyAlias(t *testing.T) {
 	}
 	units := []store.Unit{{ID: 1, Name: "kg"}}
 	aliases := []store.ProductAlias{
-		{ProductID: 4, CompanyID: 0, Alias: "Mąka tortowa"},
+		{ProductID: 4, StoryID: 0, Alias: "Mąka tortowa"},
 	}
 
 	got := hydrateBill(ocr.Bill{
 		Lines: []ocr.Line{{ReceiptName: "MAKA TORTOWA 1KG", ProductName: "", ProductID: 0, UnitName: "kg"}},
-	}, products, units, aliases)
+	}, products, units, aliases, 0)
 	if got.Lines[0].ProductID != 0 {
 		t.Fatalf("fuzzy alias should stay unmatched: %#v", got.Lines[0])
 	}
@@ -96,8 +142,8 @@ func TestHydrateBillRejectsFuzzyAlias(t *testing.T) {
 	exact := hydrateBill(ocr.Bill{
 		Lines: []ocr.Line{{ReceiptName: "MAKA TORTOWA 1KG", ProductName: "", ProductID: 0, UnitName: "kg"}},
 	}, products, units, []store.ProductAlias{
-		{ProductID: 4, CompanyID: 0, Alias: "Mąka tortowa 1kg"},
-	})
+		{ProductID: 4, StoryID: 0, Alias: "Mąka tortowa 1kg"},
+	}, 0)
 	if exact.Lines[0].ProductID != 4 {
 		t.Fatalf("exact alias: %#v", exact.Lines[0])
 	}
@@ -111,14 +157,14 @@ func TestHydrateBillRejectsFuzzyCatalog(t *testing.T) {
 
 	got := hydrateBill(ocr.Bill{
 		Lines: []ocr.Line{{ReceiptName: "RYZ 10KG", ProductName: "", ProductID: 0, UnitName: "kg"}},
-	}, products, units, nil)
+	}, products, units, nil, 0)
 	if got.Lines[0].ProductID != 0 {
 		t.Fatalf("fuzzy catalog should stay unmatched: %#v", got.Lines[0])
 	}
 
 	exact := hydrateBill(ocr.Bill{
 		Lines: []ocr.Line{{ReceiptName: "Rice", ProductName: "", ProductID: 0, UnitName: "kg"}},
-	}, products, units, nil)
+	}, products, units, nil, 0)
 	if exact.Lines[0].ProductID != 4 {
 		t.Fatalf("exact catalog: %#v", exact.Lines[0])
 	}
@@ -138,7 +184,7 @@ func TestHydrateBillConvertsExtraUnit(t *testing.T) {
 			ReceiptName: "WODA 1,5L", ProductName: "Water", ProductID: 0,
 			UnitID: 2, UnitName: "l", PackageCount: "2", PackageSize: "1.5", Amount: "5",
 		}},
-	}, products, units, nil)
+	}, products, units, nil, 0)
 	line := got.Lines[0]
 	if line.ProductID != 4 || line.UnitID != 1 {
 		t.Fatalf("match: %#v", line)
@@ -192,13 +238,13 @@ func TestHydrateBillAmbiguousAlias(t *testing.T) {
 	}
 	units := []store.Unit{{ID: 1, Name: "kg"}}
 	aliases := []store.ProductAlias{
-		{ProductID: 4, CompanyID: 0, Alias: "Mąka pszenna"},
-		{ProductID: 6, CompanyID: 0, Alias: "Mąka żytnia"},
+		{ProductID: 4, StoryID: 0, Alias: "Mąka pszenna"},
+		{ProductID: 6, StoryID: 0, Alias: "Mąka żytnia"},
 	}
 
 	got := hydrateBill(ocr.Bill{
 		Lines: []ocr.Line{{ReceiptName: "Mąka", ProductName: "", ProductID: 0, UnitName: "kg"}},
-	}, products, units, aliases)
+	}, products, units, aliases, 0)
 	if got.Lines[0].ProductID != 0 {
 		t.Fatalf("ambiguous should stay unmatched: %#v", got.Lines[0])
 	}
@@ -242,8 +288,8 @@ func TestParseReceiptForm(t *testing.T) {
 	if in.BoughtOn != "2026-08-20 14:32" {
 		t.Fatalf("bought_on: %q", in.BoughtOn)
 	}
-	if in.Company != nil || in.CompanyID != 0 {
-		t.Fatalf("company should be empty: %#v", in)
+	if in.Story != nil || in.StoryID != 0 {
+		t.Fatalf("story should be empty: %#v", in)
 	}
 	if len(in.Lines) != 2 {
 		t.Fatalf("lines: %#v", in.Lines)
@@ -266,7 +312,7 @@ func TestParseReceiptForm(t *testing.T) {
 
 	in, view, msg := parseReceiptForm(get(map[string]string{
 		"bought_on":        "2026-08-20",
-		"company_id":       "7",
+		"story_id":         "7",
 		"line_count":       "1",
 		"include_0":        "1",
 		"product_choice_0": "4",
@@ -277,8 +323,8 @@ func TestParseReceiptForm(t *testing.T) {
 	if msg != "" {
 		t.Fatal(msg)
 	}
-	if in.CompanyID != 7 || view.CompanyID != 7 {
-		t.Fatalf("company_id: in=%d view=%d", in.CompanyID, view.CompanyID)
+	if in.StoryID != 7 || view.StoryID != 7 {
+		t.Fatalf("story_id: in=%d view=%d", in.StoryID, view.StoryID)
 	}
 
 	_, _, msg = parseReceiptForm(get(map[string]string{
@@ -324,8 +370,8 @@ func TestReceiptReviewTemplateExecutes(t *testing.T) {
 		"Products": []store.ProductListItem{
 			{Product: store.Product{ID: 4, Name: "Cake flour", UnitID: 1, UnitName: "kg"}},
 		},
-		"Units":     []store.Unit{{ID: 1, Name: "kg"}},
-		"Companies": []store.Company{{ID: 2, Name: "Local Mill"}},
+		"Units":   []store.Unit{{ID: 1, Name: "kg"}},
+		"Stories": []store.Story{{ID: 2, Name: "Local Mill"}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -337,8 +383,8 @@ func TestReceiptReviewTemplateExecutes(t *testing.T) {
 	if !strings.Contains(body, `name="receipt_id"`) {
 		t.Fatal("missing receipt id")
 	}
-	if !strings.Contains(body, `name="company_id"`) || !strings.Contains(body, "Local Mill") {
-		t.Fatal("review form should let you pick a company")
+	if !strings.Contains(body, `name="story_id"`) || !strings.Contains(body, "Local Mill") {
+		t.Fatal("review form should let you pick a story")
 	}
 	if !strings.Contains(body, `name="packages_0"`) || !strings.Contains(body, `name="package_size_0"`) {
 		t.Fatal("review form should ask for packs, not a raw quantity")
@@ -534,8 +580,8 @@ func TestReceiptReviewLoadsReceiptJSON(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), `name="package_size_0" inputmode="decimal" value="10"`) {
 		t.Fatal("legacy quantity should fill package size")
 	}
-	if !strings.Contains(rec.Body.String(), `name="company_id"`) {
-		t.Fatal("review should include a company picker")
+	if !strings.Contains(rec.Body.String(), `name="story_id"`) {
+		t.Fatal("review should include a story picker")
 	}
 }
 
@@ -550,7 +596,7 @@ func TestReceiptShowListsAssignedPurchases(t *testing.T) {
 	if err != nil || len(units) == 0 {
 		t.Fatalf("units: %v %#v", err, units)
 	}
-	co, err := st.CreateCompany("Local Mill", "Kościuszki", "10", "", "40-001", "Katowice")
+	co, err := st.CreateStory("Local Mill", "Kościuszki", "10", "", "40-001", "Katowice", "", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -563,8 +609,8 @@ func TestReceiptShowListsAssignedPurchases(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := st.MigrateReceipt(r.ID, store.BillImport{
-		CompanyID: co.ID,
-		BoughtOn:  "2026-08-20",
+		StoryID:  co.ID,
+		BoughtOn: "2026-08-20",
 		Lines: []store.BillLineInput{
 			{ProductName: "Rice", UnitID: units[0].ID, Quantity: decimal.RequireFromString("10"), Amount: decimal.RequireFromString("40.00")},
 			{ProductName: "Flour", UnitID: units[0].ID, Quantity: decimal.RequireFromString("5"), Amount: decimal.RequireFromString("18.50")},
@@ -597,7 +643,7 @@ func TestReceiptShowListsAssignedPurchases(t *testing.T) {
 		t.Fatal("expected AI notes")
 	}
 	if !strings.Contains(body, "Local Mill") {
-		t.Fatal("expected company")
+		t.Fatal("expected story")
 	}
 	if !strings.Contains(body, `<strong>Rice</strong>`) || !strings.Contains(body, `<strong>Flour</strong>`) {
 		t.Fatal("expected assigned products")
@@ -608,7 +654,7 @@ func TestReceiptShowListsAssignedPurchases(t *testing.T) {
 	if !strings.Contains(body, `href="/admin/receipts/`+itoa(r.ID)+`/edit"`) {
 		t.Fatal("visit should link to edit")
 	}
-	if strings.Contains(body, `name="company_id"`) {
+	if strings.Contains(body, `name="story_id"`) {
 		t.Fatal("show page should not edit the visit inline")
 	}
 }
@@ -624,7 +670,7 @@ func TestReceiptEditUpdatesVisit(t *testing.T) {
 	if err != nil || len(units) == 0 {
 		t.Fatalf("units: %v %#v", err, units)
 	}
-	co, err := st.CreateCompany("Local Mill", "Kościuszki", "10", "", "40-001", "Katowice")
+	co, err := st.CreateStory("Local Mill", "Kościuszki", "10", "", "40-001", "Katowice", "", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -655,8 +701,8 @@ func TestReceiptEditUpdatesVisit(t *testing.T) {
 		t.Fatalf("status %d", rec.Code)
 	}
 	body := rec.Body.String()
-	if !strings.Contains(body, "No company") {
-		t.Fatal("expected missing company on the visit")
+	if !strings.Contains(body, "No store") {
+		t.Fatal("expected missing story on the visit")
 	}
 	if !strings.Contains(body, `href="/admin/receipts/`+itoa(r.ID)+`/edit"`) {
 		t.Fatal("expected edit link")
@@ -675,11 +721,11 @@ func TestReceiptEditUpdatesVisit(t *testing.T) {
 	if !strings.Contains(body, "every product assigned to this receipt") {
 		t.Fatal("expected assigned-products warning")
 	}
-	if !strings.Contains(body, `name="bought_on"`) || !strings.Contains(body, `name="bought_at"`) || !strings.Contains(body, `name="company_id"`) {
-		t.Fatal("expected date, hour, and company fields")
+	if !strings.Contains(body, `name="bought_on"`) || !strings.Contains(body, `name="bought_at"`) || !strings.Contains(body, `name="story_id"`) {
+		t.Fatal("expected date, hour, and story fields")
 	}
 
-	form := url.Values{"company_id": {itoa(co.ID)}, "bought_on": {"2026-08-22"}, "bought_at": {"14:32"}}
+	form := url.Values{"story_id": {itoa(co.ID)}, "bought_on": {"2026-08-22"}, "bought_at": {"14:32"}}
 	rec = httptest.NewRecorder()
 	req = httptest.NewRequest(http.MethodPost, "/admin/receipts/"+itoa(r.ID)+"/edit", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -695,7 +741,7 @@ func TestReceiptEditUpdatesVisit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(assigned) != 1 || assigned[0].CompanyID != co.ID || assigned[0].BoughtOn != "2026-08-22 14:32" {
+	if len(assigned) != 1 || assigned[0].StoryID != co.ID || assigned[0].BoughtOn != "2026-08-22 14:32" {
 		t.Fatalf("purchases: %#v", assigned)
 	}
 
@@ -703,51 +749,81 @@ func TestReceiptEditUpdatesVisit(t *testing.T) {
 	req = httptest.NewRequest(http.MethodGet, "/admin/receipts/"+itoa(r.ID), nil)
 	srv.Handler().ServeHTTP(rec, req)
 	body = rec.Body.String()
-	if strings.Contains(body, "No company") {
-		t.Fatal("company should be set")
+	if strings.Contains(body, "No store") {
+		t.Fatal("story should be set")
 	}
 	if !strings.Contains(body, "Local Mill") || !strings.Contains(body, "2026-08-22 14:32") {
-		t.Fatal("visit should show the saved date, hour, and company")
+		t.Fatal("visit should show the saved date, hour, and story")
 	}
 }
 
-func TestMatchCompanyPrefersAddress(t *testing.T) {
-	companies := []store.Company{
+func TestMatchStoryPrefersAddress(t *testing.T) {
+	stories := []store.Story{
 		{ID: 1, Name: "Biedronka", StreetName: "Kościuszki", BuildingNumber: "10", PostalCode: "40-001", City: "Katowice"},
 		{ID: 2, Name: "Biedronka", StreetName: "Jerozolimskie", BuildingNumber: "179", PostalCode: "02-222", City: "Warszawa"},
 	}
-	got := matchCompany(ocr.Bill{
-		CompanyName:    "Biedronka",
+	got := matchStory(ocr.Bill{
+		StoryName:      "Biedronka",
 		StreetName:     "ul. Kościuszki",
 		BuildingNumber: "10",
 		PostalCode:     "40001",
 		City:           "Katowice",
-	}, companies)
+	}, stories)
 	if got != 1 {
 		t.Fatalf("address match: %d", got)
 	}
 
-	unique := matchCompany(ocr.Bill{CompanyName: "Local Mill"}, []store.Company{
+	unique := matchStory(ocr.Bill{StoryName: "Local Mill"}, []store.Story{
 		{ID: 7, Name: "Local Mill", StreetName: "Kościuszki", BuildingNumber: "10", PostalCode: "40-001", City: "Katowice"},
 	})
 	if unique != 7 {
 		t.Fatalf("unique name: %d", unique)
 	}
 
-	ambiguous := matchCompany(ocr.Bill{CompanyName: "Biedronka"}, companies)
+	ambiguous := matchStory(ocr.Bill{StoryName: "Biedronka"}, stories)
 	if ambiguous != 0 {
 		t.Fatalf("ambiguous name should not pick: %d", ambiguous)
 	}
 }
 
-func TestReceiptReviewFillsAmountAndCompany(t *testing.T) {
+func TestMatchStoryPrefersExternalID(t *testing.T) {
+	stories := []store.Story{
+		{ID: 1, Name: "Biedronka", ExternalID: "2615", StreetName: "Kościuszki", BuildingNumber: "10", PostalCode: "40-001", City: "Katowice"},
+		{ID: 2, Name: "Biedronka", ExternalID: "9001", StreetName: "Jerozolimskie", BuildingNumber: "179", PostalCode: "02-222", City: "Warszawa"},
+	}
+	got := matchStory(ocr.Bill{
+		StoryName:      "Biedronka",
+		ExternalID:     "9001",
+		StreetName:     "ul. Kościuszki",
+		BuildingNumber: "10",
+		PostalCode:     "40001",
+		City:           "Katowice",
+	}, stories)
+	if got != 2 {
+		t.Fatalf("store code should win over address: %d", got)
+	}
+
+	fallback := matchStory(ocr.Bill{
+		ExternalID:     "0000",
+		StoryName:      "Biedronka",
+		StreetName:     "ul. Kościuszki",
+		BuildingNumber: "10",
+		PostalCode:     "40001",
+		City:           "Katowice",
+	}, stories)
+	if fallback != 1 {
+		t.Fatalf("unknown code should fall through to address: %d", fallback)
+	}
+}
+
+func TestReceiptReviewFillsAmountAndStory(t *testing.T) {
 	dir := t.TempDir()
 	st, err := store.Open(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer st.Close()
-	co, err := st.CreateCompany("Biedronka", "Kościuszki", "10", "", "40-001", "Katowice")
+	co, err := st.CreateStory("Biedronka", "Kościuszki", "10", "", "40-001", "Katowice", "", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -777,10 +853,10 @@ func TestReceiptReviewFillsAmountAndCompany(t *testing.T) {
 		t.Fatal("review should show the sale hour")
 	}
 	if !strings.Contains(body, `option value="`+itoa(co.ID)+`" selected`) {
-		t.Fatalf("company not selected")
+		t.Fatalf("story not selected")
 	}
-	if strings.Contains(body, "Create company") {
-		t.Fatal("matched company should not offer create")
+	if strings.Contains(body, "Create store") {
+		t.Fatal("matched story should not offer create")
 	}
 }
 

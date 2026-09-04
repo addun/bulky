@@ -16,13 +16,13 @@ const (
 )
 
 type fakeConfig struct {
-	Companies         int
+	Stories           int
 	Products          int
 	HistoryPerProduct int
 }
 
 type fakeStats struct {
-	Companies int
+	Stories   int
 	Products  int
 	Purchases int
 }
@@ -37,25 +37,42 @@ func fakeSeed(st *store.Store, f *gofakeit.Faker, cfg fakeConfig) (fakeStats, er
 	}
 
 	var stats fakeStats
-	companies := make([]store.Company, 0, cfg.Companies)
-	for i := 0; i < cfg.Companies; i++ {
+	chains := make([]store.RetailChain, 0, 3)
+	if cfg.Stories > 0 {
+		for i := 0; i < 3; i++ {
+			name := fmt.Sprintf("%s %d", f.Company(), i+1)
+			c, err := st.CreateRetailChain(name, name+" Sp. z o.o.", f.DigitN(10))
+			if err != nil {
+				return stats, fmt.Errorf("retail chain: %w", err)
+			}
+			chains = append(chains, c)
+		}
+	}
+	stories := make([]store.Story, 0, cfg.Stories)
+	for i := 0; i < cfg.Stories; i++ {
 		apt := ""
 		if f.Bool() {
 			apt = f.DigitN(2)
 		}
-		c, err := st.CreateCompany(
+		var chainID int64
+		if len(chains) > 0 && f.Number(1, 100) <= 80 {
+			chainID = chains[f.IntN(len(chains))].ID
+		}
+		c, err := st.CreateStory(
 			f.Company(),
 			f.StreetName(),
 			f.StreetNumber(),
 			apt,
 			fmt.Sprintf("%s-%s", f.DigitN(2), f.DigitN(3)),
 			f.City(),
+			"",
+			chainID,
 		)
 		if err != nil {
-			return stats, fmt.Errorf("company: %w", err)
+			return stats, fmt.Errorf("story: %w", err)
 		}
-		companies = append(companies, c)
-		stats.Companies++
+		stories = append(stories, c)
+		stats.Stories++
 	}
 
 	seen := map[string]bool{}
@@ -91,9 +108,9 @@ func fakeSeed(st *store.Store, f *gofakeit.Faker, cfg fakeConfig) (fakeStats, er
 				if f.Number(1, 100) <= 12 {
 					kind = store.KindPrice
 				}
-				var companyID int64
-				if len(companies) > 0 && f.Number(1, 100) <= 80 {
-					companyID = companies[f.IntN(len(companies))].ID
+				var storyID int64
+				if len(stories) > 0 && f.Number(1, 100) <= 80 {
+					storyID = stories[f.IntN(len(stories))].ID
 				}
 				jitter := time.Duration(f.Number(0, 36)) * time.Hour
 				when := start
@@ -111,7 +128,7 @@ func fakeSeed(st *store.Store, f *gofakeit.Faker, cfg fakeConfig) (fakeStats, er
 				qty := packs.Mul(packSize)
 				amount := decimal.NewFromFloat(price).Mul(qty).Round(2)
 
-				if _, err := st.CreatePurchase(p.ID, companyID, boughtOn, decimal.Zero, amount, kind, packs, packSize); err != nil {
+				if _, err := st.CreatePurchase(p.ID, storyID, boughtOn, decimal.Zero, amount, kind, packs, packSize); err != nil {
 					return fmt.Errorf("purchase: %w", err)
 				}
 				stats.Purchases++
@@ -199,7 +216,7 @@ func rescalePurchases(st *store.Store, rows []store.Purchase) (int, error) {
 		amount := newPrice.Mul(pt.row.Quantity).Round(2)
 		if err := st.UpdatePurchase(
 			pt.row.ID,
-			pt.row.CompanyID,
+			pt.row.StoryID,
 			pt.row.BoughtOn,
 			decimal.Zero,
 			amount,

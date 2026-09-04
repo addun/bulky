@@ -12,6 +12,7 @@ JSON shape:
 {
   "not_a_bill": false,
   "company_name": "shop or legal name on the header",
+  "external_id": "2615",
   "street_name": "Kościuszki",
   "building_number": "10",
   "apartment_number": "",
@@ -38,7 +39,7 @@ JSON shape:
 }
 
 Rules:
-- SHOP / ADDRESS: copy the till header. company_name is the shop or company name. street_name is the street without ul./ulica/al./aleja/pl./plac. building_number is the house number (and letter if printed). apartment_number only if a flat number is printed, else "". postal_code like 40-001. city as printed. Empty string for any part that is unreadable.
+- SHOP / ADDRESS: copy the till header. company_name is the shop or company name. external_id is the shop's own store number if printed (Biedronka "SKLEP 2615", a Lidl store number). Copy the code as printed; "" if none. Not the tax id / NIP, and not a database id. street_name is the street without ul./ulica/al./aleja/pl./plac. building_number is the house number (and letter if printed). apartment_number only if a flat number is printed, else "". postal_code like 40-001. city as printed. Empty string for any part that is unreadable.
 - bought_on: the sale DATE on the bill, not today. Polish 18.08.2026 becomes 2026-08-18. Empty string if unreadable.
 - bought_at: the sale TIME on the bill as HH:MM (24-hour). Receipts often print date and hour together (18.08.2026 14:32). Empty string if no clock is printed. Do not put the hour inside bought_on.
 - package_count, package_size, unit_price, discount, and amount MUST be strings with a dot decimal (e.g. "5", "1.5", "15.32"), never commas, thousands separators, or currency words (not "14zł").

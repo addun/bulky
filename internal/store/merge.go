@@ -129,8 +129,8 @@ WHERE product_id = ?
       WHERE k.product_id = ?
         AND k.alias = product_aliases.alias COLLATE NOCASE
         AND (
-          (k.company_id IS NULL AND product_aliases.company_id IS NULL)
-          OR k.company_id = product_aliases.company_id
+          (k.story_id IS NULL AND product_aliases.story_id IS NULL)
+          OR k.story_id = product_aliases.story_id
         )
     )
   )`, fromID, into.Name, into.ID)
@@ -161,7 +161,7 @@ func maybeAliasDroppedName(tx *sql.Tx, intoID int64, intoName, fromName string) 
 	if fromName == "" || strings.EqualFold(fromName, strings.TrimSpace(intoName)) {
 		return nil
 	}
-	_, err := createAliasTx(tx, intoID, 0, fromName)
+	_, err := createAliasTx(tx, intoID, 0, 0, fromName)
 	if err == nil || errors.Is(err, ErrDuplicate) || errors.Is(err, ErrInvalidAlias) {
 		return nil
 	}

@@ -17,11 +17,22 @@
       </select>
     </label>
     {{end}}
-    <label>Company
-      <select name="company_id">
-        <option value="">Any shop</option>
-        {{range .Companies}}
-        <option value="{{.ID}}" {{if eq .ID $.Alias.CompanyID}}selected{{end}}>{{.Label}}</option>
+    <label>Scope
+      <select name="scope">
+        <option value="" {{if eq $.Alias.ScopeValue ""}}selected{{end}}>Any shop</option>
+        {{if .Chains}}
+        <optgroup label="Retail chains">
+          {{range .Chains}}
+          <option value="chain:{{.ID}}" {{if eq $.Alias.ScopeValue (print "chain:" .ID)}}selected{{end}}>{{.Name}}</option>
+          {{end}}
+        </optgroup>
+        {{end}}
+        {{if .Stories}}
+        <optgroup label="Stores">
+          {{range .Stories}}
+          <option value="story:{{.ID}}" {{if eq $.Alias.ScopeValue (print "story:" .ID)}}selected{{end}}>{{.Label}}</option>
+          {{end}}
+        </optgroup>
         {{end}}
       </select>
     </label>

@@ -108,7 +108,7 @@ func (s *Server) showReceipt(c *gin.Context) {
 		s.renderReceiptShow(c, http.StatusOK, receipt, c.Query("error"))
 		return
 	}
-	products, units, companies, err := s.receiptLookups()
+	products, units, stories, err := s.receiptLookups()
 	if err != nil {
 		c.String(http.StatusInternalServerError, "could not load the catalog")
 		return
@@ -118,12 +118,12 @@ func (s *Server) showReceipt(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "could not load aliases")
 		return
 	}
-	view, err := receiptToView(receipt, products, units, companies, aliases)
+	view, err := receiptToView(receipt, products, units, stories, aliases)
 	if err != nil {
 		s.renderReceipts(c, http.StatusInternalServerError, "Could not read the saved AI response.")
 		return
 	}
-	s.renderReceiptReview(c, http.StatusOK, view, products, units, companies, c.Query("error"))
+	s.renderReceiptReview(c, http.StatusOK, view, products, units, stories, c.Query("error"))
 }
 
 func (s *Server) confirmReceipt(c *gin.Context) {
@@ -142,7 +142,7 @@ func (s *Server) confirmReceipt(c *gin.Context) {
 		return
 	}
 
-	products, units, companies, err := s.receiptLookups()
+	products, units, stories, err := s.receiptLookups()
 	if err != nil {
 		c.String(http.StatusInternalServerError, "could not load the catalog")
 		return
@@ -152,8 +152,8 @@ func (s *Server) confirmReceipt(c *gin.Context) {
 	view.ReceiptID = id
 	view.ImagePath = receipt.ImagePath
 	view.Status = receipt.Status
-	view.CompanyID = knownCompanyID(view.CompanyID, companies)
-	in.CompanyID = view.CompanyID
+	view.StoryID = knownStoryID(view.StoryID, stories)
+	in.StoryID = view.StoryID
 	rawJSON, jsonErr := viewToRawJSON(view)
 	if jsonErr == nil {
 		_ = s.store.UpdateReceiptJSON(id, string(rawJSON))
@@ -162,16 +162,16 @@ func (s *Server) confirmReceipt(c *gin.Context) {
 		s.renderReceiptShow(c, http.StatusConflict, receipt, "This bill is already saved as purchases.")
 		return
 	}
-	if view.CompanyID == 0 && formInt(c.PostForm("company_id")) > 0 {
-		s.renderReceiptReview(c, http.StatusUnprocessableEntity, view, products, units, companies, "Choose a company.")
+	if view.StoryID == 0 && formInt(c.PostForm("story_id")) > 0 {
+		s.renderReceiptReview(c, http.StatusUnprocessableEntity, view, products, units, stories, "Choose a store.")
 		return
 	}
 	if msg != "" {
-		s.renderReceiptReview(c, http.StatusUnprocessableEntity, view, products, units, companies, msg)
+		s.renderReceiptReview(c, http.StatusUnprocessableEntity, view, products, units, stories, msg)
 		return
 	}
 	if jsonErr != nil {
-		s.renderReceiptReview(c, http.StatusInternalServerError, view, products, units, companies, "Could not save the product list.")
+		s.renderReceiptReview(c, http.StatusInternalServerError, view, products, units, stories, "Could not save the product list.")
 		return
 	}
 	res, err := s.store.MigrateReceipt(id, in, string(rawJSON))
@@ -185,14 +185,14 @@ func (s *Server) confirmReceipt(c *gin.Context) {
 			msg = "Choose a unit for each new product."
 		} else if errors.Is(err, store.ErrNotFound) {
 			msg = "A selected product is gone. Refresh and try again."
-		} else if errors.Is(err, store.ErrInvalidCompany) {
-			msg = "Choose a company."
+		} else if errors.Is(err, store.ErrInvalidStory) {
+			msg = "Choose a store."
 		} else if err.Error() == "product name is required" || err.Error() == "name is required" {
 			msg = "Name is required for each new product."
 		} else if err.Error() == "no products to import" {
 			msg = "Tick at least one product."
 		}
-		s.renderReceiptReview(c, http.StatusUnprocessableEntity, view, products, units, companies, msg)
+		s.renderReceiptReview(c, http.StatusUnprocessableEntity, view, products, units, stories, msg)
 		return
 	}
 	c.Redirect(http.StatusSeeOther, "/admin/receipts/"+itoa(id)+"?imported="+itoa(int64(res.Purchases)))
@@ -240,24 +240,24 @@ func (s *Server) updateReceiptVisit(c *gin.Context) {
 		return
 	}
 	boughtOn, err := store.NormalizeBoughtOn(store.JoinBoughtOn(c.PostForm("bought_on"), c.PostForm("bought_at")))
-	companyID, msg := s.resolveCompanyForm(c)
+	storyID, msg := s.resolveStoryForm(c)
 	if err != nil {
-		s.renderReceiptEdit(c, http.StatusUnprocessableEntity, receipt, store.JoinBoughtOn(c.PostForm("bought_on"), c.PostForm("bought_at")), companyID, "Date must be a valid day.")
+		s.renderReceiptEdit(c, http.StatusUnprocessableEntity, receipt, store.JoinBoughtOn(c.PostForm("bought_on"), c.PostForm("bought_at")), storyID, "Date must be a valid day.")
 		return
 	}
 	if msg != "" {
-		s.renderReceiptEdit(c, http.StatusUnprocessableEntity, receipt, boughtOn, companyID, msg)
+		s.renderReceiptEdit(c, http.StatusUnprocessableEntity, receipt, boughtOn, storyID, msg)
 		return
 	}
-	if err := s.store.UpdateReceiptVisit(id, companyID, boughtOn); err != nil {
+	if err := s.store.UpdateReceiptVisit(id, storyID, boughtOn); err != nil {
 		msg := "Could not save the visit."
-		if errors.Is(err, store.ErrInvalidCompany) {
-			msg = "Choose a company."
+		if errors.Is(err, store.ErrInvalidStory) {
+			msg = "Choose a store."
 		} else if errors.Is(err, store.ErrReceiptNotReady) {
 			c.Redirect(http.StatusSeeOther, "/admin/receipts/"+itoa(id))
 			return
 		}
-		s.renderReceiptEdit(c, http.StatusUnprocessableEntity, receipt, boughtOn, companyID, msg)
+		s.renderReceiptEdit(c, http.StatusUnprocessableEntity, receipt, boughtOn, storyID, msg)
 		return
 	}
 	c.Redirect(http.StatusSeeOther, "/admin/receipts/"+itoa(id))
@@ -306,13 +306,13 @@ func (s *Server) renderReceipts(c *gin.Context, status int, errMsg string) {
 	})
 }
 
-func (s *Server) renderReceiptReview(c *gin.Context, status int, view receiptView, products []store.ProductListItem, units []store.Unit, companies []store.Company, errMsg string) {
+func (s *Server) renderReceiptReview(c *gin.Context, status int, view receiptView, products []store.ProductListItem, units []store.Unit, stories []store.Story, errMsg string) {
 	c.HTML(status, "receipt_review.html", gin.H{
-		"Page":      s.adminPage("Confirm bill", "", errMsg),
-		"View":      view,
-		"Products":  products,
-		"Units":     units,
-		"Companies": companies,
+		"Page":     s.adminPage("Confirm bill", "", errMsg),
+		"View":     view,
+		"Products": products,
+		"Units":    units,
+		"Stories":  stories,
 	})
 }
 
@@ -379,12 +379,12 @@ func (s *Server) renderReceiptShow(c *gin.Context, status int, receipt store.Rec
 		c.String(http.StatusInternalServerError, "could not load purchases")
 		return
 	}
-	companies, err := s.store.ListCompanies()
+	stories, err := s.store.ListStories()
 	if err != nil {
-		c.String(http.StatusInternalServerError, "could not load companies")
+		c.String(http.StatusInternalServerError, "could not load stores")
 		return
 	}
-	boughtOn, boughtAt, notes, company := receiptVisitFacts(receipt, buys, companies)
+	boughtOn, boughtAt, notes, story := receiptVisitFacts(receipt, buys, stories)
 	if boughtAt == "" {
 		boughtAt = store.BoughtOnTime(boughtOn)
 	}
@@ -397,45 +397,45 @@ func (s *Server) renderReceiptShow(c *gin.Context, status int, receipt store.Rec
 		"BoughtOn":  boughtOn,
 		"BoughtAt":  boughtAt,
 		"Notes":     notes,
-		"Company":   company,
+		"Story":     story,
 		"Imported":  imported,
 	})
 }
 
-func (s *Server) renderReceiptEdit(c *gin.Context, status int, receipt store.Receipt, boughtOn string, companyID int64, errMsg string) {
+func (s *Server) renderReceiptEdit(c *gin.Context, status int, receipt store.Receipt, boughtOn string, storyID int64, errMsg string) {
 	buys, err := s.store.ListPurchasesByReceipt(receipt.ID)
 	if err != nil {
 		c.String(http.StatusInternalServerError, "could not load purchases")
 		return
 	}
-	companies, err := s.store.ListCompanies()
+	stories, err := s.store.ListStories()
 	if err != nil {
-		c.String(http.StatusInternalServerError, "could not load companies")
+		c.String(http.StatusInternalServerError, "could not load stores")
 		return
 	}
 	var boughtAt string
-	if boughtOn == "" && companyID == 0 {
-		var company store.Company
-		boughtOn, boughtAt, _, company = receiptVisitFacts(receipt, buys, companies)
-		companyID = company.ID
+	if boughtOn == "" && storyID == 0 {
+		var story store.Story
+		boughtOn, boughtAt, _, story = receiptVisitFacts(receipt, buys, stories)
+		storyID = story.ID
 	} else {
-		_, boughtAt, _, _ = receiptVisitFacts(receipt, buys, companies)
+		_, boughtAt, _, _ = receiptVisitFacts(receipt, buys, stories)
 	}
 	if boughtAt == "" {
 		boughtAt = store.BoughtOnTime(boughtOn)
 	}
 	boughtOn = store.JoinBoughtOn(boughtOn, boughtAt)
 	c.HTML(status, "receipt_edit.html", gin.H{
-		"Page":      s.adminPage("Edit visit", "", errMsg),
-		"Receipt":   receipt,
-		"BoughtOn":  boughtOn,
-		"BoughtAt":  boughtAt,
-		"Company":   companyByID(companies, companyID),
-		"Companies": companies,
+		"Page":     s.adminPage("Edit visit", "", errMsg),
+		"Receipt":  receipt,
+		"BoughtOn": boughtOn,
+		"BoughtAt": boughtAt,
+		"Story":    storyByID(stories, storyID),
+		"Stories":  stories,
 	})
 }
 
-func (s *Server) receiptLookups() ([]store.ProductListItem, []store.Unit, []store.Company, error) {
+func (s *Server) receiptLookups() ([]store.ProductListItem, []store.Unit, []store.Story, error) {
 	products, err := s.store.ListProducts("")
 	if err != nil {
 		return nil, nil, nil, err
@@ -444,11 +444,11 @@ func (s *Server) receiptLookups() ([]store.ProductListItem, []store.Unit, []stor
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	companies, err := s.store.ListCompanies()
+	stories, err := s.store.ListStories()
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	return products, units, companies, nil
+	return products, units, stories, nil
 }
 
 func (s *Server) ocrModel() (string, error) {

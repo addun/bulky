@@ -42,7 +42,7 @@ func TestHomeRendersSearch(t *testing.T) {
 
 func TestProductSuggestJSON(t *testing.T) {
 	st, flour, _ := aliasPageFixture(t)
-	if _, err := st.CreateAlias(flour.ID, 0, "Mąka tortowa 1kg"); err != nil {
+	if _, err := st.CreateAlias(flour.ID, 0, 0, "Mąka tortowa 1kg"); err != nil {
 		t.Fatal(err)
 	}
 	srv, err := New(st, Config{})

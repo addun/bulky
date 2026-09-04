@@ -12,10 +12,10 @@ import (
 
 func TestAliasesPageFiltersByProduct(t *testing.T) {
 	st, flour, rice := aliasPageFixture(t)
-	if _, err := st.CreateAlias(flour.ID, 0, "Tortowa"); err != nil {
+	if _, err := st.CreateAlias(flour.ID, 0, 0, "Tortowa"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := st.CreateAlias(rice.ID, 0, "Ryz"); err != nil {
+	if _, err := st.CreateAlias(rice.ID, 0, 0, "Ryz"); err != nil {
 		t.Fatal(err)
 	}
 	srv, err := New(st, Config{})
@@ -93,6 +93,56 @@ func TestCreateAliasStaysOnProductFilter(t *testing.T) {
 	loc := rec.Header().Get("Location")
 	if loc != "/admin/aliases?product="+itoa(flour.ID) {
 		t.Fatalf("location %q", loc)
+	}
+}
+
+func TestCreateAliasChainScope(t *testing.T) {
+	st, flour, _ := aliasPageFixture(t)
+	chain, err := st.CreateRetailChain("Biedronka", "Jeronimo Martins Polska S.A.", "7791011327")
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv, err := New(st, Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/admin/aliases/new", nil)
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("form status %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "Retail chains") || !strings.Contains(body, `value="chain:`+itoa(chain.ID)+`"`) {
+		t.Fatalf("expected chain optgroup: %s", body)
+	}
+
+	form := url.Values{
+		"product_id": {itoa(flour.ID)},
+		"scope":      {"chain:" + itoa(chain.ID)},
+		"alias":      {"PłatkiDada100szt"},
+	}
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/admin/aliases", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status %d", rec.Code)
+	}
+	list, err := st.ListAliasesByProduct(flour.ID)
+	if err != nil || len(list) != 1 {
+		t.Fatalf("aliases: %v %#v", err, list)
+	}
+	if list[0].RetailChainID != chain.ID || list[0].StoryID != 0 || list[0].Alias != "PłatkiDada100szt" {
+		t.Fatalf("saved: %#v", list[0])
+	}
+
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/admin/aliases", nil)
+	srv.Handler().ServeHTTP(rec, req)
+	if !strings.Contains(rec.Body.String(), "Biedronka") {
+		t.Fatalf("list should show chain name: %s", rec.Body.String())
 	}
 }
 

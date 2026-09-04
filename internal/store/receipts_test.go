@@ -20,7 +20,7 @@ func TestReceiptAIThenMigrate(t *testing.T) {
 	if err != nil || len(units) == 0 {
 		t.Fatalf("units: %v %#v", err, units)
 	}
-	co, err := s.CreateCompany("Local Mill", "Kościuszki", "10", "", "40-001", "Katowice")
+	co, err := s.CreateStory("Local Mill", "Kościuszki", "10", "", "40-001", "Katowice", "", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,8 +51,8 @@ func TestReceiptAIThenMigrate(t *testing.T) {
 	}
 
 	res, err := s.MigrateReceipt(r.ID, BillImport{
-		CompanyID: co.ID,
-		BoughtOn:  "2026-08-20",
+		StoryID:  co.ID,
+		BoughtOn: "2026-08-20",
 		Lines: []BillLineInput{
 			{ProductName: "Rice", UnitID: units[0].ID, Quantity: mustDec(t, "10"), Amount: mustDec(t, "40.00")},
 		},
@@ -97,8 +97,8 @@ func TestReceiptAIThenMigrate(t *testing.T) {
 	if buys[0].Kind != KindPurchase {
 		t.Fatalf("kind: got %q want %q", buys[0].Kind, KindPurchase)
 	}
-	if buys[0].CompanyID != co.ID {
-		t.Fatalf("company_id: got %d want %d", buys[0].CompanyID, co.ID)
+	if buys[0].StoryID != co.ID {
+		t.Fatalf("story_id: got %d want %d", buys[0].StoryID, co.ID)
 	}
 
 	assigned, err := s.ListPurchasesByReceipt(r.ID)
@@ -285,7 +285,7 @@ func TestUpdateReceiptVisitOnSavedBill(t *testing.T) {
 	if err != nil || len(units) == 0 {
 		t.Fatalf("units: %v %#v", err, units)
 	}
-	co, err := s.CreateCompany("Local Mill", "Kościuszki", "10", "", "40-001", "Katowice")
+	co, err := s.CreateStory("Local Mill", "Kościuszki", "10", "", "40-001", "Katowice", "", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -310,8 +310,8 @@ func TestUpdateReceiptVisitOnSavedBill(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(assigned) != 2 || assigned[0].CompanyID != 0 || assigned[1].CompanyID != 0 {
-		t.Fatalf("saved without company: %#v", assigned)
+	if len(assigned) != 2 || assigned[0].StoryID != 0 || assigned[1].StoryID != 0 {
+		t.Fatalf("saved without story: %#v", assigned)
 	}
 
 	if err := s.UpdateReceiptVisit(r.ID, co.ID, "2026-08-21"); err != nil {
@@ -321,7 +321,7 @@ func TestUpdateReceiptVisitOnSavedBill(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if assigned[0].CompanyID != co.ID || assigned[1].CompanyID != co.ID {
+	if assigned[0].StoryID != co.ID || assigned[1].StoryID != co.ID {
 		t.Fatalf("after set: %#v", assigned)
 	}
 	if assigned[0].BoughtOn != "2026-08-21" || assigned[1].BoughtOn != "2026-08-21" {
@@ -336,7 +336,7 @@ func TestUpdateReceiptVisitOnSavedBill(t *testing.T) {
 		t.Fatal(err)
 	}
 	if int64(bill["company_id"].(float64)) != co.ID {
-		t.Fatalf("json company: %#v", bill["company_id"])
+		t.Fatalf("json story: %#v", bill["company_id"])
 	}
 	if bill["bought_on"] != "2026-08-21" {
 		t.Fatalf("json date: %#v", bill["bought_on"])
@@ -352,7 +352,7 @@ func TestUpdateReceiptVisitOnSavedBill(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if assigned[0].CompanyID != 0 || assigned[1].CompanyID != 0 {
+	if assigned[0].StoryID != 0 || assigned[1].StoryID != 0 {
 		t.Fatalf("cleared: %#v", assigned)
 	}
 
@@ -366,7 +366,7 @@ func TestUpdateReceiptVisitOnSavedBill(t *testing.T) {
 	if err := s.UpdateReceiptVisit(ready.ID, co.ID, "2026-08-21"); err != ErrReceiptNotReady {
 		t.Fatalf("ready receipt: %v", err)
 	}
-	if err := s.UpdateReceiptVisit(r.ID, co.ID+99, "2026-08-21"); !errors.Is(err, ErrInvalidCompany) {
-		t.Fatalf("missing company: %v", err)
+	if err := s.UpdateReceiptVisit(r.ID, co.ID+99, "2026-08-21"); !errors.Is(err, ErrInvalidStory) {
+		t.Fatalf("missing story: %v", err)
 	}
 }

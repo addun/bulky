@@ -1,0 +1,28 @@
+{{template "header" .}}
+<div class="page-head">
+  <h1>Retail chains</h1>
+  <a class="btn btn-tag" href="/admin/retail-chains/new">Add chain</a>
+</div>
+
+{{if not .RetailChains}}
+  <p class="empty">No retail chains yet.</p>
+{{else}}
+  <ul class="units">
+    {{range .RetailChains}}
+    <li>
+      <span class="row-main">
+        <span class="unit-name">{{.Name}}</span>
+        <span class="meta">{{.LegalName}} · {{.TaxID}}</span>
+      </span>
+      <span class="meta">{{.StoryCount}} store{{if ne .StoryCount 1}}s{{end}}</span>
+      <span class="tight">
+        <a href="/admin/retail-chains/{{.ID}}/edit">Edit</a>
+        {{if eq .StoryCount 0}}
+          <a class="danger" href="/admin/retail-chains/{{.ID}}/delete">Delete</a>
+        {{end}}
+      </span>
+    </li>
+    {{end}}
+  </ul>
+{{end}}
+{{template "footer" .}}

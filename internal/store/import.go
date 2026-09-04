@@ -20,15 +20,15 @@ type BillLineInput struct {
 }
 
 type BillImport struct {
-	CompanyID int64
-	Company   *Company
+	StoryID   int64
+	Story     *Story
 	ReceiptID int64
 	BoughtOn  string
 	Lines     []BillLineInput
 }
 
 type BillImportResult struct {
-	CompanyID  int64
+	StoryID    int64
 	ProductIDs []int64
 	Purchases  int
 }
@@ -42,8 +42,8 @@ type execRower interface {
 	Exec(query string, args ...any) (sql.Result, error)
 }
 
-func (s *Store) FindProductByName(name string, companyID int64) (Product, error) {
-	return findProductByNameTx(s.db, name, companyID)
+func (s *Store) FindProductByName(name string, storyID int64) (Product, error) {
+	return findProductByNameTx(s.db, name, storyID)
 }
 
 func (s *Store) ImportBill(in BillImport) (BillImportResult, error) {
@@ -70,30 +70,30 @@ func importBillTx(tx *sql.Tx, in BillImport) (BillImportResult, error) {
 		return BillImportResult{}, fmtNoLines()
 	}
 
-	companyID := in.CompanyID
-	if companyID > 0 {
-		if _, err := getCompanyTx(tx, companyID); err != nil {
+	storyID := in.StoryID
+	if storyID > 0 {
+		if _, err := getStoryTx(tx, storyID); err != nil {
 			return BillImportResult{}, err
 		}
-	} else if in.Company != nil {
-		c, err := createCompanyTx(tx, *in.Company)
+	} else if in.Story != nil {
+		c, err := createStoryTx(tx, *in.Story)
 		if err != nil {
 			return BillImportResult{}, err
 		}
-		companyID = c.ID
+		storyID = c.ID
 	}
 
 	created := map[string]int64{}
 	newIDs := map[int64]struct{}{}
 	var result BillImportResult
-	result.CompanyID = companyID
+	result.StoryID = storyID
 	for _, line := range in.Lines {
-		pid, err := resolveImportProduct(tx, line, created, newIDs, companyID)
+		pid, err := resolveImportProduct(tx, line, created, newIDs, storyID)
 		if err != nil {
 			return BillImportResult{}, err
 		}
 		result.ProductIDs = append(result.ProductIDs, pid)
-		if _, err := createPurchaseTx(tx, pid, companyID, in.ReceiptID, in.BoughtOn, line.Quantity, line.Amount, line.PackageCount, line.PackageSize); err != nil {
+		if _, err := createPurchaseTx(tx, pid, storyID, in.ReceiptID, in.BoughtOn, line.Quantity, line.Amount, line.PackageCount, line.PackageSize); err != nil {
 			return BillImportResult{}, err
 		}
 		result.Purchases++
@@ -105,13 +105,13 @@ func fmtNoLines() error {
 	return errors.New("no products to import")
 }
 
-func resolveImportProduct(tx *sql.Tx, line BillLineInput, created map[string]int64, newIDs map[int64]struct{}, companyID int64) (int64, error) {
+func resolveImportProduct(tx *sql.Tx, line BillLineInput, created map[string]int64, newIDs map[int64]struct{}, storyID int64) (int64, error) {
 	if line.ProductID > 0 {
 		p, err := getProductTx(tx, line.ProductID)
 		if err != nil {
 			return 0, err
 		}
-		if err := maybeAliasFromReceipt(tx, p.ID, companyID, line.ReceiptName, p.Name); err != nil {
+		if err := maybeAliasFromReceipt(tx, p.ID, storyID, line.ReceiptName, p.Name); err != nil {
 			return 0, err
 		}
 		return p.ID, nil
@@ -122,13 +122,13 @@ func resolveImportProduct(tx *sql.Tx, line BillLineInput, created map[string]int
 	}
 	if id, ok := created[key]; ok {
 		if _, isNew := newIDs[id]; isNew {
-			if err := maybeAliasFromReceipt(tx, id, companyID, line.ReceiptName, line.ProductName); err != nil {
+			if err := maybeAliasFromReceipt(tx, id, storyID, line.ReceiptName, line.ProductName); err != nil {
 				return 0, err
 			}
 		}
 		return id, nil
 	}
-	existing, err := findProductByNameTx(tx, line.ProductName, companyID)
+	existing, err := findProductByNameTx(tx, line.ProductName, storyID)
 	if err == nil {
 		created[key] = existing.ID
 		return existing.ID, nil
@@ -142,13 +142,13 @@ func resolveImportProduct(tx *sql.Tx, line BillLineInput, created map[string]int
 	}
 	created[key] = p.ID
 	newIDs[p.ID] = struct{}{}
-	if err := maybeAliasFromReceipt(tx, p.ID, companyID, line.ReceiptName, line.ProductName); err != nil {
+	if err := maybeAliasFromReceipt(tx, p.ID, storyID, line.ReceiptName, line.ProductName); err != nil {
 		return 0, err
 	}
 	return p.ID, nil
 }
 
-func maybeAliasFromReceipt(tx *sql.Tx, productID, companyID int64, receiptName, productName string) error {
+func maybeAliasFromReceipt(tx *sql.Tx, productID, storyID int64, receiptName, productName string) error {
 	receiptName = strings.TrimSpace(receiptName)
 	if receiptName == "" {
 		return nil
@@ -156,8 +156,19 @@ func maybeAliasFromReceipt(tx *sql.Tx, productID, companyID int64, receiptName, 
 	if strings.EqualFold(receiptName, strings.TrimSpace(productName)) {
 		return nil
 	}
-	_, err := createAliasTx(tx, productID, companyID, receiptName)
-	if err == nil || errors.Is(err, ErrDuplicate) || errors.Is(err, ErrInvalidAlias) {
+	var chainID int64
+	if storyID > 0 {
+		st, err := getStoryTx(tx, storyID)
+		if err != nil {
+			return err
+		}
+		if st.RetailChainID > 0 {
+			chainID = st.RetailChainID
+			storyID = 0
+		}
+	}
+	_, err := createAliasTx(tx, productID, storyID, chainID, receiptName)
+	if err == nil || errors.Is(err, ErrDuplicate) || errors.Is(err, ErrInvalidAlias) || errors.Is(err, ErrAliasScope) {
 		return nil
 	}
 	return err
@@ -176,35 +187,44 @@ WHERE p.id = ?`, id).Scan(&p.ID, &p.Name, &p.UnitID, &p.UnitName, &p.ImagePath, 
 	return p, err
 }
 
-func getCompanyTx(tx *sql.Tx, id int64) (Company, error) {
-	var c Company
-	err := tx.QueryRow(`
-SELECT c.id, c.name, c.street_name, c.building_number, c.apartment_number, c.postal_code, c.city, COUNT(p.id)
-FROM companies c
-LEFT JOIN purchases p ON p.company_id = c.id
+func getStoryTx(tx *sql.Tx, id int64) (Story, error) {
+	c, err := scanStoryRow(tx.QueryRow(storySelect+`
 WHERE c.id = ?
-GROUP BY c.id`, id).Scan(&c.ID, &c.Name, &c.StreetName, &c.BuildingNumber, &c.ApartmentNumber, &c.PostalCode, &c.City, &c.PurchaseCount)
+GROUP BY c.id`, id))
 	if errors.Is(err, sql.ErrNoRows) {
-		return Company{}, ErrNotFound
+		return Story{}, ErrNotFound
 	}
 	return c, err
 }
 
-func findProductByNameTx(q queryRower, name string, companyID int64) (Product, error) {
+func findProductByNameTx(q queryRower, name string, storyID int64) (Product, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return Product{}, ErrNotFound
 	}
-	if companyID > 0 {
-		p, err := productByAliasTx(q, name, companyID)
+	if storyID > 0 {
+		p, err := productByAliasTx(q, name, storyID, 0)
 		if err == nil {
 			return p, nil
 		}
 		if !errors.Is(err, ErrNotFound) {
 			return Product{}, err
 		}
+		chainID, err := storyChainIDTx(q, storyID)
+		if err != nil {
+			return Product{}, err
+		}
+		if chainID > 0 {
+			p, err := productByAliasTx(q, name, 0, chainID)
+			if err == nil {
+				return p, nil
+			}
+			if !errors.Is(err, ErrNotFound) {
+				return Product{}, err
+			}
+		}
 	}
-	p, err := productByAliasTx(q, name, 0)
+	p, err := productByAliasTx(q, name, 0, 0)
 	if err == nil {
 		return p, nil
 	}
@@ -253,29 +273,22 @@ func createProductTx(tx *sql.Tx, name string, unitID int64) (Product, error) {
 	return getProductTx(tx, id)
 }
 
-func createCompanyTx(tx *sql.Tx, in Company) (Company, error) {
-	c, err := normalizeCompany(in.Name, in.StreetName, in.BuildingNumber, in.ApartmentNumber, in.PostalCode, in.City)
+func createStoryTx(tx *sql.Tx, in Story) (Story, error) {
+	c, err := normalizeStory(in.Name, in.StreetName, in.BuildingNumber, in.ApartmentNumber, in.PostalCode, in.City, in.ExternalID)
 	if err != nil {
-		return Company{}, err
+		return Story{}, err
 	}
-	res, err := tx.Exec(
-		`INSERT INTO companies (name, street_name, building_number, apartment_number, postal_code, city) VALUES (?, ?, ?, ?, ?, ?)`,
-		c.Name, c.StreetName, c.BuildingNumber, c.ApartmentNumber, c.PostalCode, c.City,
-	)
+	id, err := insertStory(tx, c, in.RetailChainID)
 	if err != nil {
-		return Company{}, err
+		return Story{}, err
 	}
-	id, err := res.LastInsertId()
-	if err != nil {
-		return Company{}, err
-	}
-	return getCompanyTx(tx, id)
+	return getStoryTx(tx, id)
 }
 
-func createPurchaseTx(tx *sql.Tx, productID, companyID, receiptID int64, boughtOn string, quantity, amount, packages, packSize decimal.Decimal) (Purchase, error) {
-	var company any
-	if companyID > 0 {
-		company = companyID
+func createPurchaseTx(tx *sql.Tx, productID, storyID, receiptID int64, boughtOn string, quantity, amount, packages, packSize decimal.Decimal) (Purchase, error) {
+	var story any
+	if storyID > 0 {
+		story = storyID
 	}
 	var receipt any
 	if receiptID > 0 {
@@ -286,8 +299,8 @@ func createPurchaseTx(tx *sql.Tx, productID, companyID, receiptID int64, boughtO
 		return Purchase{}, err
 	}
 	res, err := tx.Exec(
-		`INSERT INTO purchases (product_id, company_id, kind, receipt_id, bought_on, quantity, package_count, package_size, amount, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		productID, company, KindPurchase, receipt, boughtOn, qty.String(), packCount, packSizeVal, amount.String(), nowRFC3339(),
+		`INSERT INTO purchases (product_id, story_id, kind, receipt_id, bought_on, quantity, package_count, package_size, amount, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		productID, story, KindPurchase, receipt, boughtOn, qty.String(), packCount, packSizeVal, amount.String(), nowRFC3339(),
 	)
 	if err != nil {
 		return Purchase{}, err

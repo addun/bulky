@@ -25,7 +25,7 @@ func TestImportBillCreatesProductsAndPurchases(t *testing.T) {
 	}
 
 	res, err := s.ImportBill(BillImport{
-		Company: &Company{
+		Story: &Story{
 			Name:           "Local Mill",
 			StreetName:     "Kościuszki",
 			BuildingNumber: "10",
@@ -45,8 +45,8 @@ func TestImportBillCreatesProductsAndPurchases(t *testing.T) {
 	if res.Purchases != 3 {
 		t.Fatalf("purchases: %d", res.Purchases)
 	}
-	if res.CompanyID == 0 {
-		t.Fatal("expected company")
+	if res.StoryID == 0 {
+		t.Fatal("expected story")
 	}
 	flour, err := s.FindProductByName("flour", 0)
 	if err != nil {
@@ -63,7 +63,7 @@ func TestImportBillCreatesProductsAndPurchases(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(riceBuys) != 1 || riceBuys[0].CompanyID != res.CompanyID {
+	if len(riceBuys) != 1 || riceBuys[0].StoryID != res.StoryID {
 		t.Fatalf("rice: %#v", riceBuys)
 	}
 	if riceBuys[0].ReceiptID != 0 {
@@ -78,8 +78,8 @@ func TestImportBillCreatesAliasFromReceiptName(t *testing.T) {
 	s, kg, _, _, lidl, _ := aliasFixture(t)
 
 	res, err := s.ImportBill(BillImport{
-		CompanyID: lidl.ID,
-		BoughtOn:  "2026-08-20",
+		StoryID:  lidl.ID,
+		BoughtOn: "2026-08-20",
 		Lines: []BillLineInput{
 			{ProductName: "Pastry flour", ReceiptName: "MAKA TORTOWA 1KG", UnitID: kg.ID, Quantity: mustDec(t, "1"), Amount: mustDec(t, "4.50")},
 		},
@@ -94,7 +94,7 @@ func TestImportBillCreatesAliasFromReceiptName(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(aliases) != 1 || aliases[0].Alias != "MAKA TORTOWA 1KG" || aliases[0].CompanyID != lidl.ID {
+	if len(aliases) != 1 || aliases[0].Alias != "MAKA TORTOWA 1KG" || aliases[0].StoryID != lidl.ID {
 		t.Fatalf("shop alias: %#v", aliases)
 	}
 
@@ -111,8 +111,38 @@ func TestImportBillCreatesAliasFromReceiptName(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(galias) != 1 || galias[0].Alias != "CUKIER 1KG" || galias[0].CompanyID != 0 {
+	if len(galias) != 1 || galias[0].Alias != "CUKIER 1KG" || galias[0].StoryID != 0 {
 		t.Fatalf("global alias: %#v", galias)
+	}
+}
+
+func TestImportBillCreatesChainAliasWhenStoryHasChain(t *testing.T) {
+	s, kg, _, _, shops := chainAliasFixture(t)
+	res, err := s.ImportBill(BillImport{
+		StoryID:  shops.a.ID,
+		BoughtOn: "2026-08-20",
+		Lines: []BillLineInput{
+			{ProductName: "Corn flakes", ReceiptName: "PłatkiDada100szt", UnitID: kg.ID, Quantity: mustDec(t, "1"), Amount: mustDec(t, "4.50")},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	aliases, err := s.ListAliasesByProduct(res.ProductIDs[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(aliases) != 1 {
+		t.Fatalf("aliases: %#v", aliases)
+	}
+	a := aliases[0]
+	if a.Alias != "PłatkiDada100szt" || a.StoryID != 0 || a.RetailChainID != shops.biedronka.ID {
+		t.Fatalf("expected chain alias: %#v", a)
+	}
+
+	hit, err := s.FindProductByName("PłatkiDada100szt", shops.b.ID)
+	if err != nil || hit.ID != res.ProductIDs[0] {
+		t.Fatalf("other shop in chain should match: %v %#v", err, hit)
 	}
 }
 
@@ -138,7 +168,7 @@ func TestImportBillSkipsAliasWhenNamesMatch(t *testing.T) {
 
 func TestImportBillSkipsDuplicateAlias(t *testing.T) {
 	s, kg, flour, _, _, _ := aliasFixture(t)
-	if _, err := s.CreateAlias(flour.ID, 0, "MAKA TORTOWA"); err != nil {
+	if _, err := s.CreateAlias(flour.ID, 0, 0, "MAKA TORTOWA"); err != nil {
 		t.Fatal(err)
 	}
 	res, err := s.ImportBill(BillImport{
@@ -184,7 +214,7 @@ func TestImportBillTwoReceiptNamesOnNewProduct(t *testing.T) {
 	got := map[string]bool{}
 	for _, a := range aliases {
 		got[a.Alias] = true
-		if a.CompanyID != 0 {
+		if a.StoryID != 0 {
 			t.Fatalf("expected global: %#v", a)
 		}
 	}
@@ -196,8 +226,8 @@ func TestImportBillTwoReceiptNamesOnNewProduct(t *testing.T) {
 func TestImportBillAliasesExistingProductFromReceiptName(t *testing.T) {
 	s, kg, flour, _, lidl, _ := aliasFixture(t)
 	res, err := s.ImportBill(BillImport{
-		CompanyID: lidl.ID,
-		BoughtOn:  "2026-08-20",
+		StoryID:  lidl.ID,
+		BoughtOn: "2026-08-20",
 		Lines: []BillLineInput{
 			{ProductID: flour.ID, ReceiptName: "MAKA TORTOWA", Quantity: mustDec(t, "1"), Amount: mustDec(t, "4.00")},
 		},
@@ -212,7 +242,7 @@ func TestImportBillAliasesExistingProductFromReceiptName(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(aliases) != 1 || aliases[0].Alias != "MAKA TORTOWA" || aliases[0].CompanyID != lidl.ID {
+	if len(aliases) != 1 || aliases[0].Alias != "MAKA TORTOWA" || aliases[0].StoryID != lidl.ID {
 		t.Fatalf("selected product should keep the corrected alias: %#v", aliases)
 	}
 

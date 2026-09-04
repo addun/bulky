@@ -1,0 +1,39 @@
+{{template "header" .}}
+<h1>{{if .New}}Add store{{else}}Edit store{{end}}</h1>
+<form class="stack" method="post" action="{{if .New}}/admin/stories{{else}}/admin/stories/{{.Story.ID}}{{end}}">
+  {{if .Next}}<input type="hidden" name="next" value="{{.Next}}">{{end}}
+  <fieldset class="form-group">
+    <legend>Name</legend>
+    <label>Name <input name="name" required placeholder="Makro, local mill…" value="{{.Story.Name}}" autofocus></label>
+    <label>
+      Retail chain
+      <select name="retail_chain_id">
+        <option value="">None</option>
+        {{range .RetailChains}}
+        <option value="{{.ID}}" {{if eq .ID $.Story.RetailChainID}}selected{{end}}>{{.Label}}</option>
+        {{end}}
+      </select>
+    </label>
+    <label><span>Store code <span class="hint">optional · printed on the bill</span></span> <input name="external_id" placeholder="2615" value="{{.Story.ExternalID}}"></label>
+    {{if not .RetailChains}}
+      <p class="hint">No retail chains yet. You can still save, or <a href="/admin/retail-chains/new">add a chain</a> first.</p>
+    {{end}}
+  </fieldset>
+  <fieldset class="form-group">
+    <legend>Address</legend>
+    <label>Street name <input name="street_name" required placeholder="Al. Jerozolimskie" value="{{.Story.StreetName}}" autocomplete="street-address"></label>
+    <div class="form-row">
+      <label>Building number <input name="building_number" required placeholder="179" value="{{.Story.BuildingNumber}}"></label>
+      <label><span>Apartment number <span class="hint">optional</span></span> <input name="apartment_number" placeholder="12" value="{{.Story.ApartmentNumber}}"></label>
+    </div>
+    <div class="city-row">
+      <label>Postal code <input name="postal_code" required placeholder="00-001" value="{{.Story.PostalCode}}" autocomplete="postal-code"></label>
+      <label>City <input name="city" required placeholder="Warszawa" value="{{.Story.City}}"></label>
+    </div>
+  </fieldset>
+  <div class="form-actions">
+    <button type="submit" class="btn btn-tag">{{if .New}}Add store{{else}}Save store{{end}}</button>
+    <a href="{{if .Next}}{{.Next}}{{else}}/admin/stories{{end}}">Cancel</a>
+  </div>
+</form>
+{{template "footer" .}}
