@@ -41,7 +41,6 @@ func parseBill(raw []byte) (Bill, error) {
 		fixWeighedKg(&bill.Lines[i])
 		fillMissingAmount(&bill.Lines[i])
 	}
-	bill.Lines = mergeRepeatScans(bill.Lines)
 	return bill, nil
 }
 
@@ -309,73 +308,6 @@ func looksLikeScaleKg(s string) bool {
 		return false
 	}
 	return strings.TrimRight(frac, "0") != ""
-}
-
-func mergeRepeatScans(lines []Line) []Line {
-	if len(lines) < 2 {
-		return lines
-	}
-	type acc struct {
-		idx      int
-		count    decimal.Decimal
-		amount   decimal.Decimal
-		discount decimal.Decimal
-	}
-	seen := map[string]*acc{}
-	out := make([]Line, 0, len(lines))
-	for _, line := range lines {
-		if line.Skip {
-			out = append(out, line)
-			continue
-		}
-		key, count, amount, discount, ok := repeatScanKey(line)
-		if !ok {
-			out = append(out, line)
-			continue
-		}
-		if g, hit := seen[key]; hit {
-			g.count = g.count.Add(count)
-			g.amount = g.amount.Add(amount)
-			g.discount = g.discount.Add(discount)
-			out[g.idx].PackageCount = g.count.String()
-			out[g.idx].Amount = g.amount.String()
-			if !g.discount.IsZero() || out[g.idx].Discount != "" {
-				out[g.idx].Discount = g.discount.String()
-			}
-			continue
-		}
-		idx := len(out)
-		out = append(out, line)
-		seen[key] = &acc{idx: idx, count: count, amount: amount, discount: discount}
-	}
-	return out
-}
-
-func repeatScanKey(line Line) (key string, count, amount, discount decimal.Decimal, ok bool) {
-	name := strings.ToLower(strings.Join(strings.Fields(line.ReceiptName), " "))
-	if name == "" {
-		return "", decimal.Zero, decimal.Zero, decimal.Zero, false
-	}
-	count, err := decimal.NewFromString(line.PackageCount)
-	if err != nil || count.IsZero() {
-		return "", decimal.Zero, decimal.Zero, decimal.Zero, false
-	}
-	amount, err = decimal.NewFromString(line.Amount)
-	if err != nil {
-		return "", decimal.Zero, decimal.Zero, decimal.Zero, false
-	}
-	if line.Discount != "" {
-		discount, _ = decimal.NewFromString(line.Discount)
-		discount = discount.Abs()
-	}
-	size, err := decimal.NewFromString(line.PackageSize)
-	if err != nil {
-		size = decimal.Zero
-	}
-	unit := strings.ToLower(line.UnitName)
-	price := line.UnitPrice
-	key = name + "\x1f" + unit + "\x1f" + size.String() + "\x1f" + count.String() + "\x1f" + amount.String() + "\x1f" + price + "\x1f" + line.VatType
-	return key, count, amount, discount, true
 }
 
 type flexInt int64
