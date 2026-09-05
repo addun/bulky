@@ -46,14 +46,7 @@
         </div>
         <p class="history-facts">
           {{if $buy.StoryID}}<span>{{(index $.StoryByID $buy.StoryID).Name}}</span>{{end}}
-          <span>
-            {{if $buy.HasPackage}}
-              {{qty $buy.PackageCount}} × {{qty $buy.PackageSize}} {{$.Product.UnitName}}
-              <span class="meta">({{qty $buy.Quantity}} {{$.Product.UnitName}})</span>
-            {{else}}
-              {{qty $buy.Quantity}} {{$.Product.UnitName}}
-            {{end}}
-          </span>
+          <span>{{qty $buy.Quantity}} {{$.Product.UnitName}}</span>
           <span>{{unitPrice $buy.Amount $buy.Quantity}} / {{$.Product.UnitName}}</span>
         </p>
         <p class="history-foot">

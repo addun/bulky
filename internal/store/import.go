@@ -9,14 +9,12 @@ import (
 )
 
 type BillLineInput struct {
-	ProductID    int64
-	ProductName  string
-	ReceiptName  string
-	UnitID       int64
-	Quantity     decimal.Decimal
-	PackageCount decimal.Decimal
-	PackageSize  decimal.Decimal
-	Amount       decimal.Decimal
+	ProductID   int64
+	ProductName string
+	ReceiptName string
+	UnitID      int64
+	Quantity    decimal.Decimal
+	Amount      decimal.Decimal
 }
 
 type BillImport struct {
@@ -93,7 +91,7 @@ func importBillTx(tx *sql.Tx, in BillImport) (BillImportResult, error) {
 			return BillImportResult{}, err
 		}
 		result.ProductIDs = append(result.ProductIDs, pid)
-		if _, err := createPurchaseTx(tx, pid, storyID, in.ReceiptID, in.BoughtOn, line.Quantity, line.Amount, line.PackageCount, line.PackageSize); err != nil {
+		if _, err := createPurchaseTx(tx, pid, storyID, in.ReceiptID, in.BoughtOn, line.Quantity, line.Amount); err != nil {
 			return BillImportResult{}, err
 		}
 		result.Purchases++
@@ -285,7 +283,7 @@ func createStoryTx(tx *sql.Tx, in Story) (Story, error) {
 	return getStoryTx(tx, id)
 }
 
-func createPurchaseTx(tx *sql.Tx, productID, storyID, receiptID int64, boughtOn string, quantity, amount, packages, packSize decimal.Decimal) (Purchase, error) {
+func createPurchaseTx(tx *sql.Tx, productID, storyID, receiptID int64, boughtOn string, quantity, amount decimal.Decimal) (Purchase, error) {
 	var story any
 	if storyID > 0 {
 		story = storyID
@@ -294,13 +292,12 @@ func createPurchaseTx(tx *sql.Tx, productID, storyID, receiptID int64, boughtOn 
 	if receiptID > 0 {
 		receipt = receiptID
 	}
-	qty, packCount, packSizeVal, err := packedQuantity(quantity, packages, packSize)
-	if err != nil {
+	if err := validQuantity(quantity); err != nil {
 		return Purchase{}, err
 	}
 	res, err := tx.Exec(
-		`INSERT INTO purchases (product_id, story_id, kind, receipt_id, bought_on, quantity, package_count, package_size, amount, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		productID, story, KindPurchase, receipt, boughtOn, qty.String(), packCount, packSizeVal, amount.String(), nowRFC3339(),
+		`INSERT INTO purchases (product_id, story_id, kind, receipt_id, bought_on, quantity, amount, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		productID, story, KindPurchase, receipt, boughtOn, quantity.String(), amount.String(), nowRFC3339(),
 	)
 	if err != nil {
 		return Purchase{}, err

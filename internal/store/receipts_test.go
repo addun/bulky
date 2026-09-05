@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
-
-	"github.com/shopspring/decimal"
 )
 
 func TestReceiptAIThenMigrate(t *testing.T) {
@@ -121,7 +119,7 @@ func TestReceiptAIThenMigrate(t *testing.T) {
 		t.Fatalf("assigned amount: %s", assigned[0].Amount)
 	}
 
-	if _, err := s.CreatePurchase(rice.ID, co.ID, "2026-08-21", mustDec(t, "1"), mustDec(t, "1"), KindPurchase, decimal.Zero, decimal.Zero); err != nil {
+	if _, err := s.CreatePurchase(rice.ID, co.ID, "2026-08-21", mustDec(t, "1"), mustDec(t, "1"), KindPurchase); err != nil {
 		t.Fatal(err)
 	}
 	assigned, err = s.ListPurchasesByReceipt(r.ID)

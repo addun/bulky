@@ -297,7 +297,7 @@ func TestProductShowUsesPurchaseUnit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := st.CreatePurchase(p.ID, 0, "2026-08-20", decimal.Zero, decimal.RequireFromString("15"), store.KindPurchase, decimal.RequireFromString("6"), decimal.RequireFromString("1")); err != nil {
+	if _, err := st.CreatePurchase(p.ID, 0, "2026-08-20", decimal.RequireFromString("6"), decimal.RequireFromString("15"), store.KindPurchase); err != nil {
 		t.Fatal(err)
 	}
 	srv, err := New(st, Config{Currency: "PLN", CurrencySymbol: "zł"})
@@ -336,7 +336,7 @@ func TestProductShowUsesPurchaseUnit(t *testing.T) {
 	rec = httptest.NewRecorder()
 	req = httptest.NewRequest(http.MethodGet, "/admin/products/"+itoa(p.ID)+"/purchases/new", nil)
 	srv.Handler().ServeHTTP(rec, req)
-	if !strings.Contains(rec.Body.String(), "Package size (szt)") {
+	if !strings.Contains(rec.Body.String(), "Quantity (szt)") {
 		t.Fatal("purchase form should use the purchase unit")
 	}
 }
@@ -407,7 +407,7 @@ func TestChangeProductUnitFormAndSave(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := st.CreatePurchase(p.ID, 0, "2026-08-20", decimal.Zero, decimal.RequireFromString("15"), store.KindPurchase, decimal.RequireFromString("2"), decimal.RequireFromString("1")); err != nil {
+	if _, err := st.CreatePurchase(p.ID, 0, "2026-08-20", decimal.RequireFromString("2"), decimal.RequireFromString("15"), store.KindPurchase); err != nil {
 		t.Fatal(err)
 	}
 	srv, err := New(st, Config{})

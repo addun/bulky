@@ -48,13 +48,13 @@
     <h2>Products</h2>
     <div id="receipt-lines">
       {{range $i, $line := .View.Lines}}
-      <fieldset class="receipt-line{{if not $line.Include}} is-off{{end}}" data-pack-form data-pack-symbol="{{$.Page.Symbol}}">
+      <fieldset class="receipt-line{{if not $line.Include}} is-off{{end}}" data-qty-form data-qty-symbol="{{$.Page.Symbol}}">
         <legend class="sr">Line {{add $i 1}}</legend>
         <label class="check receipt-include">
           <input type="checkbox" name="include_{{$i}}" value="1" {{if $line.Include}}checked{{end}}>
           Include
         </label>
-        {{if $line.ReceiptName}}<p class="meta bill-text">On the bill: {{$line.ReceiptName}}{{if $line.VatType}} · VAT {{$line.VatType}}{{end}}{{if $line.UnitPrice}} · {{$line.PackageCount}} × {{$line.UnitPrice}}{{end}}{{if $line.Discount}} · rabat {{$line.Discount}}{{end}}</p>{{end}}
+        {{if $line.ReceiptName}}<p class="meta bill-text">On the bill: {{$line.ReceiptName}}{{if $line.VatType}} · VAT {{$line.VatType}}{{end}}{{if $line.UnitPrice}} · {{$line.Quantity}} × {{$line.UnitPrice}}{{end}}{{if $line.Discount}} · rabat {{$line.Discount}}{{end}}</p>{{end}}
         <input type="hidden" name="vat_type_{{$i}}" value="{{$line.VatType}}">
         <input type="hidden" name="unit_price_{{$i}}" value="{{$line.UnitPrice}}">
         <input type="hidden" name="discount_{{$i}}" value="{{$line.Discount}}">
@@ -64,26 +64,25 @@
           <select name="product_choice_{{$i}}" data-product-choice>
             <option value="new" {{if eq $line.ProductID 0}}selected{{end}}>New product</option>
             {{range $.Products}}
-            <option value="{{.ID}}" data-unit-id="{{.UnitID}}" data-unit-ids="{{.UnitIDsAttr}}" data-conversions="{{.PackConversionsJSON}}" {{if eq .ID $line.ProductID}}selected{{end}}>{{.Name}} ({{.UnitName}})</option>
+            <option value="{{.ID}}" {{if eq .ID $line.ProductID}}selected{{end}}>{{.Name}} ({{.UnitName}})</option>
             {{end}}
           </select>
         </label>
         <label{{if $line.ProductID}} hidden{{end}} data-new-name>Name <input name="product_name_{{$i}}" value="{{$line.ProductName}}"></label>
         <div class="receipt-nums">
-          <label>Packages <input name="packages_{{$i}}" inputmode="decimal" value="{{$line.PackageCount}}" data-pack-count></label>
-          <label>Package size <input name="package_size_{{$i}}" inputmode="decimal" value="{{$line.PackageSize}}" data-pack-size></label>
-          <label>
+          <label>Quantity <input name="quantity_{{$i}}" inputmode="decimal" value="{{$line.Quantity}}" data-qty></label>
+          <label{{if $line.ProductID}} hidden{{end}} data-new-unit>
             Unit
-            <select name="unit_id_{{$i}}" data-pack-unit-select>
+            <select name="unit_id_{{$i}}">
               <option value="">Select…</option>
               {{range $.Units}}
-              <option value="{{.ID}}" {{if eq .ID $line.UnitID}}selected{{end}}>{{.Name}}</option>
+              <option value="{{.ID}}" {{if and (eq $line.ProductID 0) (eq .ID $line.UnitID)}}selected{{end}}>{{.Name}}</option>
               {{end}}
             </select>
           </label>
-          <label>Amount ({{$.Page.Currency}}) <input name="amount_{{$i}}" inputmode="decimal" value="{{$line.Amount}}" data-pack-amount></label>
+          <label>Amount ({{$.Page.Currency}}) <input name="amount_{{$i}}" inputmode="decimal" value="{{$line.Amount}}" data-qty-amount></label>
         </div>
-        <p class="hint pack-total" data-pack-total hidden></p>
+        <p class="hint pack-total" data-qty-total hidden></p>
       </fieldset>
       {{end}}
     </div>
@@ -95,7 +94,7 @@
 </div>
 
 <template id="receipt-line-template">
-  <fieldset class="receipt-line" data-pack-form data-pack-symbol="{{.Page.Symbol}}">
+  <fieldset class="receipt-line" data-qty-form data-qty-symbol="{{.Page.Symbol}}">
     <legend class="sr">New line</legend>
     <label class="check receipt-include">
       <input type="checkbox" name="include___I__" value="1" checked>
@@ -107,26 +106,25 @@
       <select name="product_choice___I__" data-product-choice>
         <option value="new" selected>New product</option>
         {{range .Products}}
-        <option value="{{.ID}}" data-unit-id="{{.UnitID}}" data-unit-ids="{{.UnitIDsAttr}}" data-conversions="{{.PackConversionsJSON}}">{{.Name}} ({{.UnitName}})</option>
+        <option value="{{.ID}}">{{.Name}} ({{.UnitName}})</option>
         {{end}}
       </select>
     </label>
     <label data-new-name>Name <input name="product_name___I__" value=""></label>
     <div class="receipt-nums">
-      <label>Packages <input name="packages___I__" inputmode="decimal" value="" data-pack-count></label>
-      <label>Package size <input name="package_size___I__" inputmode="decimal" value="" data-pack-size></label>
-      <label>
+      <label>Quantity <input name="quantity___I__" inputmode="decimal" value="" data-qty></label>
+      <label data-new-unit>
         Unit
-        <select name="unit_id___I__" data-pack-unit-select>
+        <select name="unit_id___I__">
           <option value="">Select…</option>
           {{range .Units}}
           <option value="{{.ID}}">{{.Name}}</option>
           {{end}}
         </select>
       </label>
-      <label>Amount ({{.Page.Currency}}) <input name="amount___I__" inputmode="decimal" value="" data-pack-amount></label>
+      <label>Amount ({{.Page.Currency}}) <input name="amount___I__" inputmode="decimal" value="" data-qty-amount></label>
     </div>
-    <p class="hint pack-total" data-pack-total hidden></p>
+    <p class="hint pack-total" data-qty-total hidden></p>
   </fieldset>
 </template>
 {{template "footer" .}}

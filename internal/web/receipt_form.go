@@ -78,20 +78,19 @@ func (v receiptView) CreateStoryURL() string {
 }
 
 type receiptLineView struct {
-	Include      bool
-	ProductID    int64
-	ProductName  string
-	UnitID       int64
-	PackageCount string
-	PackageSize  string
-	Amount       string
-	ReceiptName  string
-	VatType      string
-	UnitPrice    string
-	Discount     string
+	Include     bool
+	ProductID   int64
+	ProductName string
+	UnitID      int64
+	Quantity    string
+	Amount      string
+	ReceiptName string
+	VatType     string
+	UnitPrice   string
+	Discount    string
 }
 
-func hydrateBill(bill ocr.Bill, products []store.ProductListItem, units []store.Unit, aliases []store.ProductAlias, chainID int64) ocr.Bill {
+func hydrateBill(bill ocr.Bill, products []store.ProductListItem, _ []store.Unit, aliases []store.ProductAlias, chainID int64) ocr.Bill {
 	productByID := map[int64]store.ProductListItem{}
 	var names []match.Label
 	for _, p := range products {
@@ -114,22 +113,15 @@ func hydrateBill(bill ocr.Bill, products []store.ProductListItem, units []store.
 			global = append(global, lab)
 		}
 	}
-	unitByID := map[int64]store.Unit{}
-	unitByName := map[string]store.Unit{}
-	for _, u := range units {
-		unitByID[u.ID] = u
-		unitByName[unitKey(u.Name)] = u
-	}
 
 	for i, line := range bill.Lines {
-		fromUnit := lineUnitID(line, unitByID, unitByName)
 		if line.ProductID != 0 {
 			if p, ok := productByID[line.ProductID]; ok {
 				line.ProductID = p.ID
 				if line.ProductName == "" {
 					line.ProductName = p.Name
 				}
-				applyPurchaseUnit(&line, p.Product, fromUnit)
+				line.UnitID = 0
 			} else {
 				line.ProductID = 0
 			}
@@ -137,48 +129,15 @@ func hydrateBill(bill ocr.Bill, products []store.ProductListItem, units []store.
 		if line.ProductID == 0 {
 			if p, ok := matchLineProduct(line.ReceiptName, line.ProductName, shop, chain, global, names, productByID); ok {
 				line.ProductID = p.ID
-				applyPurchaseUnit(&line, p.Product, fromUnit)
+				line.UnitID = 0
 			}
 		}
 		if line.ProductID == 0 {
-			if _, ok := unitByID[line.UnitID]; !ok {
-				line.UnitID = 0
-				if u, ok := unitByName[unitKey(line.UnitName)]; ok {
-					line.UnitID = u.ID
-				}
-			}
+			line.UnitID = 0
 		}
 		bill.Lines[i] = line
 	}
 	return bill
-}
-
-func lineUnitID(line ocr.Line, unitByID map[int64]store.Unit, unitByName map[string]store.Unit) int64 {
-	if _, ok := unitByID[line.UnitID]; ok {
-		return line.UnitID
-	}
-	if u, ok := unitByName[unitKey(line.UnitName)]; ok {
-		return u.ID
-	}
-	return 0
-}
-
-func applyPurchaseUnit(line *ocr.Line, p store.Product, fromUnit int64) {
-	if fromUnit == 0 {
-		fromUnit = line.UnitID
-	}
-	count, size := linePackFields(*line)
-	packs, err1 := parseDecimal(count, 8, false)
-	packSize, err2 := parseDecimal(size, 8, false)
-	if err1 == nil && err2 == nil {
-		np, ns, converted := store.ConvertPacksToPrimary(packs, packSize, fromUnit, p)
-		if converted {
-			line.PackageCount = np.String()
-			line.PackageSize = ns.String()
-			line.Quantity = np.Mul(ns).String()
-		}
-	}
-	line.UnitID = p.UnitID
 }
 
 func matchLineProduct(receiptName, productName string, shop, chain, global, names []match.Label, products map[int64]store.ProductListItem) (store.ProductListItem, bool) {
@@ -216,19 +175,17 @@ func billToView(bill ocr.Bill, receiptID int64, imagePath, status string) receip
 		if name == "" {
 			name = line.ReceiptName
 		}
-		packCount, packSize := linePackFields(line)
 		view.Lines = append(view.Lines, receiptLineView{
-			Include:      true,
-			ProductID:    line.ProductID,
-			ProductName:  name,
-			UnitID:       line.UnitID,
-			PackageCount: packCount,
-			PackageSize:  packSize,
-			Amount:       line.Amount,
-			ReceiptName:  line.ReceiptName,
-			VatType:      line.VatType,
-			UnitPrice:    line.UnitPrice,
-			Discount:     line.Discount,
+			Include:     true,
+			ProductID:   line.ProductID,
+			ProductName: name,
+			UnitID:      line.UnitID,
+			Quantity:    lineQuantity(line),
+			Amount:      line.Amount,
+			ReceiptName: line.ReceiptName,
+			VatType:     line.VatType,
+			UnitPrice:   line.UnitPrice,
+			Discount:    line.Discount,
 		})
 	}
 	return view
@@ -273,17 +230,16 @@ func viewToRawJSON(view receiptView) (string, error) {
 	}
 	for _, line := range view.Lines {
 		bill.Lines = append(bill.Lines, ocr.Line{
-			ReceiptName:  line.ReceiptName,
-			ProductName:  line.ProductName,
-			ProductID:    line.ProductID,
-			UnitID:       line.UnitID,
-			VatType:      line.VatType,
-			PackageCount: line.PackageCount,
-			PackageSize:  line.PackageSize,
-			UnitPrice:    line.UnitPrice,
-			Discount:     line.Discount,
-			Amount:       line.Amount,
-			Skip:         !line.Include,
+			ReceiptName: line.ReceiptName,
+			ProductName: line.ProductName,
+			ProductID:   line.ProductID,
+			UnitID:      line.UnitID,
+			VatType:     line.VatType,
+			Quantity:    line.Quantity,
+			UnitPrice:   line.UnitPrice,
+			Discount:    line.Discount,
+			Amount:      line.Amount,
+			Skip:        !line.Include,
 		})
 	}
 	raw, err := json.Marshal(bill)
@@ -324,23 +280,22 @@ func parseReceiptView(get func(string) string) receiptView {
 			productID, _ = strconv.ParseInt(choice, 10, 64)
 		}
 		view.Lines = append(view.Lines, receiptLineView{
-			Include:      get("include_"+p) == "1",
-			ProductID:    productID,
-			ProductName:  strings.TrimSpace(get("product_name_" + p)),
-			UnitID:       formInt(get("unit_id_" + p)),
-			PackageCount: strings.TrimSpace(get("packages_" + p)),
-			PackageSize:  strings.TrimSpace(get("package_size_" + p)),
-			Amount:       strings.TrimSpace(get("amount_" + p)),
-			ReceiptName:  strings.TrimSpace(get("receipt_name_" + p)),
-			VatType:      strings.TrimSpace(get("vat_type_" + p)),
-			UnitPrice:    strings.TrimSpace(get("unit_price_" + p)),
-			Discount:     strings.TrimSpace(get("discount_" + p)),
+			Include:     get("include_"+p) == "1",
+			ProductID:   productID,
+			ProductName: strings.TrimSpace(get("product_name_" + p)),
+			UnitID:      formInt(get("unit_id_" + p)),
+			Quantity:    strings.TrimSpace(get("quantity_" + p)),
+			Amount:      strings.TrimSpace(get("amount_" + p)),
+			ReceiptName: strings.TrimSpace(get("receipt_name_" + p)),
+			VatType:     strings.TrimSpace(get("vat_type_" + p)),
+			UnitPrice:   strings.TrimSpace(get("unit_price_" + p)),
+			Discount:    strings.TrimSpace(get("discount_" + p)),
 		})
 	}
 	return view
 }
 
-func parseReceiptForm(get func(string) string, products []store.ProductListItem) (store.BillImport, receiptView, string) {
+func parseReceiptForm(get func(string) string, _ []store.ProductListItem) (store.BillImport, receiptView, string) {
 	view := parseReceiptView(get)
 	boughtOn, err := store.NormalizeBoughtOn(store.JoinBoughtOn(view.BoughtOn, view.BoughtAt))
 	if err != nil {
@@ -349,33 +304,20 @@ func parseReceiptForm(get func(string) string, products []store.ProductListItem)
 	view.BoughtOn = store.BoughtOnDate(boughtOn)
 	view.BoughtAt = store.BoughtOnTime(boughtOn)
 
-	byID := map[int64]store.ProductListItem{}
-	for _, p := range products {
-		byID[p.ID] = p
-	}
-
 	in := store.BillImport{BoughtOn: boughtOn, StoryID: view.StoryID}
 	for i, line := range view.Lines {
 		if !line.Include {
 			continue
 		}
-		packages, err := parseDecimal(line.PackageCount, 8, false)
+		qty, err := parseDecimal(line.Quantity, 8, false)
 		if err != nil {
-			return store.BillImport{}, view, fmt.Sprintf("Line %d: packages %s.", i+1, err.Error())
+			return store.BillImport{}, view, fmt.Sprintf("Line %d: quantity %s.", i+1, err.Error())
 		}
-		packSize, err := parseDecimal(line.PackageSize, 8, false)
-		if err != nil {
-			return store.BillImport{}, view, fmt.Sprintf("Line %d: package size %s.", i+1, err.Error())
-		}
-		if p, ok := byID[line.ProductID]; ok {
-			packages, packSize, _ = store.ConvertPacksToPrimary(packages, packSize, line.UnitID, p.Product)
-		}
-		qty := packages.Mul(packSize)
 		amount, err := parseDecimal(line.Amount, 2, true)
 		if err != nil {
 			return store.BillImport{}, view, fmt.Sprintf("Line %d: amount %s.", i+1, err.Error())
 		}
-		item := store.BillLineInput{Quantity: qty, PackageCount: packages, PackageSize: packSize, Amount: amount, ReceiptName: line.ReceiptName}
+		item := store.BillLineInput{Quantity: qty, Amount: amount, ReceiptName: line.ReceiptName}
 		if line.ProductID > 0 {
 			item.ProductID = line.ProductID
 		} else {
@@ -555,25 +497,9 @@ func storyByID(stories []store.Story, id int64) store.Story {
 	return store.Story{}
 }
 
-func unitKey(s string) string {
-	s = strings.ToLower(strings.TrimSpace(s))
-	s = strings.TrimSuffix(s, ".")
-	return s
-}
-
-func linePackFields(line ocr.Line) (count, size string) {
-	count = strings.TrimSpace(line.PackageCount)
-	size = strings.TrimSpace(line.PackageSize)
-	if count != "" && size != "" {
-		return count, size
-	}
+func lineQuantity(line ocr.Line) string {
 	if q := strings.TrimSpace(line.Quantity); q != "" {
-		if count == "" {
-			count = "1"
-		}
-		if size == "" {
-			size = q
-		}
+		return q
 	}
-	return count, size
+	return strings.TrimSpace(line.PackageCount)
 }

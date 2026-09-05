@@ -119,16 +119,13 @@ func fakeSeed(st *store.Store, f *gofakeit.Faker, cfg fakeConfig) (fakeStats, er
 				}
 				boughtOn := when.Add(jitter).Format("2006-01-02")
 				price = clampUnitPrice(price * f.Float64Range(0.93, 1.08))
-				packs := decimal.NewFromInt(int64(f.Number(1, 8)))
-				packSize := packSizeFor(f, p.UnitName)
-				if f.Number(1, 100) <= 25 {
-					packs = decimal.NewFromInt(1)
-					packSize = looseQty(f, p.UnitName)
+				qty := decimal.NewFromInt(int64(f.Number(1, 8)))
+				if strings.EqualFold(p.UnitName, "kg") {
+					qty = decimal.NewFromFloat(f.Float64Range(0.4, 12)).Round(3)
 				}
-				qty := packs.Mul(packSize)
 				amount := decimal.NewFromFloat(price).Mul(qty).Round(2)
 
-				if _, err := st.CreatePurchase(p.ID, storyID, boughtOn, decimal.Zero, amount, kind, packs, packSize); err != nil {
+				if _, err := st.CreatePurchase(p.ID, storyID, boughtOn, qty, amount, kind); err != nil {
 					return fmt.Errorf("purchase: %w", err)
 				}
 				stats.Purchases++
@@ -218,11 +215,9 @@ func rescalePurchases(st *store.Store, rows []store.Purchase) (int, error) {
 			pt.row.ID,
 			pt.row.StoryID,
 			pt.row.BoughtOn,
-			decimal.Zero,
+			pt.row.Quantity,
 			amount,
 			pt.row.Kind,
-			pt.row.FormPackages(),
-			pt.row.FormPackSize(),
 		); err != nil {
 			return n, err
 		}
@@ -256,18 +251,4 @@ func productName(f *gofakeit.Faker) string {
 		return strings.TrimSpace(f.Adjective() + " " + base)
 	}
 	return base
-}
-
-func packSizeFor(f *gofakeit.Faker, unit string) decimal.Decimal {
-	if strings.EqualFold(unit, "kg") {
-		return decimal.RequireFromString(f.RandomString([]string{"0.25", "0.5", "1", "2.5", "5", "10"}))
-	}
-	return decimal.RequireFromString(f.RandomString([]string{"50", "100", "250", "500", "1000"}))
-}
-
-func looseQty(f *gofakeit.Faker, unit string) decimal.Decimal {
-	if strings.EqualFold(unit, "kg") {
-		return decimal.NewFromFloat(f.Float64Range(0.4, 12)).Round(3)
-	}
-	return decimal.NewFromInt(int64(f.Number(80, 2500)))
 }

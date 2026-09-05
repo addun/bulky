@@ -191,31 +191,25 @@ func formInt64Query(c *gin.Context, name string) int64 {
 	return v
 }
 
-func (s *Server) parsePurchase(c *gin.Context) (boughtOn string, qty, amount, packages, packSize decimal.Decimal, errMsg string) {
+func (s *Server) parsePurchase(c *gin.Context) (boughtOn string, qty, amount decimal.Decimal, errMsg string) {
 	when, whenErr := store.NormalizeBoughtOn(store.JoinBoughtOn(c.PostForm("bought_on"), c.PostForm("bought_at")))
 	if whenErr != nil {
-		return "", decimal.Zero, decimal.Zero, decimal.Zero, decimal.Zero, "Date must be a valid day."
+		return "", decimal.Zero, decimal.Zero, "Date must be a valid day."
 	}
 	amount, err := parseDecimal(c.PostForm("amount"), 2, true)
 	if err != nil {
-		return "", decimal.Zero, decimal.Zero, decimal.Zero, decimal.Zero, "Amount " + err.Error() + "."
+		return "", decimal.Zero, decimal.Zero, "Amount " + err.Error() + "."
 	}
-	packages, err = parseDecimal(c.PostForm("packages"), 8, false)
+	qty, err = parseDecimal(c.PostForm("quantity"), 8, false)
 	if err != nil {
-		return "", decimal.Zero, decimal.Zero, decimal.Zero, decimal.Zero, "Packages " + err.Error() + "."
+		return "", decimal.Zero, decimal.Zero, "Quantity " + err.Error() + "."
 	}
-	packSize, err = parseDecimal(c.PostForm("package_size"), 8, false)
-	if err != nil {
-		return "", decimal.Zero, decimal.Zero, decimal.Zero, decimal.Zero, "Package size " + err.Error() + "."
-	}
-	return when, decimal.Zero, amount, packages, packSize, ""
+	return when, qty, amount, ""
 }
 
 func purchaseSaveError(err error) string {
-	switch {
-	case errors.Is(err, store.ErrIncompletePackage), errors.Is(err, store.ErrInvalidPackage):
-		return "Packages and package size must be greater than zero."
-	default:
-		return "Could not save the purchase."
+	if errors.Is(err, store.ErrInvalidQuantity) {
+		return "Quantity must be greater than zero."
 	}
+	return "Could not save the purchase."
 }

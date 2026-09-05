@@ -43,18 +43,6 @@ func PricePer(amount, primaryQty decimal.Decimal, conv ProductConversion) decima
 	return amount.Div(q)
 }
 
-func ConvertPacksToPrimary(packs, size decimal.Decimal, fromUnitID int64, p Product) (decimal.Decimal, decimal.Decimal, bool) {
-	if fromUnitID == 0 || fromUnitID == p.UnitID {
-		return packs, size, false
-	}
-	conv, ok := p.ConversionFor(fromUnitID)
-	if !ok || packs.IsZero() || conv.Factor.IsZero() {
-		return packs, size, false
-	}
-	primaryQty := packs.Mul(size).Div(conv.Factor)
-	return packs, primaryQty.Div(packs), true
-}
-
 func (p Product) ConversionFor(unitID int64) (ProductConversion, bool) {
 	for _, c := range p.Conversions {
 		if c.UnitID == unitID {
@@ -206,16 +194,6 @@ ORDER BY p.id`, productID)
 	}
 	for _, buy := range buys {
 		qty := buy.Quantity.Mul(factor)
-		if buy.HasPackage() {
-			size := buy.PackageSize.Mul(factor)
-			if _, err := tx.Exec(
-				`UPDATE purchases SET quantity = ?, package_size = ? WHERE id = ?`,
-				qty.String(), size.String(), buy.ID,
-			); err != nil {
-				return err
-			}
-			continue
-		}
 		if _, err := tx.Exec(`UPDATE purchases SET quantity = ? WHERE id = ?`, qty.String(), buy.ID); err != nil {
 			return err
 		}
