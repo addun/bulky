@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/shopspring/decimal"
 
 	"github.com/adrian/bulkly/internal/store"
 )
@@ -16,12 +15,7 @@ func (s *Server) newPurchase(c *gin.Context) {
 	if !ok {
 		return
 	}
-	lastSize, hasLast, err := s.store.LastPackageSize(prod.ID)
-	if err != nil {
-		c.String(http.StatusInternalServerError, "could not load pack size")
-		return
-	}
-	s.renderPurchaseForm(c, http.StatusOK, prod, newPurchaseDraft(hasLast, lastSize), stories, true, hasLast, lastSize, c.Query("error"))
+	s.renderPurchaseForm(c, http.StatusOK, prod, newPurchaseDraft(), stories, true, c.Query("error"))
 }
 
 func (s *Server) createPurchase(c *gin.Context) {
@@ -29,16 +23,11 @@ func (s *Server) createPurchase(c *gin.Context) {
 	if !ok {
 		return
 	}
-	lastSize, hasLast, err := s.store.LastPackageSize(prod.ID)
-	if err != nil {
-		c.String(http.StatusInternalServerError, "could not load pack size")
-		return
-	}
 	form := purchaseFromForm(c)
 	renderErr := func(msg string) {
-		s.renderPurchaseForm(c, http.StatusUnprocessableEntity, prod, form, stories, true, hasLast, lastSize, msg)
+		s.renderPurchaseForm(c, http.StatusUnprocessableEntity, prod, form, stories, true, msg)
 	}
-	boughtOn, qty, amount, packages, packSize, msg := s.parsePurchase(c)
+	boughtOn, qty, amount, msg := s.parsePurchase(c)
 	if msg != "" {
 		renderErr(msg)
 		return
@@ -53,7 +42,7 @@ func (s *Server) createPurchase(c *gin.Context) {
 		renderErr(msg)
 		return
 	}
-	if _, err := s.store.CreatePurchase(prod.ID, storyID, boughtOn, qty, amount, kind, packages, packSize); err != nil {
+	if _, err := s.store.CreatePurchase(prod.ID, storyID, boughtOn, qty, amount, kind); err != nil {
 		renderErr(purchaseSaveError(err))
 		return
 	}
@@ -85,7 +74,7 @@ func (s *Server) editPurchase(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "could not load stores")
 		return
 	}
-	s.renderPurchaseForm(c, http.StatusOK, prod, p, stories, false, false, decimal.Zero, "")
+	s.renderPurchaseForm(c, http.StatusOK, prod, p, stories, false, "")
 }
 
 func (s *Server) updatePurchase(c *gin.Context) {
@@ -117,9 +106,9 @@ func (s *Server) updatePurchase(c *gin.Context) {
 	form.ID = p.ID
 	form.ReceiptID = p.ReceiptID
 	renderErr := func(msg string) {
-		s.renderPurchaseForm(c, http.StatusUnprocessableEntity, prod, form, stories, false, false, decimal.Zero, msg)
+		s.renderPurchaseForm(c, http.StatusUnprocessableEntity, prod, form, stories, false, msg)
 	}
-	boughtOn, qty, amount, packages, packSize, msg := s.parsePurchase(c)
+	boughtOn, qty, amount, msg := s.parsePurchase(c)
 	if msg != "" {
 		renderErr(msg)
 		return
@@ -134,7 +123,7 @@ func (s *Server) updatePurchase(c *gin.Context) {
 		renderErr(msg)
 		return
 	}
-	if err := s.store.UpdatePurchase(id, storyID, boughtOn, qty, amount, kind, packages, packSize); err != nil {
+	if err := s.store.UpdatePurchase(id, storyID, boughtOn, qty, amount, kind); err != nil {
 		renderErr(purchaseSaveError(err))
 		return
 	}
@@ -237,29 +226,22 @@ func (s *Server) purchaseProduct(c *gin.Context) (store.Product, []store.Story, 
 	return prod, stories, true
 }
 
-func (s *Server) renderPurchaseForm(c *gin.Context, status int, prod store.Product, p store.Purchase, stories []store.Story, isNew bool, hasLast bool, lastSize decimal.Decimal, errMsg string) {
+func (s *Server) renderPurchaseForm(c *gin.Context, status int, prod store.Product, p store.Purchase, stories []store.Story, isNew bool, errMsg string) {
 	title := "Add new purchase"
 	if !isNew {
 		title = editPurchaseTitle(p)
 	}
 	c.HTML(status, "purchase_form.html", gin.H{
-		"Page":         s.adminPage(title, "", errMsg),
-		"Product":      prod,
-		"Purchase":     p,
-		"Stories":      stories,
-		"New":          isNew,
-		"HasLastPack":  hasLast,
-		"LastPackSize": lastSize,
+		"Page":     s.adminPage(title, "", errMsg),
+		"Product":  prod,
+		"Purchase": p,
+		"Stories":  stories,
+		"New":      isNew,
 	})
 }
 
-func newPurchaseDraft(hasLast bool, lastSize decimal.Decimal) store.Purchase {
-	p := store.Purchase{BoughtOn: time.Now().Format("2006-01-02 15:04")}
-	if hasLast {
-		p.PackageCount = decimal.NewFromInt(1)
-		p.PackageSize = lastSize
-	}
-	return p
+func newPurchaseDraft() store.Purchase {
+	return store.Purchase{BoughtOn: time.Now().Format("2006-01-02 15:04")}
 }
 
 func purchaseFromForm(c *gin.Context) store.Purchase {
@@ -269,7 +251,6 @@ func purchaseFromForm(c *gin.Context) store.Purchase {
 		StoryID:  formInt64(c, "story_id"),
 	}
 	p.Amount, _ = parseDecimal(c.PostForm("amount"), 2, true)
-	p.PackageCount, _ = parseDecimal(c.PostForm("packages"), 8, false)
-	p.PackageSize, _ = parseDecimal(c.PostForm("package_size"), 8, false)
+	p.Quantity, _ = parseDecimal(c.PostForm("quantity"), 8, false)
 	return p
 }

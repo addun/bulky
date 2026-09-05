@@ -119,13 +119,13 @@ func TestLookupShowPricesAndChart(t *testing.T) {
 	day := func(delta int) string {
 		return today.AddDate(0, 0, delta).Format("2006-01-02")
 	}
-	if _, err := st.CreatePurchase(flour.ID, 0, day(-40), decimal.RequireFromString("1"), decimal.RequireFromString("1"), store.KindPurchase, decimal.Zero, decimal.Zero); err != nil {
+	if _, err := st.CreatePurchase(flour.ID, 0, day(-40), decimal.RequireFromString("1"), decimal.RequireFromString("1"), store.KindPurchase); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := st.CreatePurchase(flour.ID, 0, day(-10), decimal.RequireFromString("2"), decimal.RequireFromString("8"), store.KindPrice, decimal.Zero, decimal.Zero); err != nil {
+	if _, err := st.CreatePurchase(flour.ID, 0, day(-10), decimal.RequireFromString("2"), decimal.RequireFromString("8"), store.KindPrice); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := st.CreatePurchase(flour.ID, 0, day(0), decimal.RequireFromString("1"), decimal.RequireFromString("9"), store.KindPurchase, decimal.Zero, decimal.Zero); err != nil {
+	if _, err := st.CreatePurchase(flour.ID, 0, day(0), decimal.RequireFromString("1"), decimal.RequireFromString("9"), store.KindPurchase); err != nil {
 		t.Fatal(err)
 	}
 	srv, err := New(st, Config{CurrencySymbol: "zł"})

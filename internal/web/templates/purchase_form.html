@@ -1,7 +1,7 @@
 {{template "header" .}}
 <h1>{{if .New}}Add new purchase{{else if .Purchase.IsPrice}}Edit price{{else}}Edit purchase{{end}}</h1>
 <p class="lede">{{.Product.Name}}</p>
-<form class="stack" method="post" action="{{if .New}}/admin/products/{{.Product.ID}}/purchases{{else}}/admin/purchases/{{.Purchase.ID}}{{end}}" data-pack-form data-pack-unit="{{.Product.UnitName}}" data-pack-symbol="{{.Page.Symbol}}" data-conversions="{{.Product.PackConversionsJSON}}">
+<form class="stack" method="post" action="{{if .New}}/admin/products/{{.Product.ID}}/purchases{{else}}/admin/purchases/{{.Purchase.ID}}{{end}}" data-qty-form data-qty-unit="{{.Product.UnitName}}" data-qty-symbol="{{.Page.Symbol}}">
   {{if and (not .New) .Purchase.ReceiptID}}
   <p class="meta">From <a href="/admin/receipts/{{.Purchase.ReceiptID}}">receipt {{.Purchase.ReceiptID}}</a></p>
   {{end}}
@@ -15,17 +15,14 @@
   </fieldset>
 
   <fieldset class="form-group">
-    <legend>Packs</legend>
-    <div class="form-row">
-      <label>Packages <input name="packages" required inputmode="decimal" placeholder="4" value="{{if or (not .New) .Purchase.HasPackage}}{{qty .Purchase.FormPackages}}{{end}}" data-pack-count></label>
-      <label>Package size ({{.Product.UnitName}}) <input name="package_size" required inputmode="decimal" placeholder="100" value="{{if or (not .New) .Purchase.HasPackage}}{{qty .Purchase.FormPackSize}}{{end}}" data-pack-size></label>
-    </div>
-    <p class="hint pack-total" data-pack-total hidden></p>
+    <legend>Quantity</legend>
+    <label>Quantity ({{.Product.UnitName}}) <input name="quantity" required inputmode="decimal" placeholder="2" value="{{if not .Purchase.Quantity.IsZero}}{{qty .Purchase.Quantity}}{{end}}" data-qty></label>
+    <p class="hint pack-total" data-qty-total hidden></p>
   </fieldset>
 
   <fieldset class="form-group">
     <legend>Paid</legend>
-    <label>Amount ({{.Page.Currency}}) <input name="amount" required inputmode="decimal" placeholder="12.40" value="{{if not .Purchase.Amount.IsZero}}{{.Purchase.Amount}}{{end}}" data-pack-amount></label>
+    <label>Amount ({{.Page.Currency}}) <input name="amount" required inputmode="decimal" placeholder="12.40" value="{{if not .Purchase.Amount.IsZero}}{{.Purchase.Amount}}{{end}}" data-qty-amount></label>
     <label>
       Store
       <select name="story_id">

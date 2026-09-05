@@ -40,14 +40,7 @@
             {{end}}
             <span class="row-main">
               <strong>{{.ProductName}}</strong>
-              <span class="meta">
-                {{if .HasPackage}}
-                  {{qty .PackageCount}} × {{qty .PackageSize}} {{.UnitName}}
-                  ({{qty .Quantity}} {{.UnitName}})
-                {{else}}
-                  {{qty .Quantity}} {{.UnitName}}
-                {{end}}
-              </span>
+              <span class="meta">{{qty .Quantity}} {{.UnitName}}</span>
             </span>
             <span class="row-amt">{{money .Amount}}</span>
           </a>

@@ -1,7 +1,6 @@
 package match
 
 import (
-	"regexp"
 	"strings"
 )
 
@@ -10,16 +9,8 @@ const (
 	containScore   = 0.92
 )
 
-var (
-	numUnit  = regexp.MustCompile(`^\d+([.]\d+)?(kg|g|l|ml|szt|op)$`)
-	justNum  = regexp.MustCompile(`^\d+([.]\d+)?$`)
-	sizeUnit = map[string]bool{
-		"kg": true, "g": true, "l": true, "ml": true, "szt": true, "op": true,
-	}
-)
-
 func Search(query string, labels ...string) float64 {
-	q := stripTrailingSize(fold(query))
+	q := fold(query)
 	if q == "" {
 		return 0
 	}
@@ -77,20 +68,6 @@ func substringScore(q, l string) float64 {
 		cover = 1
 	}
 	return containScore + (1-containScore)*cover
-}
-
-func stripTrailingSize(s string) string {
-	toks := strings.Fields(s)
-	if len(toks) == 0 {
-		return s
-	}
-	last := toks[len(toks)-1]
-	if numUnit.MatchString(last) {
-		toks = toks[:len(toks)-1]
-	} else if sizeUnit[last] && len(toks) >= 2 && justNum.MatchString(toks[len(toks)-2]) {
-		toks = toks[:len(toks)-2]
-	}
-	return strings.Join(toks, " ")
 }
 
 func similarity(a, b string) float64 {

@@ -39,6 +39,7 @@ func parseBill(raw []byte) (Bill, error) {
 	for i := range bill.Lines {
 		normalizeLine(&bill.Lines[i])
 		fixWeighedKg(&bill.Lines[i])
+		coalesceQuantity(&bill.Lines[i])
 		fillMissingAmount(&bill.Lines[i])
 	}
 	return bill, nil
@@ -56,13 +57,14 @@ func normalizeLine(line *Line) {
 	unitPrice, vatFromPrice := peelVAT(line.UnitPrice)
 	amount, vatFromAmount := peelVAT(line.Amount)
 	count, vatFromCount := peelVAT(line.PackageCount)
+	qty, vatFromQty := peelVAT(line.Quantity)
 	line.UnitPrice = normalizeNumber(unitPrice)
 	line.Amount = normalizeNumber(amount)
 	line.PackageCount = normalizeNumber(count)
 	line.PackageSize = normalizeNumber(line.PackageSize)
-	line.Quantity = normalizeNumber(line.Quantity)
+	line.Quantity = normalizeNumber(qty)
 	line.Discount = normalizeDiscount(line.Discount)
-	line.VatType = normalizeVAT(line.VatType, vatFromPrice, vatFromAmount, vatFromCount)
+	line.VatType = normalizeVAT(line.VatType, vatFromPrice, vatFromAmount, vatFromCount, vatFromQty)
 }
 
 func extractJSON(raw []byte) ([]byte, error) {
@@ -249,6 +251,15 @@ func normalizeNumber(s string) string {
 	return s
 }
 
+func coalesceQuantity(line *Line) {
+	if strings.TrimSpace(line.Quantity) != "" {
+		return
+	}
+	if c := strings.TrimSpace(line.PackageCount); c != "" {
+		line.Quantity = c
+	}
+}
+
 // fillMissingAmount sets amount from printed unit price, qty, and rabat
 // when the till did not print a final line total. Never overwrites a
 // printed amount.
@@ -260,7 +271,7 @@ func fillMissingAmount(line *Line) {
 	if err != nil || price.IsZero() {
 		return
 	}
-	count, err := decimal.NewFromString(line.PackageCount)
+	count, err := decimal.NewFromString(line.Quantity)
 	if err != nil || count.IsZero() {
 		return
 	}

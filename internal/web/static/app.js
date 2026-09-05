@@ -24,98 +24,81 @@
     return n;
   }
 
-  function formatQty(n) {
-    var s = String(n);
-    if (s.indexOf("e") !== -1 || s.indexOf("E") !== -1) {
-      s = n.toFixed(8).replace(/0+$/, "").replace(/\.$/, "");
-    }
-    return s.replace(".", ",");
-  }
-
   function formatMoney(n) {
     return n.toFixed(2).replace(".", ",");
   }
 
   function unitOf(form) {
-    var attr = form.getAttribute("data-pack-unit");
+    var attr = form.getAttribute("data-qty-unit");
     if (attr) return attr.trim();
-    var sel = form.querySelector("[data-pack-unit-select]");
-    if (sel && sel.selectedIndex >= 0) {
-      var text = (sel.options[sel.selectedIndex].text || "").trim();
-      if (text && text !== "Select…") return text;
+    var unitWrap = form.querySelector("[data-new-unit]");
+    if (unitWrap && !unitWrap.hidden) {
+      var sel = unitWrap.querySelector("select");
+      if (sel && sel.selectedIndex >= 0) {
+        var text = (sel.options[sel.selectedIndex].text || "").trim();
+        if (text && text !== "Select…") return text;
+      }
     }
-    var size = form.querySelector("[data-pack-size]");
-    var label = size && size.closest("label");
-    if (!label) return "";
-    var m = label.textContent.match(/\(([^)]+)\)/);
-    return m ? m[1].trim() : "";
+    return "";
   }
 
-  function syncPack(form) {
-    var count = form.querySelector("[data-pack-count]");
-    var size = form.querySelector("[data-pack-size]");
-    var total = form.querySelector("[data-pack-total]");
-    if (!count || !size || !total) return;
-    var packs = parseNum(count.value);
-    var packSize = parseNum(size.value);
-    if (!packs || !packSize) {
+  function syncQty(form) {
+    var qtyEl = form.querySelector("[data-qty]");
+    var total = form.querySelector("[data-qty-total]");
+    if (!qtyEl || !total) return;
+    var qty = parseNum(qtyEl.value);
+    if (!qty) {
       total.hidden = true;
       total.textContent = "";
       return;
     }
-    var qty = packs * packSize;
     var unit = unitOf(form);
-    var parts = ["Total " + formatQty(qty) + (unit ? " " + unit : "")];
-    var amountEl = form.querySelector("[data-pack-amount]");
+    var amountEl = form.querySelector("[data-qty-amount]");
     var amount = amountEl ? parseNum(amountEl.value) : null;
-    if (amount) {
-      var sym = (form.getAttribute("data-pack-symbol") || "").trim();
-      var price = formatMoney(amount / qty) + (sym ? " " + sym : "");
-      parts.push(price + (unit ? "/" + unit : " per unit"));
+    if (!amount) {
+      total.hidden = true;
+      total.textContent = "";
+      return;
     }
+    var sym = (form.getAttribute("data-qty-symbol") || "").trim();
+    var price = formatMoney(amount / qty) + (sym ? " " + sym : "");
     total.hidden = false;
-    total.textContent = parts.join(" · ");
+    total.textContent = price + (unit ? "/" + unit : " per unit");
   }
 
-  function bindPack(form) {
-    if (!form || form.getAttribute("data-pack-bound")) return;
-    form.setAttribute("data-pack-bound", "1");
+  function bindQty(form) {
+    if (!form || form.getAttribute("data-qty-bound")) return;
+    form.setAttribute("data-qty-bound", "1");
     form.addEventListener("input", function () {
-      syncPack(form);
+      syncQty(form);
     });
     form.addEventListener("change", function () {
-      syncPack(form);
+      syncQty(form);
     });
-    syncPack(form);
+    syncQty(form);
   }
 
-  document.querySelectorAll("[data-pack-form]").forEach(bindPack);
+  document.querySelectorAll("[data-qty-form]").forEach(bindQty);
 
   var lines = document.getElementById("receipt-lines");
   function syncLineProduct(line) {
     if (!line) return;
     var sel = line.querySelector("[data-product-choice]");
     var nameField = line.querySelector("[data-new-name]");
+    var unitField = line.querySelector("[data-new-unit]");
     if (!sel || !nameField) return;
     var isNew = sel.value === "new" || sel.value === "";
     nameField.hidden = !isNew;
-    if (!isNew) {
-      var opt = sel.options[sel.selectedIndex];
-      var unitId = opt && opt.getAttribute("data-unit-id");
-      var unitSel = line.querySelector("[data-pack-unit-select]");
-      var allowed = {};
-      var ids = ((opt && opt.getAttribute("data-unit-ids")) || unitId || "").split(",");
-      ids.forEach(function (id) {
-        if (id) allowed[id] = true;
-      });
-      if (unitSel && unitId && !allowed[unitSel.value]) {
-        unitSel.value = unitId;
+    if (unitField) {
+      unitField.hidden = !isNew;
+      if (isNew) {
+        var unitSel = unitField.querySelector("select");
+        if (unitSel && !unitField.hasAttribute("data-kept-unit")) {
+          unitSel.value = "";
+        }
       }
-      line.setAttribute("data-conversions", (opt && opt.getAttribute("data-conversions")) || "[]");
-    } else {
-      line.removeAttribute("data-conversions");
     }
-    syncPack(line);
+    syncQty(line);
   }
 
   if (lines) {
@@ -127,10 +110,16 @@
         field.classList.toggle("is-off", !e.target.checked);
       }
       if (e.target.name.indexOf("product_choice_") === 0) {
+        var unitField = field.querySelector("[data-new-unit]");
+        if (unitField) unitField.removeAttribute("data-kept-unit");
         syncLineProduct(field);
       }
     });
-    lines.querySelectorAll(".receipt-line").forEach(syncLineProduct);
+    lines.querySelectorAll(".receipt-line").forEach(function (line) {
+      var unitField = line.querySelector("[data-new-unit]");
+      if (unitField) unitField.setAttribute("data-kept-unit", "1");
+      syncLineProduct(line);
+    });
   }
 
   var add = document.getElementById("add-line");
@@ -144,7 +133,7 @@
       wrap.innerHTML = html.trim();
       var field = wrap.firstElementChild;
       lines.appendChild(field);
-      bindPack(field);
+      bindQty(field);
       syncLineProduct(field);
       count.value = String(i + 1);
     });

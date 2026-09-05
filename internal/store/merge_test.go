@@ -3,13 +3,11 @@ package store
 import (
 	"errors"
 	"testing"
-
-	"github.com/shopspring/decimal"
 )
 
 func TestMergePlanCountsHistoryAndAliases(t *testing.T) {
 	s, _, flour, rice, lidl, biedronka := aliasFixture(t)
-	if _, err := s.CreatePurchase(rice.ID, lidl.ID, "2026-08-20", mustDec(t, "2"), mustDec(t, "9.90"), KindPurchase, decimal.Zero, decimal.Zero); err != nil {
+	if _, err := s.CreatePurchase(rice.ID, lidl.ID, "2026-08-20", mustDec(t, "2"), mustDec(t, "9.90"), KindPurchase); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.CreateAlias(rice.ID, biedronka.ID, 0, "Ryż biały"); err != nil {
@@ -35,7 +33,7 @@ func TestMergePlanCountsHistoryAndAliases(t *testing.T) {
 
 func TestMergeProductsMovesPurchasesAndAliases(t *testing.T) {
 	s, _, flour, rice, lidl, biedronka := aliasFixture(t)
-	buy, err := s.CreatePurchase(rice.ID, lidl.ID, "2026-08-20", mustDec(t, "2"), mustDec(t, "9.90"), KindPurchase, decimal.Zero, decimal.Zero)
+	buy, err := s.CreatePurchase(rice.ID, lidl.ID, "2026-08-20", mustDec(t, "2"), mustDec(t, "9.90"), KindPurchase)
 	if err != nil {
 		t.Fatal(err)
 	}

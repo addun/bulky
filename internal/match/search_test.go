@@ -12,8 +12,11 @@ func TestSearchNameAndAlias(t *testing.T) {
 	if s := Search("tortova", "Mąka tortowa 1kg"); s < minSearchScore {
 		t.Fatalf("typo: %v", s)
 	}
-	if s := Search("maka 1kg", "Mąka tortowa"); s < containScore {
-		t.Fatalf("trailing size on query: %v", s)
+	if s := Search("maka 1kg", "Mąka tortowa 1kg"); s < containScore {
+		t.Fatalf("size in name: %v", s)
+	}
+	if Search("Chleb 550g", "Chleb 400g") >= 1 {
+		t.Fatal("different sizes should not be an exact match")
 	}
 	if s := Search("flour", "Cake flour"); s < containScore {
 		t.Fatalf("token: %v", s)

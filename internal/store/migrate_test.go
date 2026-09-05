@@ -19,7 +19,7 @@ func TestOpenFreshSeedsAndVersions(t *testing.T) {
 	defer s.Close()
 
 	assertCurrentSchema(t, s.db)
-	assertGooseVersion(t, s.db, 14)
+	assertGooseVersion(t, s.db, 15)
 
 	units, err := s.ListUnits()
 	if err != nil {
@@ -54,7 +54,7 @@ func TestOpenSecondBootNoops(t *testing.T) {
 	defer s.Close()
 
 	assertCurrentSchema(t, s.db)
-	assertGooseVersion(t, s.db, 14)
+	assertGooseVersion(t, s.db, 15)
 
 	units, err := s.ListUnits()
 	if err != nil {
@@ -123,7 +123,7 @@ VALUES (1, '2024-01-02', '10', '20.50', '2024-01-02T00:00:00Z');
 	defer s.Close()
 
 	assertCurrentSchema(t, s.db)
-	assertGooseVersion(t, s.db, 14)
+	assertGooseVersion(t, s.db, 15)
 
 	var n int
 	if err := s.db.QueryRow(`SELECT COUNT(*) FROM purchases`).Scan(&n); err != nil {
@@ -185,7 +185,7 @@ func TestOpenAddsKindWhenGooseAlreadyAtReceipts(t *testing.T) {
 	if !hasColumn(t, s.db, "purchases", "kind") {
 		t.Fatal("purchases missing kind after reopen")
 	}
-	assertGooseVersion(t, s.db, 14)
+	assertGooseVersion(t, s.db, 15)
 	if _, err := s.ListProducts(""); err != nil {
 		t.Fatalf("ListProducts: %v", err)
 	}
@@ -230,7 +230,7 @@ func TestOpenRenamesRecipesToReceipts(t *testing.T) {
 	defer s.Close()
 
 	assertCurrentSchema(t, s.db)
-	assertGooseVersion(t, s.db, 14)
+	assertGooseVersion(t, s.db, 15)
 }
 
 func TestPurchaseStoryOptional(t *testing.T) {
@@ -249,7 +249,7 @@ func TestPurchaseStoryOptional(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	buy, err := s.CreatePurchase(p.ID, 0, "2024-01-02", mustDec(t, "10"), mustDec(t, "20.50"), KindPurchase, decimal.Zero, decimal.Zero)
+	buy, err := s.CreatePurchase(p.ID, 0, "2024-01-02", mustDec(t, "10"), mustDec(t, "20.50"), KindPurchase)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -262,7 +262,7 @@ func TestPurchaseStoryOptional(t *testing.T) {
 	if buy.Kind != KindPurchase {
 		t.Fatalf("Kind: got %q want %q", buy.Kind, KindPurchase)
 	}
-	if err := s.UpdatePurchase(buy.ID, 0, "2024-01-03", buy.Quantity, buy.Amount, KindPurchase, decimal.Zero, decimal.Zero); err != nil {
+	if err := s.UpdatePurchase(buy.ID, 0, "2024-01-03", buy.Quantity, buy.Amount, KindPurchase); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -283,10 +283,10 @@ func TestPriceKindExcludedFromSpend(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.CreatePurchase(p.ID, 0, "2024-06-01", mustDec(t, "10"), mustDec(t, "40"), KindPurchase, decimal.Zero, decimal.Zero); err != nil {
+	if _, err := s.CreatePurchase(p.ID, 0, "2024-06-01", mustDec(t, "10"), mustDec(t, "40"), KindPurchase); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.CreatePurchase(p.ID, 0, "2024-07-01", mustDec(t, "5"), mustDec(t, "30"), KindPrice, decimal.Zero, decimal.Zero); err != nil {
+	if _, err := s.CreatePurchase(p.ID, 0, "2024-07-01", mustDec(t, "5"), mustDec(t, "30"), KindPrice); err != nil {
 		t.Fatal(err)
 	}
 
@@ -325,7 +325,7 @@ func TestPriceKindExcludedFromSpend(t *testing.T) {
 		t.Fatalf("year qty: got %s want 10", years[0].Quantity)
 	}
 
-	if _, err := s.CreatePurchase(p.ID, 0, "2024-08-01", mustDec(t, "1"), mustDec(t, "1"), PurchaseKind("bogus"), decimal.Zero, decimal.Zero); !errors.Is(err, ErrInvalidKind) {
+	if _, err := s.CreatePurchase(p.ID, 0, "2024-08-01", mustDec(t, "1"), mustDec(t, "1"), PurchaseKind("bogus")); !errors.Is(err, ErrInvalidKind) {
 		t.Fatalf("invalid kind: %v", err)
 	}
 }
@@ -377,11 +377,11 @@ func assertCurrentSchema(t *testing.T, db *sql.DB) {
 	if !hasColumn(t, db, "purchases", "receipt_id") {
 		t.Fatal("purchases missing receipt_id")
 	}
-	if !hasColumn(t, db, "purchases", "package_count") {
-		t.Fatal("purchases missing package_count")
+	if hasColumn(t, db, "purchases", "package_count") {
+		t.Fatal("purchases still has package_count")
 	}
-	if !hasColumn(t, db, "purchases", "package_size") {
-		t.Fatal("purchases missing package_size")
+	if hasColumn(t, db, "purchases", "package_size") {
+		t.Fatal("purchases still has package_size")
 	}
 	if tableExists(t, db, "ocr_scans") || tableExists(t, db, "ocr_scan_lines") || tableExists(t, db, "recipes") {
 		t.Fatal("ocr_scans and recipes tables should be gone")

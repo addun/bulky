@@ -142,17 +142,17 @@ func TestClampExistingUnitPricesRescales(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := st.CreatePurchase(boom.ID, 0, "2024-01-01", decimal.NewFromInt(1), decimal.NewFromInt(1_000_000), store.KindPurchase, decimal.Zero, decimal.Zero); err != nil {
+	if _, err := st.CreatePurchase(boom.ID, 0, "2024-01-01", decimal.NewFromInt(1), decimal.NewFromInt(1_000_000), store.KindPurchase); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := st.CreatePurchase(boom.ID, 0, "2024-06-01", decimal.NewFromInt(2), decimal.NewFromInt(50_000_000), store.KindPrice, decimal.Zero, decimal.Zero); err != nil {
+	if _, err := st.CreatePurchase(boom.ID, 0, "2024-06-01", decimal.NewFromInt(2), decimal.NewFromInt(50_000_000), store.KindPrice); err != nil {
 		t.Fatal(err)
 	}
 	ok, err := st.CreateProduct("Fine", units[0].ID, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := st.CreatePurchase(ok.ID, 0, "2024-01-01", decimal.NewFromInt(1), decimal.NewFromInt(12), store.KindPurchase, decimal.Zero, decimal.Zero); err != nil {
+	if _, err := st.CreatePurchase(ok.ID, 0, "2024-01-01", decimal.NewFromInt(1), decimal.NewFromInt(12), store.KindPurchase); err != nil {
 		t.Fatal(err)
 	}
 

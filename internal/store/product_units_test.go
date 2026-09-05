@@ -122,21 +122,13 @@ func TestUnitInUseViaConversion(t *testing.T) {
 	}
 }
 
-func TestConvertPacksToPrimary(t *testing.T) {
+func TestQtyInAndPricePer(t *testing.T) {
 	p := Product{
 		UnitID:   1,
 		UnitName: "szt",
 		Conversions: []ProductConversion{
 			{UnitID: 2, UnitName: "l", Factor: mustDec(t, "1.5")},
 		},
-	}
-	packs, size, ok := ConvertPacksToPrimary(mustDec(t, "2"), mustDec(t, "1.5"), 2, p)
-	if !ok || !packs.Equal(mustDec(t, "2")) || !size.Equal(mustDec(t, "1")) {
-		t.Fatalf("converted: packs=%s size=%s ok=%v", packs, size, ok)
-	}
-	packs, size, ok = ConvertPacksToPrimary(mustDec(t, "2"), mustDec(t, "1"), 1, p)
-	if ok {
-		t.Fatalf("primary should not convert: %s × %s", packs, size)
 	}
 	qty := QtyIn(mustDec(t, "6"), p.Conversions[0])
 	if !qty.Equal(mustDec(t, "9")) {
@@ -221,11 +213,11 @@ func TestChangePurchaseUnitPromotesExtra(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	packed, err := s.CreatePurchase(p.ID, 0, "2026-08-20", decimal.Zero, mustDec(t, "15"), KindPurchase, mustDec(t, "2"), mustDec(t, "1"))
+	packed, err := s.CreatePurchase(p.ID, 0, "2026-08-20", mustDec(t, "2"), mustDec(t, "15"), KindPurchase)
 	if err != nil {
 		t.Fatal(err)
 	}
-	loose, err := s.CreatePurchase(p.ID, 0, "2026-08-21", mustDec(t, "3"), mustDec(t, "7.50"), KindPurchase, decimal.Zero, decimal.Zero)
+	loose, err := s.CreatePurchase(p.ID, 0, "2026-08-21", mustDec(t, "3"), mustDec(t, "7.50"), KindPurchase)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -260,8 +252,8 @@ func TestChangePurchaseUnitPromotesExtra(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !packed.PackageCount.Equal(mustDec(t, "2")) || !packed.PackageSize.Equal(mustDec(t, "1.5")) || !packed.Quantity.Equal(mustDec(t, "3")) {
-		t.Fatalf("packed: count=%s size=%s qty=%s", packed.PackageCount, packed.PackageSize, packed.Quantity)
+	if !packed.Quantity.Equal(mustDec(t, "3")) {
+		t.Fatalf("packed qty: %s", packed.Quantity)
 	}
 	if !packed.Amount.Equal(mustDec(t, "15")) {
 		t.Fatalf("amount should stay: %s", packed.Amount)
@@ -271,8 +263,8 @@ func TestChangePurchaseUnitPromotesExtra(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if loose.HasPackage() || !loose.Quantity.Equal(mustDec(t, "4.5")) {
-		t.Fatalf("loose: packed=%v qty=%s", loose.HasPackage(), loose.Quantity)
+	if !loose.Quantity.Equal(mustDec(t, "4.5")) {
+		t.Fatalf("loose qty: %s", loose.Quantity)
 	}
 }
 
@@ -284,7 +276,7 @@ func TestChangePurchaseUnitRejectsUnknownExtra(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	buy, err := s.CreatePurchase(p.ID, 0, "2026-08-20", mustDec(t, "500"), mustDec(t, "8"), KindPurchase, decimal.Zero, decimal.Zero)
+	buy, err := s.CreatePurchase(p.ID, 0, "2026-08-20", mustDec(t, "500"), mustDec(t, "8"), KindPurchase)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -317,7 +309,7 @@ func TestChangePurchaseUnitRejects(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.CreatePurchase(p.ID, 0, "2026-08-20", mustDec(t, "2"), mustDec(t, "5"), KindPurchase, decimal.Zero, decimal.Zero); err != nil {
+	if _, err := s.CreatePurchase(p.ID, 0, "2026-08-20", mustDec(t, "2"), mustDec(t, "5"), KindPurchase); err != nil {
 		t.Fatal(err)
 	}
 
