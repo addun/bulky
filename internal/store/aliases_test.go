@@ -30,8 +30,18 @@ func TestAliasCRUDAndUniqueness(t *testing.T) {
 	if _, err := s.CreateAlias(rice.ID, 0, 0, "tortowa"); !errors.Is(err, ErrDuplicate) {
 		t.Fatalf("dup global: %v", err)
 	}
-	if _, err := s.CreateAlias(flour.ID, 0, 0, "Cake flour"); !errors.Is(err, ErrDuplicate) {
-		t.Fatalf("catalog name: %v", err)
+	if _, err := s.CreateAlias(rice.ID, 0, 0, "Cake flour"); !errors.Is(err, ErrDuplicate) {
+		t.Fatalf("other catalog name: %v", err)
+	}
+	own, err := s.CreateAlias(flour.ID, 0, 0, "Cake flour")
+	if err != nil {
+		t.Fatalf("own catalog name: %v", err)
+	}
+	if own.Alias != "Cake flour" {
+		t.Fatalf("own catalog name: %#v", own)
+	}
+	if err := s.DeleteAlias(own.ID); err != nil {
+		t.Fatal(err)
 	}
 	if _, err := s.CreateAlias(flour.ID, 0, 0, "  "); !errors.Is(err, ErrInvalidAlias) {
 		t.Fatalf("empty: %v", err)
@@ -207,15 +217,31 @@ func TestListProductsFuzzySearch(t *testing.T) {
 }
 
 func TestProductNameCannotReuseAlias(t *testing.T) {
-	s, kg, flour, _, _, _ := aliasFixture(t)
+	s, kg, flour, rice, _, _ := aliasFixture(t)
 	if _, err := s.CreateAlias(flour.ID, 0, 0, "Tortowa"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.CreateProduct("tortowa", kg.ID, nil); !errors.Is(err, ErrDuplicate) {
 		t.Fatalf("create: %v", err)
 	}
-	if err := s.UpdateProduct(flour.ID, "Tortowa", kg.ID, nil, false); !errors.Is(err, ErrDuplicate) {
-		t.Fatalf("update: %v", err)
+	if err := s.UpdateProduct(rice.ID, "Tortowa", kg.ID, nil, false); !errors.Is(err, ErrDuplicate) {
+		t.Fatalf("update other: %v", err)
+	}
+	if err := s.UpdateProduct(flour.ID, "Cake flour", kg.ID, nil, false); err != nil {
+		t.Fatalf("keep name with unrelated alias: %v", err)
+	}
+	if err := s.UpdateProduct(flour.ID, "Tortowa", kg.ID, nil, false); err != nil {
+		t.Fatalf("rename to own alias: %v", err)
+	}
+}
+
+func TestUpdateProductAllowsOwnNameAlias(t *testing.T) {
+	s, kg, flour, _, _, _ := aliasFixture(t)
+	if _, err := s.CreateAlias(flour.ID, 0, 0, "Cake flour"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpdateProduct(flour.ID, "Cake flour", kg.ID, nil, false); err != nil {
+		t.Fatalf("keep name matching own alias: %v", err)
 	}
 }
 

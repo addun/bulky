@@ -143,7 +143,7 @@ func prepareAliasTx(q queryRower, productID, storyID, chainID int64, alias strin
 	if err != nil {
 		return "", nil, nil, err
 	}
-	if err := q.QueryRow(`SELECT COUNT(*) FROM products WHERE name = ? COLLATE NOCASE`, alias).Scan(&n); err != nil {
+	if err := q.QueryRow(`SELECT COUNT(*) FROM products WHERE name = ? COLLATE NOCASE AND id != ?`, alias, productID).Scan(&n); err != nil {
 		return "", nil, nil, err
 	}
 	if n > 0 {
@@ -209,8 +209,12 @@ func (s *Store) catalogNameExists(name string) (bool, error) {
 }
 
 func (s *Store) aliasExists(alias string) (bool, error) {
+	return aliasExistsExcept(s.db, alias, 0)
+}
+
+func aliasExistsExcept(q queryRower, alias string, exceptProductID int64) (bool, error) {
 	var n int
-	err := s.db.QueryRow(`SELECT COUNT(*) FROM product_aliases WHERE alias = ? COLLATE NOCASE`, strings.TrimSpace(alias)).Scan(&n)
+	err := q.QueryRow(`SELECT COUNT(*) FROM product_aliases WHERE alias = ? COLLATE NOCASE AND product_id != ?`, strings.TrimSpace(alias), exceptProductID).Scan(&n)
 	return n > 0, err
 }
 

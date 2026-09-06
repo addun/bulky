@@ -146,9 +146,10 @@ func TestImportBillCreatesChainAliasWhenStoryHasChain(t *testing.T) {
 	}
 }
 
-func TestImportBillSkipsAliasWhenNamesMatch(t *testing.T) {
-	s, kg, _, _, _, _ := aliasFixture(t)
+func TestImportBillCreatesAliasWhenNamesMatch(t *testing.T) {
+	s, kg, _, _, lidl, _ := aliasFixture(t)
 	res, err := s.ImportBill(BillImport{
+		StoryID:  lidl.ID,
 		BoughtOn: "2026-08-20",
 		Lines: []BillLineInput{
 			{ProductName: "Oats", ReceiptName: "oats", UnitID: kg.ID, Quantity: mustDec(t, "1"), Amount: mustDec(t, "2.00")},
@@ -161,8 +162,48 @@ func TestImportBillSkipsAliasWhenNamesMatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(aliases) != 0 {
-		t.Fatalf("expected no alias: %#v", aliases)
+	if len(aliases) != 1 || aliases[0].Alias != "oats" || aliases[0].StoryID != lidl.ID {
+		t.Fatalf("new product should keep the till name: %#v", aliases)
+	}
+
+	if err := s.UpdateProduct(res.ProductIDs[0], "Rolled oats", kg.ID, nil, false); err != nil {
+		t.Fatal(err)
+	}
+	hit, err := s.FindProductByName("oats", lidl.ID)
+	if err != nil || hit.ID != res.ProductIDs[0] {
+		t.Fatalf("renamed product should still match the till name: %v %#v", err, hit)
+	}
+}
+
+func TestImportBillAliasesExistingProductWhenNamesMatch(t *testing.T) {
+	s, kg, flour, _, lidl, _ := aliasFixture(t)
+	res, err := s.ImportBill(BillImport{
+		StoryID:  lidl.ID,
+		BoughtOn: "2026-08-20",
+		Lines: []BillLineInput{
+			{ProductID: flour.ID, ReceiptName: "Cake flour", Quantity: mustDec(t, "1"), Amount: mustDec(t, "4.00")},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.ProductIDs[0] != flour.ID {
+		t.Fatalf("should reuse flour: %#v", res)
+	}
+	aliases, err := s.ListAliasesByProduct(flour.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(aliases) != 1 || aliases[0].Alias != "Cake flour" || aliases[0].StoryID != lidl.ID {
+		t.Fatalf("existing product should keep the till name: %#v", aliases)
+	}
+
+	if err := s.UpdateProduct(flour.ID, "Pastry flour", kg.ID, nil, false); err != nil {
+		t.Fatal(err)
+	}
+	hit, err := s.FindProductByName("Cake flour", lidl.ID)
+	if err != nil || hit.ID != flour.ID {
+		t.Fatalf("renamed product should still match the till name: %v %#v", err, hit)
 	}
 }
 

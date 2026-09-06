@@ -588,7 +588,7 @@ func (s *Store) UpdateProduct(id int64, name string, unitID int64, imagePath *st
 		}
 		return err
 	}
-	taken, err := s.aliasExists(name)
+	taken, err := aliasExistsExcept(s.db, name, id)
 	if err != nil {
 		return err
 	}
