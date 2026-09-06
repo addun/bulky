@@ -285,7 +285,7 @@ func aliasFormError(err error) string {
 	case errors.Is(err, store.ErrAliasScope):
 		return "Choose either a chain or a store, not both."
 	case errors.Is(err, store.ErrDuplicate):
-		return "That alias already exists for this scope, or matches a product name."
+		return "That alias already exists for this scope, or matches another product's name."
 	default:
 		return ""
 	}

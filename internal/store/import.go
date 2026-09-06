@@ -109,7 +109,7 @@ func resolveImportProduct(tx *sql.Tx, line BillLineInput, created map[string]int
 		if err != nil {
 			return 0, err
 		}
-		if err := maybeAliasFromReceipt(tx, p.ID, storyID, line.ReceiptName, p.Name); err != nil {
+		if err := maybeAliasFromReceipt(tx, p.ID, storyID, line.ReceiptName); err != nil {
 			return 0, err
 		}
 		return p.ID, nil
@@ -120,7 +120,7 @@ func resolveImportProduct(tx *sql.Tx, line BillLineInput, created map[string]int
 	}
 	if id, ok := created[key]; ok {
 		if _, isNew := newIDs[id]; isNew {
-			if err := maybeAliasFromReceipt(tx, id, storyID, line.ReceiptName, line.ProductName); err != nil {
+			if err := maybeAliasFromReceipt(tx, id, storyID, line.ReceiptName); err != nil {
 				return 0, err
 			}
 		}
@@ -140,18 +140,15 @@ func resolveImportProduct(tx *sql.Tx, line BillLineInput, created map[string]int
 	}
 	created[key] = p.ID
 	newIDs[p.ID] = struct{}{}
-	if err := maybeAliasFromReceipt(tx, p.ID, storyID, line.ReceiptName, line.ProductName); err != nil {
+	if err := maybeAliasFromReceipt(tx, p.ID, storyID, line.ReceiptName); err != nil {
 		return 0, err
 	}
 	return p.ID, nil
 }
 
-func maybeAliasFromReceipt(tx *sql.Tx, productID, storyID int64, receiptName, productName string) error {
+func maybeAliasFromReceipt(tx *sql.Tx, productID, storyID int64, receiptName string) error {
 	receiptName = strings.TrimSpace(receiptName)
 	if receiptName == "" {
-		return nil
-	}
-	if strings.EqualFold(receiptName, strings.TrimSpace(productName)) {
 		return nil
 	}
 	var chainID int64
