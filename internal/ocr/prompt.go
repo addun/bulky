@@ -27,6 +27,7 @@ JSON shape:
       "product_name": "clean catalog name, keep printed size (e.g. 550g, 1.5l)",
       "vat_type": "C",
       "quantity": "3",
+      "unit_name": "szt",
       "unit_price": "18.55",
       "discount": "2.38",
       "amount": "14.99",
@@ -65,6 +66,12 @@ Rules:
   - The Ilość / qty column (the number before "x cena") is always quantity. "3 x18,55" → quantity "3". "5.000 x 3,29" → "5".
   - A weighed loose buy (produce/deli, sold per kg) like "Marchew  1.450 x 4,99" has quantity "1.450" (the scale weight).
   - If the till printed the same goods line several times (scanned once per pack), emit one JSON line per printed row. Do not combine them. Different scale weights stay separate.
+
+- UNIT: unit_name is the unit of quantity (the number before x), not the size in the product name.
+  Typical Polish tills: "szt" (items), "pkt" (packs), "kg" (scale). Copy the printed abbreviation when present (szt, pkt, kg, g, l, ml).
+  "2 x 3,99" with no unit printed → "szt". Packaged goods counted as items are szt even when the name includes a size ("Mąka 1kg" qty 2 → "szt", not "kg").
+  "1,450 x 4,99" (three decimal places, produce/deli) → "kg".
+  Empty string only if you cannot tell.
 
 - UNIT PRICE: unit_price is the normal shelf price for ONE item / one kg as printed after "x". Copy it even when a VAT letter follows (3 x18,55 C → "18.55"). Empty string if that column is unreadable. Do not compute unit_price from the line total.
 

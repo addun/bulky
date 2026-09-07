@@ -35,6 +35,9 @@ func TestAdminPageAndSave(t *testing.T) {
 	if !strings.Contains(body, `name="ocr_model"`) {
 		t.Fatal("missing model field")
 	}
+	if !strings.Contains(body, `name="piece_unit_id"`) || !strings.Contains(body, `name="weight_unit_id"`) {
+		t.Fatal("missing default unit fields")
+	}
 	if !strings.Contains(body, `href="https://developers.openai.com/api/docs/models/all"`) {
 		t.Fatal("missing models link")
 	}
@@ -63,6 +66,57 @@ func TestAdminPageAndSave(t *testing.T) {
 	body = rec.Body.String()
 	if !strings.Contains(body, `value="gpt-4o-mini"`) {
 		t.Fatal("saved model should fill the field")
+	}
+}
+
+func TestAdminSavesUnitDefaults(t *testing.T) {
+	st, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	szt, err := st.CreateUnit("szt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	kg, err := st.FindUnitByName("kg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv, err := New(st, Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	form := url.Values{
+		"ocr_model":      {"gpt-4o-mini"},
+		"piece_unit_id":  {itoa(szt.ID)},
+		"weight_unit_id": {itoa(kg.ID)},
+	}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/admin/settings", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("save status %d", rec.Code)
+	}
+
+	got, err := st.UnitDefaults()
+	if err != nil || got.PieceID != szt.ID || got.WeightID != kg.ID {
+		t.Fatalf("defaults: %v %#v", err, got)
+	}
+
+	form = url.Values{"ocr_model": {"gpt-4o-mini"}}
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/admin/settings", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("clear status %d", rec.Code)
+	}
+	got, err = st.UnitDefaults()
+	if err != nil || got != (store.UnitDefaults{}) {
+		t.Fatalf("cleared: %v %#v", err, got)
 	}
 }
 

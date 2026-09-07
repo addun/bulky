@@ -3,6 +3,32 @@
 <form class="stack" method="post" action="/admin/settings">
   <label>Model <input name="ocr_model" required value="{{.OCRModel}}" autofocus></label>
   <p class="hint"><a href="https://developers.openai.com/api/docs/models/all" target="_blank" rel="noopener">All models</a></p>
+
+  <fieldset class="form-group">
+    <legend>New product units</legend>
+    <p class="hint">On a bill, a quantity like 1 uses the piece unit and 1,450 uses the weight unit. <a href="/admin/units">Add units</a> first if the list is empty.</p>
+    <div class="form-row">
+      <label>
+        Piece unit
+        <select name="piece_unit_id">
+          <option value="">Select…</option>
+          {{range .Units}}
+          <option value="{{.ID}}" {{if eq .ID $.Defaults.PieceID}}selected{{end}}>{{.Name}}</option>
+          {{end}}
+        </select>
+      </label>
+      <label>
+        Weight unit
+        <select name="weight_unit_id">
+          <option value="">Select…</option>
+          {{range .Units}}
+          <option value="{{.ID}}" {{if eq .ID $.Defaults.WeightID}}selected{{end}}>{{.Name}}</option>
+          {{end}}
+        </select>
+      </label>
+    </div>
+  </fieldset>
+
   <div class="form-actions">
     <button type="submit" class="btn btn-tag">Save</button>
   </div>

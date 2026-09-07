@@ -118,7 +118,12 @@ func (s *Server) showReceipt(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "could not load aliases")
 		return
 	}
-	view, err := receiptToView(receipt, products, units, stories, aliases)
+	defaults, err := s.store.UnitDefaults()
+	if err != nil {
+		c.String(http.StatusInternalServerError, "could not load settings")
+		return
+	}
+	view, err := receiptToView(receipt, products, stories, aliases, defaults)
 	if err != nil {
 		s.renderReceipts(c, http.StatusInternalServerError, "Could not read the saved AI response.")
 		return

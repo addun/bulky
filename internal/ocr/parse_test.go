@@ -58,6 +58,49 @@ func TestParseBillKeepsExplicitPackSize(t *testing.T) {
 	}
 }
 
+func TestParseBillCanonicalizesUnitName(t *testing.T) {
+	raw := []byte(`{"lines":[
+		{"receipt_name":"Chleb","quantity":"1","unit_name":"szt.","amount":"4.50"},
+		{"receipt_name":"Jaja","quantity":"1","unit_name":"opak","amount":"8.00"},
+		{"receipt_name":"Mąka","quantity":"2","unit_name":"KG","amount":"5.00"}
+	]}`)
+	bill, err := parseBill(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"szt", "pkt", "kg"}
+	for i, name := range want {
+		if bill.Lines[i].UnitName != name {
+			t.Fatalf("line %d unit %q want %q", i, bill.Lines[i].UnitName, name)
+		}
+	}
+}
+
+func TestParseBillInfersKgFromScaleQty(t *testing.T) {
+	raw := []byte(`{"lines":[{"receipt_name":"Marchew","quantity":"1.450","amount":"7.23"}]}`)
+	bill, err := parseBill(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bill.Lines[0].UnitName != "kg" || bill.Lines[0].Quantity != "1.450" {
+		t.Fatalf("scale qty: %#v", bill.Lines[0])
+	}
+}
+
+func TestParseBillInfersKgFromOldPackSize(t *testing.T) {
+	raw := []byte(`{"lines":[{"receipt_name":"Marchew","package_count":"1","package_size":"1.450","amount":"7.23"}]}`)
+	bill, err := parseBill(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bill.Lines[0].UnitName != "kg" {
+		t.Fatalf("unit: %#v", bill.Lines[0])
+	}
+	if bill.Lines[0].PackageCount != "1.450" || bill.Lines[0].PackageSize != "1" {
+		t.Fatalf("rewritten pack: %#v", bill.Lines[0])
+	}
+}
+
 func TestParseBillKeepsRepeatScansSeparate(t *testing.T) {
 	raw := []byte(`{"lines":[
 		{"receipt_name":"Mleko UHT 1l","package_count":"1","package_size":"1","unit_name":"l","amount":"3.29"},

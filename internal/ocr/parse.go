@@ -38,8 +38,10 @@ func parseBill(raw []byte) (Bill, error) {
 	bill.BoughtAt = normalizeTime(bill.BoughtAt)
 	for i := range bill.Lines {
 		normalizeLine(&bill.Lines[i])
+		inferUnitFromSize(&bill.Lines[i])
 		fixWeighedKg(&bill.Lines[i])
 		coalesceQuantity(&bill.Lines[i])
+		inferUnitFromQuantity(&bill.Lines[i])
 		fillMissingAmount(&bill.Lines[i])
 	}
 	return bill, nil
@@ -51,7 +53,7 @@ func normalizeLine(line *Line) {
 	if line.ProductName == "" {
 		line.ProductName = line.ReceiptName
 	}
-	line.UnitName = strings.TrimSpace(line.UnitName)
+	line.UnitName = normalizeUnitName(line.UnitName)
 	line.SkipReason = strings.TrimSpace(line.SkipReason)
 
 	unitPrice, vatFromPrice := peelVAT(line.UnitPrice)
@@ -257,6 +259,45 @@ func coalesceQuantity(line *Line) {
 	}
 	if c := strings.TrimSpace(line.PackageCount); c != "" {
 		line.Quantity = c
+	}
+}
+
+func inferUnitFromSize(line *Line) {
+	if line.UnitName != "" {
+		return
+	}
+	if looksLikeScaleKg(line.PackageSize) {
+		line.UnitName = "kg"
+	}
+}
+
+func inferUnitFromQuantity(line *Line) {
+	if line.UnitName != "" {
+		return
+	}
+	if looksLikeScaleKg(line.Quantity) {
+		line.UnitName = "kg"
+	}
+}
+
+func normalizeUnitName(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	s = strings.TrimSuffix(s, ".")
+	switch s {
+	case "sztuka", "sztuk", "pcs", "pc", "piece", "szt":
+		return "szt"
+	case "opak", "opakowanie", "op", "pkt":
+		return "pkt"
+	case "kilogram", "kilogramy", "kilogramów", "kg":
+		return "kg"
+	case "gram", "gramy", "gramów", "gr", "g":
+		return "g"
+	case "litr", "litry", "litrów", "liter", "l":
+		return "l"
+	case "mililitr", "mililitry", "ml":
+		return "ml"
+	default:
+		return s
 	}
 }
 

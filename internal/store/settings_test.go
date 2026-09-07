@@ -53,3 +53,45 @@ func TestSettingGetSet(t *testing.T) {
 		t.Fatalf("empty save should not clear: got %q", got)
 	}
 }
+
+func TestUnitDefaults(t *testing.T) {
+	s, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	got, err := s.UnitDefaults()
+	if err != nil || got != (UnitDefaults{}) {
+		t.Fatalf("empty: %v %#v", err, got)
+	}
+
+	szt, err := s.CreateUnit("szt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	kg, err := s.FindUnitByName("kg")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.SetUnitDefaults(UnitDefaults{PieceID: szt.ID, WeightID: kg.ID}); err != nil {
+		t.Fatal(err)
+	}
+	got, err = s.UnitDefaults()
+	if err != nil || got.PieceID != szt.ID || got.WeightID != kg.ID {
+		t.Fatalf("saved: %v %#v", err, got)
+	}
+
+	if err := s.SetUnitDefaults(UnitDefaults{}); err != nil {
+		t.Fatal(err)
+	}
+	got, err = s.UnitDefaults()
+	if err != nil || got != (UnitDefaults{}) {
+		t.Fatalf("cleared: %v %#v", err, got)
+	}
+
+	if err := s.SetUnitDefaults(UnitDefaults{PieceID: 999}); !errors.Is(err, ErrInvalidUnit) {
+		t.Fatalf("missing unit: %v", err)
+	}
+}

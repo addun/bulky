@@ -4,7 +4,9 @@ Bulkly can photograph a receipt or upload a PDF and turn the printed lines into 
 
 ## Setup
 
-The reader needs a vision model. Set `OCR_API_KEY` (or `OPENAI_API_KEY`) for OpenAI, or `OCR_BASE_URL` for any OpenAI-compatible API, including a local server. Set the model name on **Admin** (`/admin`); there is no default. Until the key (or base URL) and the model are set, **Receipts** explains that the reader is off.
+The reader needs a vision model. Set `OCR_API_KEY` (or `OPENAI_API_KEY`) for OpenAI, or `OCR_BASE_URL` for any OpenAI-compatible API, including a local server. Set the model name on **Settings** (`/admin/settings`); there is no default. Until the key (or base URL) and the model are set, **Receipts** explains that the reader is off.
+
+On the same page, pick a **piece unit** and a **weight unit** from your catalog. Confirming a bill uses those for new products. They can be any names (`szt`/`kg`, `ea`/`lb`, …). Leave either blank if you do not want that guess.
 
 PDFs are rasterized with `pdftoppm` (Poppler) and sent as page images to the same model as photos. Docker already has Poppler. For `go run` on a Mac, `brew install poppler`. There is no Tesseract step: extracted text glued columns together (for example `bananyC1.35x6.00`) and the model could not unstick them.
 
@@ -36,7 +38,7 @@ Quantity in the log is the till qty column. A weighed loose buy (`Marchew  1.450
 
 ## Confirm
 
-Open a scan that is **To confirm**. Check the date and hour, pick a store if you want one, and go through every line: include it or not, keep **New product** or choose an existing one, and fix name, quantity, and amount. A new product starts with Unit empty — you must pick one (`szt`, `kg`, …). An existing product already has a unit; quantity is not converted.
+Open a scan that is **To confirm**. Check the date and hour, pick a store if you want one, and go through every line: include it or not, keep **New product** or choose an existing one, and fix name, quantity, and amount. A new product’s Unit comes from **Settings**: a scale reading (`1,450`) uses the weight unit, a whole number (`1`, `2.000`) uses the piece unit. You can still change it (for example to `pkt`). If a default is not set, Unit stays empty. An existing product already has a unit; quantity is not converted.
 
 How printed names are matched to your catalog, and how a new product remembers the till wording, is in [Receipt matching](../receipt-matching/index.md). Aliases themselves are in [Product aliases](../product-aliases/index.md).
 
