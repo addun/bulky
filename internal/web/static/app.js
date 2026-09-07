@@ -491,6 +491,153 @@
     }
   }
 
+  function isImageFile(f) {
+    if (!f) return false;
+    var type = (f.type || "").toLowerCase();
+    if (type.indexOf("image/") === 0) return true;
+    var name = (f.name || "").toLowerCase();
+    return /\.(jpe?g|png|webp|gif)$/.test(name);
+  }
+
+  function firstMatching(files, ok) {
+    if (!files) return null;
+    for (var i = 0; i < files.length; i++) {
+      if (ok(files[i])) return files[i];
+    }
+    return null;
+  }
+
+  function clipboardImage(e) {
+    var cd = e.clipboardData;
+    if (!cd) return null;
+    var f = firstMatching(cd.files, isImageFile);
+    if (f) return f;
+    var items = cd.items;
+    if (!items) return null;
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].kind !== "file") continue;
+      f = items[i].getAsFile();
+      if (isImageFile(f)) return f;
+    }
+    return null;
+  }
+
+  function pasteIntoField(e) {
+    var t = e.target;
+    if (!t) return false;
+    if (t.isContentEditable) return true;
+    var tag = (t.tagName || "").toLowerCase();
+    if (tag === "textarea") return true;
+    return tag === "input" && t.type !== "file" && t.type !== "checkbox";
+  }
+
+  function namedFile(f, fallback) {
+    if (!f || f.name) return f;
+    var ext = ((f.type || "image/png").split("/")[1] || "png").replace("jpeg", "jpg");
+    try {
+      return new File([f], fallback + "." + ext, { type: f.type || "image/png" });
+    } catch (err) {
+      return f;
+    }
+  }
+
+  function putFile(input, f, fallback) {
+    f = namedFile(f, fallback || "paste");
+    try {
+      var dt = new DataTransfer();
+      dt.items.add(f);
+      input.files = dt.files;
+    } catch (err) {}
+    return f;
+  }
+
+  function bindFileDrop(wrap, onFiles) {
+    if (!wrap) return;
+    function hasFiles(e) {
+      var types = e.dataTransfer && e.dataTransfer.types;
+      if (!types) return false;
+      if (typeof types.contains === "function") return types.contains("Files");
+      return Array.prototype.indexOf.call(types, "Files") !== -1;
+    }
+    var overTimer = 0;
+    function markOver(on) {
+      clearTimeout(overTimer);
+      if (on) {
+        wrap.classList.add("is-over");
+        return;
+      }
+      wrap.classList.remove("is-over");
+    }
+    document.addEventListener("dragenter", function (e) {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      markOver(true);
+    });
+    document.addEventListener("dragover", function (e) {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "copy";
+      markOver(true);
+      overTimer = setTimeout(function () {
+        markOver(false);
+      }, 150);
+    });
+    document.addEventListener("dragleave", function (e) {
+      if (!hasFiles(e)) return;
+      if (e.relatedTarget) return;
+      markOver(false);
+    });
+    document.addEventListener("drop", function (e) {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      markOver(false);
+      onFiles(e.dataTransfer.files);
+    });
+  }
+
+  var productImage = document.getElementById("product-image");
+  if (productImage) {
+    var photoWrap = document.getElementById("photo-drop");
+    var photoImg = document.getElementById("photo-preview-img");
+    var clearPhoto = document.querySelector("#product-form [name=clear_image]");
+    var photoUrl = "";
+
+    function showProductPhoto(f) {
+      if (!f) return;
+      if (photoImg) {
+        if (photoUrl) URL.revokeObjectURL(photoUrl);
+        photoUrl = URL.createObjectURL(f);
+        photoImg.src = photoUrl;
+      }
+      if (clearPhoto) clearPhoto.checked = false;
+      if (photoWrap) photoWrap.classList.add("has-file");
+      productImage.setCustomValidity("");
+    }
+
+    function takeProductPhoto(f) {
+      if (!isImageFile(f)) {
+        productImage.setCustomValidity("Choose a jpeg, png, webp, or gif.");
+        productImage.reportValidity();
+        return;
+      }
+      showProductPhoto(putFile(productImage, f, "paste"));
+    }
+
+    productImage.addEventListener("change", function () {
+      if (productImage.files && productImage.files[0]) showProductPhoto(productImage.files[0]);
+    });
+    document.addEventListener("paste", function (e) {
+      var f = clipboardImage(e);
+      if (!f) return;
+      if (pasteIntoField(e) && e.clipboardData && e.clipboardData.getData("text/plain")) return;
+      e.preventDefault();
+      takeProductPhoto(f);
+    });
+    bindFileDrop(photoWrap, function (files) {
+      takeProductPhoto(firstMatching(files, isImageFile));
+    });
+  }
+
   var camera = document.getElementById("bill-camera");
   var file = document.getElementById("bill");
   var form = document.getElementById("receipt-upload");
@@ -534,80 +681,34 @@
   camera.addEventListener("change", onPick(camera));
   file.addEventListener("change", onPick(file));
 
-  function hasFiles(e) {
-    var types = e.dataTransfer && e.dataTransfer.types;
-    if (!types) return false;
-    if (typeof types.contains === "function") return types.contains("Files");
-    return Array.prototype.indexOf.call(types, "Files") !== -1;
-  }
-
   function isBillFile(f) {
     if (!f) return false;
     if (isPDF(f)) return true;
-    var type = (f.type || "").toLowerCase();
-    if (type.indexOf("image/") === 0) return true;
-    var name = (f.name || "").toLowerCase();
-    return /\.(jpe?g|png|webp|gif)$/.test(name);
-  }
-
-  function firstBill(files) {
-    if (!files) return null;
-    for (var i = 0; i < files.length; i++) {
-      if (isBillFile(files[i])) return files[i];
-    }
-    return null;
+    return isImageFile(f);
   }
 
   function assignFile(f) {
-    try {
-      var dt = new DataTransfer();
-      dt.items.add(f);
-      file.files = dt.files;
-      camera.value = "";
-    } catch (err) {}
+    f = putFile(file, f, "bill");
+    camera.value = "";
     file.setCustomValidity("");
     show(f);
   }
 
-  var overTimer = 0;
-  function markOver(on) {
-    clearTimeout(overTimer);
-    if (on) {
-      wrap.classList.add("is-over");
-      return;
-    }
-    wrap.classList.remove("is-over");
-  }
-
-  document.addEventListener("dragenter", function (e) {
-    if (!hasFiles(e)) return;
-    e.preventDefault();
-    markOver(true);
-  });
-  document.addEventListener("dragover", function (e) {
-    if (!hasFiles(e)) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "copy";
-    markOver(true);
-    overTimer = setTimeout(function () {
-      markOver(false);
-    }, 150);
-  });
-  document.addEventListener("dragleave", function (e) {
-    if (!hasFiles(e)) return;
-    if (e.relatedTarget) return;
-    markOver(false);
-  });
-  document.addEventListener("drop", function (e) {
-    if (!hasFiles(e)) return;
-    e.preventDefault();
-    markOver(false);
-    var f = firstBill(e.dataTransfer.files);
+  bindFileDrop(wrap, function (files) {
+    var f = firstMatching(files, isBillFile);
     if (!f) {
       file.setCustomValidity("Choose a photo or a PDF of the bill.");
       file.reportValidity();
       return;
     }
+    assignFile(f);
+  });
+
+  document.addEventListener("paste", function (e) {
+    var f = clipboardImage(e);
+    if (!f) return;
+    if (pasteIntoField(e) && e.clipboardData && e.clipboardData.getData("text/plain")) return;
+    e.preventDefault();
     assignFile(f);
   });
 

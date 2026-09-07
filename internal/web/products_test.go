@@ -277,6 +277,35 @@ func TestProductFormSavesExtraUnits(t *testing.T) {
 	}
 }
 
+func TestProductFormOffersPhotoPaste(t *testing.T) {
+	st, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+	srv, err := New(st, Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/admin/products/new", nil)
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `id="photo-drop"`) || !strings.Contains(body, `id="product-image"`) {
+		t.Fatal("product form should offer a photo picker")
+	}
+	if !strings.Contains(body, `id="photo-preview"`) || !strings.Contains(body, "photo-frame") {
+		t.Fatal("product form should reserve a photo placeholder")
+	}
+	if strings.Contains(body, "paste, drop") {
+		t.Fatal("product form should not spell out paste instructions")
+	}
+}
+
 func TestProductShowUsesPurchaseUnit(t *testing.T) {
 	st, err := store.Open(t.TempDir())
 	if err != nil {
