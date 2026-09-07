@@ -4,20 +4,18 @@ import (
 	"database/sql"
 	"errors"
 	"strings"
+
+	"github.com/adrian/bulkly/internal/store/sqlc"
 )
 
 const SettingOCRModel = "ocr_model"
 
 func (s *Store) GetSetting(key string) (string, error) {
-	var value string
-	err := s.db.QueryRow(`SELECT value FROM settings WHERE key = ?`, key).Scan(&value)
+	value, err := s.q.GetSetting(ctx(), key)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", nil
 	}
-	if err != nil {
-		return "", err
-	}
-	return value, nil
+	return value, err
 }
 
 func (s *Store) SetSetting(key, value string) error {
@@ -26,9 +24,5 @@ func (s *Store) SetSetting(key, value string) error {
 	if key == "" || value == "" {
 		return ErrInvalidSetting
 	}
-	_, err := s.db.Exec(`
-INSERT INTO settings (key, value) VALUES (?, ?)
-ON CONFLICT(key) DO UPDATE SET value = excluded.value
-`, key, value)
-	return err
+	return s.q.UpsertSetting(ctx(), sqlc.UpsertSettingParams{Key: key, Value: value})
 }

@@ -1,10 +1,11 @@
 package store
 
 import (
-	"database/sql"
 	"errors"
 	"strings"
 	"unicode"
+
+	"github.com/adrian/bulkly/internal/store/sqlc"
 )
 
 var (
@@ -30,34 +31,20 @@ func (c RetailChain) Label() string {
 	return c.Name + " — " + c.LegalName
 }
 
-const retailChainSelect = `
-SELECT rc.id, rc.name, rc.legal_name, rc.tax_id,
-  (SELECT COUNT(*) FROM stories s WHERE s.retail_chain_id = rc.id)
-FROM retail_chains rc`
-
 func (s *Store) ListRetailChains() ([]RetailChain, error) {
-	rows, err := s.db.Query(retailChainSelect + ` ORDER BY rc.name COLLATE NOCASE, rc.id`)
+	rows, err := s.q.ListRetailChains(ctx())
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	var out []RetailChain
-	for rows.Next() {
-		c, err := scanRetailChain(rows)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, c)
-	}
-	return out, rows.Err()
+	return mapRetailChains(rows), nil
 }
 
 func (s *Store) GetRetailChain(id int64) (RetailChain, error) {
-	c, err := scanRetailChain(s.db.QueryRow(retailChainSelect+` WHERE rc.id = ?`, id))
-	if errors.Is(err, sql.ErrNoRows) {
-		return RetailChain{}, ErrNotFound
+	row, err := s.q.GetRetailChain(ctx(), id)
+	if err != nil {
+		return RetailChain{}, notFound(err)
 	}
-	return c, err
+	return mapRetailChain(row), nil
 }
 
 func (s *Store) CreateRetailChain(name, legalName, taxID string) (RetailChain, error) {
@@ -65,18 +52,15 @@ func (s *Store) CreateRetailChain(name, legalName, taxID string) (RetailChain, e
 	if err != nil {
 		return RetailChain{}, err
 	}
-	res, err := s.db.Exec(
-		`INSERT INTO retail_chains (name, legal_name, tax_id) VALUES (?, ?, ?)`,
-		c.Name, c.LegalName, c.TaxID,
-	)
+	id, err := s.q.InsertRetailChain(ctx(), sqlc.InsertRetailChainParams{
+		Name:      c.Name,
+		LegalName: c.LegalName,
+		TaxID:     c.TaxID,
+	})
 	if err != nil {
 		if isUniqueErr(err) {
 			return RetailChain{}, ErrDuplicate
 		}
-		return RetailChain{}, err
-	}
-	id, err := res.LastInsertId()
-	if err != nil {
 		return RetailChain{}, err
 	}
 	return s.GetRetailChain(id)
@@ -87,18 +71,16 @@ func (s *Store) UpdateRetailChain(id int64, name, legalName, taxID string) error
 	if err != nil {
 		return err
 	}
-	res, err := s.db.Exec(
-		`UPDATE retail_chains SET name = ?, legal_name = ?, tax_id = ? WHERE id = ?`,
-		c.Name, c.LegalName, c.TaxID, id,
-	)
+	n, err := s.q.UpdateRetailChain(ctx(), sqlc.UpdateRetailChainParams{
+		Name:      c.Name,
+		LegalName: c.LegalName,
+		TaxID:     c.TaxID,
+		ID:        id,
+	})
 	if err != nil {
 		if isUniqueErr(err) {
 			return ErrDuplicate
 		}
-		return err
-	}
-	n, err := res.RowsAffected()
-	if err != nil {
 		return err
 	}
 	if n == 0 {
@@ -115,11 +97,7 @@ func (s *Store) DeleteRetailChain(id int64) error {
 	if c.StoryCount > 0 {
 		return ErrRetailChainInUse
 	}
-	res, err := s.db.Exec(`DELETE FROM retail_chains WHERE id = ?`, id)
-	if err != nil {
-		return err
-	}
-	n, err := res.RowsAffected()
+	n, err := s.q.DeleteRetailChain(ctx(), id)
 	if err != nil {
 		return err
 	}
@@ -127,12 +105,6 @@ func (s *Store) DeleteRetailChain(id int64) error {
 		return ErrNotFound
 	}
 	return nil
-}
-
-func scanRetailChain(row rowScanner) (RetailChain, error) {
-	var c RetailChain
-	err := row.Scan(&c.ID, &c.Name, &c.LegalName, &c.TaxID, &c.StoryCount)
-	return c, err
 }
 
 func normalizeRetailChain(name, legalName, taxID string) (RetailChain, error) {
@@ -161,18 +133,4 @@ func normalizeTaxID(s string) string {
 		}
 	}
 	return b.String()
-}
-
-func optionalRetailChainArgTx(q queryRower, id int64) (any, error) {
-	if id == 0 {
-		return nil, nil
-	}
-	var n int
-	if err := q.QueryRow(`SELECT COUNT(*) FROM retail_chains WHERE id = ?`, id).Scan(&n); err != nil {
-		return nil, err
-	}
-	if n == 0 {
-		return nil, ErrInvalidRetailChain
-	}
-	return id, nil
 }
