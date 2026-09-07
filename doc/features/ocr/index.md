@@ -42,4 +42,4 @@ Open a scan that is **To confirm**. Check the date and hour, pick a store if you
 
 How printed names are matched to your catalog, and how a new product remembers the till wording, is in [Receipt matching](../receipt-matching/index.md). Aliases themselves are in [Product aliases](../product-aliases/index.md).
 
-**Save purchases** writes the included lines as purchases (date and hour in `bought_on`, for example `2026-08-18 14:32`) and marks the receipt saved. You can still open it later to see the photo and the list; it will not be imported again.
+**Save purchases** writes the included lines as purchases (date and hour in `bought_on`, for example `2026-08-18 14:32`) and marks the receipt saved. If the till had no clock, the hour is stored as midday (`12:00`). You can still open it later to see the photo and the list; it will not be imported again.

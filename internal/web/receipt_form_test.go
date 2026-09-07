@@ -258,6 +258,9 @@ func TestParseReceiptFormKeepsQuantity(t *testing.T) {
 	if msg != "" {
 		t.Fatal(msg)
 	}
+	if in.BoughtOn != "2026-08-20 12:00" {
+		t.Fatalf("bought_on midday: %q", in.BoughtOn)
+	}
 	if len(in.Lines) != 1 {
 		t.Fatalf("lines: %#v", in.Lines)
 	}

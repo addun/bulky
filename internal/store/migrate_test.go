@@ -19,7 +19,7 @@ func TestOpenFreshSeedsAndVersions(t *testing.T) {
 	defer s.Close()
 
 	assertCurrentSchema(t, s.db)
-	assertGooseVersion(t, s.db, 15)
+	assertGooseVersion(t, s.db, 16)
 
 	units, err := s.ListUnits()
 	if err != nil {
@@ -54,7 +54,7 @@ func TestOpenSecondBootNoops(t *testing.T) {
 	defer s.Close()
 
 	assertCurrentSchema(t, s.db)
-	assertGooseVersion(t, s.db, 15)
+	assertGooseVersion(t, s.db, 16)
 
 	units, err := s.ListUnits()
 	if err != nil {
@@ -123,7 +123,7 @@ VALUES (1, '2024-01-02', '10', '20.50', '2024-01-02T00:00:00Z');
 	defer s.Close()
 
 	assertCurrentSchema(t, s.db)
-	assertGooseVersion(t, s.db, 15)
+	assertGooseVersion(t, s.db, 16)
 
 	var n int
 	if err := s.db.QueryRow(`SELECT COUNT(*) FROM purchases`).Scan(&n); err != nil {
@@ -147,6 +147,14 @@ VALUES (1, '2024-01-02', '10', '20.50', '2024-01-02T00:00:00Z');
 	}
 	if kind != string(KindPurchase) {
 		t.Fatalf("legacy purchase kind: got %q want %q", kind, KindPurchase)
+	}
+
+	var boughtOn string
+	if err := s.db.QueryRow(`SELECT bought_on FROM purchases`).Scan(&boughtOn); err != nil {
+		t.Fatal(err)
+	}
+	if boughtOn != "2024-01-02 12:00" {
+		t.Fatalf("legacy bought_on: got %q want 2024-01-02 12:00", boughtOn)
 	}
 }
 
@@ -185,7 +193,7 @@ func TestOpenAddsKindWhenGooseAlreadyAtReceipts(t *testing.T) {
 	if !hasColumn(t, s.db, "purchases", "kind") {
 		t.Fatal("purchases missing kind after reopen")
 	}
-	assertGooseVersion(t, s.db, 15)
+	assertGooseVersion(t, s.db, 16)
 	if _, err := s.ListProducts(""); err != nil {
 		t.Fatalf("ListProducts: %v", err)
 	}
@@ -230,7 +238,7 @@ func TestOpenRenamesRecipesToReceipts(t *testing.T) {
 	defer s.Close()
 
 	assertCurrentSchema(t, s.db)
-	assertGooseVersion(t, s.db, 15)
+	assertGooseVersion(t, s.db, 16)
 }
 
 func TestPurchaseStoryOptional(t *testing.T) {
@@ -303,8 +311,8 @@ func TestPriceKindExcludedFromSpend(t *testing.T) {
 	if !items[0].LifetimeAmount.Equal(mustDec(t, "40")) {
 		t.Fatalf("LifetimeAmount: got %s want 40", items[0].LifetimeAmount)
 	}
-	if !items[0].LastBought.Valid || items[0].LastBought.String != "2024-06-01" {
-		t.Fatalf("LastBought: got %#v want 2024-06-01", items[0].LastBought)
+	if !items[0].LastBought.Valid || items[0].LastBought.String != "2024-06-01 12:00" {
+		t.Fatalf("LastBought: got %#v want 2024-06-01 12:00", items[0].LastBought)
 	}
 
 	rows, err := s.ListPurchases(p.ID)

@@ -7,12 +7,13 @@ import (
 )
 
 const (
-	boughtOnDate  = "2006-01-02"
-	boughtOnClock = "15:04"
+	boughtOnDate   = "2006-01-02"
+	boughtOnClock  = "15:04"
+	boughtOnMidday = "12:00"
 )
 
 // JoinBoughtOn combines a calendar day and clock into the bought_on form
-// stored on purchases: "2006-01-02" or "2006-01-02 15:04".
+// stored on purchases: "2006-01-02 15:04". Missing clock becomes midday.
 func JoinBoughtOn(date, clock string) string {
 	date, existing := SplitBoughtOn(date)
 	clock = strings.TrimSpace(clock)
@@ -25,7 +26,7 @@ func JoinBoughtOn(date, clock string) string {
 		return ""
 	}
 	if clock == "" {
-		return date
+		clock = boughtOnMidday
 	}
 	return date + " " + clock
 }
@@ -54,7 +55,7 @@ func NormalizeBoughtOn(s string) (string, error) {
 		return "", err
 	}
 	if clock == "" {
-		return date, nil
+		clock = boughtOnMidday
 	}
 	if _, err := time.Parse(boughtOnClock, clock); err != nil {
 		return "", err

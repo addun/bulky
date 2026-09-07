@@ -243,6 +243,10 @@ func createPurchase(q *sqlc.Queries, productID, storyID, receiptID int64, bought
 	if err := validQuantity(quantity); err != nil {
 		return Purchase{}, err
 	}
+	boughtOn, err := NormalizeBoughtOn(boughtOn)
+	if err != nil {
+		return Purchase{}, err
+	}
 	id, err := q.InsertPurchase(ctx(), sqlc.InsertPurchaseParams{
 		ProductID: productID,
 		StoryID:   nullID(storyID),
