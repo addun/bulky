@@ -45,16 +45,20 @@
     <p><button type="button" class="btn btn-ghost" id="add-extra-unit">Add conversion</button></p>
   </fieldset>
 
-  <label>
-    Photo <span class="hint">optional, jpeg/png/webp/gif up to 5 MB — stored as a 240×240 JPEG · take or choose on a phone</span>
-    <input name="image" type="file" accept="image/*">
-  </label>
-  {{if and (not .New) .Product.ImagePath.Valid}}
-  <div class="preview">
-    <img src="/images/{{.Product.ImagePath.String}}" alt="">
-    <label class="check"><input type="checkbox" name="clear_image" value="1"> Remove photo</label>
+  <div class="photo-drop{{if and (not .New) .Product.ImagePath.Valid}} has-file{{end}}" id="photo-drop">
+    <label>
+      Photo
+      <input id="product-image" name="image" type="file" accept="image/*">
+    </label>
+    <div class="preview" id="photo-preview">
+      <span class="photo-frame thumb-empty">
+        <img id="photo-preview-img" alt=""{{if and (not .New) .Product.ImagePath.Valid}} src="/images/{{.Product.ImagePath.String}}"{{end}}>
+      </span>
+      {{if and (not .New) .Product.ImagePath.Valid}}
+      <label class="check"><input type="checkbox" name="clear_image" value="1"> Remove photo</label>
+      {{end}}
+    </div>
   </div>
-  {{end}}
   <div class="actions">
     <button type="submit" class="btn btn-tag">{{if .New}}Save product{{else}}Save changes{{end}}</button>
     <a href="{{if .New}}/admin{{else}}/admin/products/{{.Product.ID}}{{end}}">Cancel</a>

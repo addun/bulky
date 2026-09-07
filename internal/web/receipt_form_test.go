@@ -546,8 +546,8 @@ func TestReceiptsPageRendersWhenUnconfigured(t *testing.T) {
 	if !strings.Contains(body, "Take photo") || !strings.Contains(body, "Choose file") {
 		t.Fatal("configured page should offer camera and file pickers")
 	}
-	if !strings.Contains(body, "Drop a file here") {
-		t.Fatal("configured page should offer drag and drop")
+	if !strings.Contains(body, "Paste, drop") {
+		t.Fatal("configured page should offer paste and drag and drop")
 	}
 	if !strings.Contains(body, `name="bill_camera"`) {
 		t.Fatal("configured page should post the camera field")

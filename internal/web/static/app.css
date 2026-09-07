@@ -723,20 +723,72 @@ code {
   width: 100%;
 }
 
-.scan-drop {
-  width: 100%;
+.scan-drop,
+.photo-drop {
   border: 2px dashed var(--line);
   background: #fff;
   padding: 1.1rem 1.2rem 1.2rem;
 }
 
-.scan-drop.has-file {
+.scan-drop {
+  width: 100%;
+}
+
+.photo-drop {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.scan-drop.has-file,
+.photo-drop.has-file {
   border-color: var(--pine);
 }
 
-.scan-drop.is-over {
+.scan-drop.is-over,
+.photo-drop.is-over {
   border-color: var(--ink);
   background: rgba(255, 212, 0, 0.22);
+}
+
+.photo-drop > label {
+  width: max-content;
+  max-width: calc(100% - 5.5rem);
+}
+
+.photo-drop input[type="file"] {
+  width: auto;
+  max-width: 100%;
+}
+
+.photo-drop .preview {
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.45rem;
+  margin: 0;
+}
+
+.photo-frame {
+  width: 72px;
+  height: 72px;
+  flex-shrink: 0;
+}
+
+.photo-frame img {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  display: block;
+}
+
+.photo-frame img:not([src]) {
+  display: none;
+}
+
+.preview[hidden] {
+  display: none;
 }
 
 .scan-heading {
