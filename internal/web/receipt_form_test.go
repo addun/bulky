@@ -20,8 +20,6 @@ func TestHydrateBillMatchesCatalog(t *testing.T) {
 	products := []store.ProductListItem{
 		{Product: store.Product{ID: 4, Name: "Rice", UnitID: 1, UnitName: "kg"}},
 	}
-	units := []store.Unit{{ID: 1, Name: "kg"}, {ID: 2, Name: "g"}}
-
 	bill := ocr.Bill{
 		Lines: []ocr.Line{
 			{ReceiptName: "RYZ 10KG", ProductName: "Rice", ProductID: 0, UnitName: "kg", Quantity: "10", Amount: "40"},
@@ -29,12 +27,12 @@ func TestHydrateBillMatchesCatalog(t *testing.T) {
 			{ReceiptName: "Ghost", ProductName: "Ghost", ProductID: 123, Skip: true},
 		},
 	}
-	got := hydrateBill(bill, products, units, nil, 0)
+	got := hydrateBill(bill, products, nil, 0, 0, 0)
 	if got.Lines[0].ProductID != 4 || got.Lines[0].UnitID != 0 {
 		t.Fatalf("rice: %#v", got.Lines[0])
 	}
 	if got.Lines[1].ProductID != 0 || got.Lines[1].UnitID != 0 {
-		t.Fatalf("new product unit stays empty: %#v", got.Lines[1])
+		t.Fatalf("no unit defaults: %#v", got.Lines[1])
 	}
 	if got.Lines[2].ProductID != 0 {
 		t.Fatalf("invalid product id should clear: %#v", got.Lines[2])
@@ -46,7 +44,6 @@ func TestHydrateBillMatchesAlias(t *testing.T) {
 		{Product: store.Product{ID: 4, Name: "Cake flour", UnitID: 1, UnitName: "kg"}},
 		{Product: store.Product{ID: 5, Name: "Rice", UnitID: 1, UnitName: "kg"}},
 	}
-	units := []store.Unit{{ID: 1, Name: "kg"}}
 	aliases := []store.ProductAlias{
 		{ProductID: 4, StoryID: 0, Alias: "Tortowa"},
 		{ProductID: 5, StoryID: 9, Alias: "Mąka"},
@@ -56,21 +53,21 @@ func TestHydrateBillMatchesAlias(t *testing.T) {
 	shop := hydrateBill(ocr.Bill{
 		StoryID: 9,
 		Lines:   []ocr.Line{{ReceiptName: "MĄKA", ProductName: "", ProductID: 0, UnitName: "kg"}},
-	}, products, units, aliases, 0)
+	}, products, aliases, 0, 0, 0)
 	if shop.Lines[0].ProductID != 5 {
 		t.Fatalf("shop alias should win: %#v", shop.Lines[0])
 	}
 
 	global := hydrateBill(ocr.Bill{
 		Lines: []ocr.Line{{ReceiptName: "Tortowa", ProductName: "", ProductID: 0, UnitName: "kg"}},
-	}, products, units, aliases, 0)
+	}, products, aliases, 0, 0, 0)
 	if global.Lines[0].ProductID != 4 {
 		t.Fatalf("global: %#v", global.Lines[0])
 	}
 
 	unknownShop := hydrateBill(ocr.Bill{
 		Lines: []ocr.Line{{ReceiptName: "Mąka", ProductName: "", ProductID: 0, UnitName: "kg"}},
-	}, products, units, aliases, 0)
+	}, products, aliases, 0, 0, 0)
 	if unknownShop.Lines[0].ProductID != 4 {
 		t.Fatalf("no story uses global only: %#v", unknownShop.Lines[0])
 	}
@@ -82,7 +79,6 @@ func TestHydrateBillMatchesChainAlias(t *testing.T) {
 		{Product: store.Product{ID: 5, Name: "Rice", UnitID: 1, UnitName: "kg"}},
 		{Product: store.Product{ID: 8, Name: "Oats", UnitID: 1, UnitName: "kg"}},
 	}
-	units := []store.Unit{{ID: 1, Name: "kg"}}
 	aliases := []store.ProductAlias{
 		{ProductID: 4, Alias: "Płatki"},
 		{ProductID: 5, RetailChainID: 2, Alias: "Płatki"},
@@ -93,7 +89,7 @@ func TestHydrateBillMatchesChainAlias(t *testing.T) {
 	story := hydrateBill(ocr.Bill{
 		StoryID: 11,
 		Lines:   []ocr.Line{{ReceiptName: "PŁATKI", ProductName: "", ProductID: 0, UnitName: "kg"}},
-	}, products, units, aliases, 2)
+	}, products, aliases, 2, 0, 0)
 	if story.Lines[0].ProductID != 8 {
 		t.Fatalf("story alias should win: %#v", story.Lines[0])
 	}
@@ -101,7 +97,7 @@ func TestHydrateBillMatchesChainAlias(t *testing.T) {
 	chain := hydrateBill(ocr.Bill{
 		StoryID: 12,
 		Lines:   []ocr.Line{{ReceiptName: "Płatki", ProductName: "", ProductID: 0, UnitName: "kg"}},
-	}, products, units, aliases, 2)
+	}, products, aliases, 2, 0, 0)
 	if chain.Lines[0].ProductID != 5 {
 		t.Fatalf("chain alias: %#v", chain.Lines[0])
 	}
@@ -109,14 +105,14 @@ func TestHydrateBillMatchesChainAlias(t *testing.T) {
 	otherChain := hydrateBill(ocr.Bill{
 		StoryID: 20,
 		Lines:   []ocr.Line{{ReceiptName: "Płatki", ProductName: "", ProductID: 0, UnitName: "kg"}},
-	}, products, units, aliases, 3)
+	}, products, aliases, 3, 0, 0)
 	if otherChain.Lines[0].ProductID != 4 {
 		t.Fatalf("other chain should not leak: %#v", otherChain.Lines[0])
 	}
 
 	noStory := hydrateBill(ocr.Bill{
 		Lines: []ocr.Line{{ReceiptName: "Płatki", ProductName: "", ProductID: 0, UnitName: "kg"}},
-	}, products, units, aliases, 0)
+	}, products, aliases, 0, 0, 0)
 	if noStory.Lines[0].ProductID != 4 {
 		t.Fatalf("no story uses global only: %#v", noStory.Lines[0])
 	}
@@ -127,23 +123,22 @@ func TestHydrateBillRejectsFuzzyAlias(t *testing.T) {
 		{Product: store.Product{ID: 4, Name: "Cake flour", UnitID: 1, UnitName: "kg"}},
 		{Product: store.Product{ID: 5, Name: "Rice", UnitID: 1, UnitName: "kg"}},
 	}
-	units := []store.Unit{{ID: 1, Name: "kg"}}
 	aliases := []store.ProductAlias{
 		{ProductID: 4, StoryID: 0, Alias: "Mąka tortowa"},
 	}
 
 	got := hydrateBill(ocr.Bill{
 		Lines: []ocr.Line{{ReceiptName: "MAKA TORTOWA 1KG", ProductName: "", ProductID: 0, UnitName: "kg"}},
-	}, products, units, aliases, 0)
+	}, products, aliases, 0, 0, 0)
 	if got.Lines[0].ProductID != 0 {
 		t.Fatalf("fuzzy alias should stay unmatched: %#v", got.Lines[0])
 	}
 
 	exact := hydrateBill(ocr.Bill{
 		Lines: []ocr.Line{{ReceiptName: "MAKA TORTOWA 1KG", ProductName: "", ProductID: 0, UnitName: "kg"}},
-	}, products, units, []store.ProductAlias{
+	}, products, []store.ProductAlias{
 		{ProductID: 4, StoryID: 0, Alias: "Mąka tortowa 1kg"},
-	}, 0)
+	}, 0, 0, 0)
 	if exact.Lines[0].ProductID != 4 {
 		t.Fatalf("exact alias: %#v", exact.Lines[0])
 	}
@@ -153,20 +148,67 @@ func TestHydrateBillRejectsFuzzyCatalog(t *testing.T) {
 	products := []store.ProductListItem{
 		{Product: store.Product{ID: 4, Name: "Rice", UnitID: 1, UnitName: "kg"}},
 	}
-	units := []store.Unit{{ID: 1, Name: "kg"}}
 
 	got := hydrateBill(ocr.Bill{
 		Lines: []ocr.Line{{ReceiptName: "RYZ 10KG", ProductName: "", ProductID: 0, UnitName: "kg"}},
-	}, products, units, nil, 0)
+	}, products, nil, 0, 0, 0)
 	if got.Lines[0].ProductID != 0 {
 		t.Fatalf("fuzzy catalog should stay unmatched: %#v", got.Lines[0])
 	}
 
 	exact := hydrateBill(ocr.Bill{
 		Lines: []ocr.Line{{ReceiptName: "Rice", ProductName: "", ProductID: 0, UnitName: "kg"}},
-	}, products, units, nil, 0)
+	}, products, nil, 0, 0, 0)
 	if exact.Lines[0].ProductID != 4 {
 		t.Fatalf("exact catalog: %#v", exact.Lines[0])
+	}
+}
+
+func TestHydrateBillPicksNewProductUnit(t *testing.T) {
+	const pieceID, weightID int64 = 2, 1
+
+	scale := hydrateBill(ocr.Bill{
+		Lines: []ocr.Line{{ReceiptName: "Marchew", ProductName: "Marchew", Quantity: "1.450"}},
+	}, nil, nil, 0, pieceID, weightID)
+	if scale.Lines[0].ProductID != 0 || scale.Lines[0].UnitID != weightID {
+		t.Fatalf("1.450 is weight unit: %#v", scale.Lines[0])
+	}
+
+	comma := hydrateBill(ocr.Bill{
+		Lines: []ocr.Line{{ReceiptName: "Marchew", ProductName: "Marchew", Quantity: "1,450"}},
+	}, nil, nil, 0, pieceID, weightID)
+	if comma.Lines[0].UnitID != weightID {
+		t.Fatalf("1,450 is weight unit: %#v", comma.Lines[0])
+	}
+
+	item := hydrateBill(ocr.Bill{
+		Lines: []ocr.Line{{ReceiptName: "Chleb", ProductName: "Chleb", UnitName: "kg", Quantity: "1"}},
+	}, nil, nil, 0, pieceID, weightID)
+	if item.Lines[0].UnitID != pieceID {
+		t.Fatalf("1 is piece unit: %#v", item.Lines[0])
+	}
+
+	padded := hydrateBill(ocr.Bill{
+		Lines: []ocr.Line{{ReceiptName: "Masło", ProductName: "Masło", Quantity: "2.000"}},
+	}, nil, nil, 0, pieceID, weightID)
+	if padded.Lines[0].UnitID != pieceID {
+		t.Fatalf("2.000 is piece unit: %#v", padded.Lines[0])
+	}
+
+	unset := hydrateBill(ocr.Bill{
+		Lines: []ocr.Line{{ReceiptName: "Chleb", ProductName: "Chleb", Quantity: "1"}},
+	}, nil, nil, 0, 0, 0)
+	if unset.Lines[0].UnitID != 0 {
+		t.Fatalf("no defaults stay empty: %#v", unset.Lines[0])
+	}
+
+	matched := hydrateBill(ocr.Bill{
+		Lines: []ocr.Line{{ReceiptName: "Rice", ProductName: "Rice", Quantity: "1.450"}},
+	}, []store.ProductListItem{
+		{Product: store.Product{ID: 4, Name: "Rice", UnitID: 1, UnitName: "kg"}},
+	}, nil, 0, pieceID, weightID)
+	if matched.Lines[0].ProductID != 4 || matched.Lines[0].UnitID != 0 {
+		t.Fatalf("matched product hides unit: %#v", matched.Lines[0])
 	}
 }
 
@@ -178,13 +220,12 @@ func TestHydrateBillKeepsQuantityOnMatch(t *testing.T) {
 			Conversions: []store.ProductConversion{{UnitID: 2, UnitName: "l", Factor: factor}},
 		}},
 	}
-	units := []store.Unit{{ID: 1, Name: "szt"}, {ID: 2, Name: "l"}}
 	got := hydrateBill(ocr.Bill{
 		Lines: []ocr.Line{{
 			ReceiptName: "WODA 1,5L", ProductName: "Water", ProductID: 0,
 			UnitID: 2, UnitName: "l", Quantity: "2", Amount: "5",
 		}},
-	}, products, units, nil, 0)
+	}, products, nil, 0, 0, 0)
 	line := got.Lines[0]
 	if line.ProductID != 4 || line.UnitID != 0 {
 		t.Fatalf("match should hide unit: %#v", line)
@@ -231,7 +272,6 @@ func TestHydrateBillAmbiguousAlias(t *testing.T) {
 		{Product: store.Product{ID: 4, Name: "Wheat flour", UnitID: 1, UnitName: "kg"}},
 		{Product: store.Product{ID: 6, Name: "Rye flour", UnitID: 1, UnitName: "kg"}},
 	}
-	units := []store.Unit{{ID: 1, Name: "kg"}}
 	aliases := []store.ProductAlias{
 		{ProductID: 4, StoryID: 0, Alias: "Mąka pszenna"},
 		{ProductID: 6, StoryID: 0, Alias: "Mąka żytnia"},
@@ -239,7 +279,7 @@ func TestHydrateBillAmbiguousAlias(t *testing.T) {
 
 	got := hydrateBill(ocr.Bill{
 		Lines: []ocr.Line{{ReceiptName: "Mąka", ProductName: "", ProductID: 0, UnitName: "kg"}},
-	}, products, units, aliases, 0)
+	}, products, aliases, 0, 0, 0)
 	if got.Lines[0].ProductID != 0 {
 		t.Fatalf("ambiguous should stay unmatched: %#v", got.Lines[0])
 	}
@@ -573,6 +613,17 @@ func TestReceiptReviewLoadsReceiptJSON(t *testing.T) {
 	if err := st.SaveAIResponse(r.ID, `{"bought_on":"2026-08-20","lines":[{"product_name":"Rice","quantity":"10","amount":"40.00","unit_name":"kg"}]}`); err != nil {
 		t.Fatal(err)
 	}
+	szt, err := st.CreateUnit("szt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	kg, err := st.FindUnitByName("kg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SetUnitDefaults(store.UnitDefaults{PieceID: szt.ID, WeightID: kg.ID}); err != nil {
+		t.Fatal(err)
+	}
 	srv, err := New(st, Config{Currency: "PLN", CurrencySymbol: "zł"})
 	if err != nil {
 		t.Fatal(err)
@@ -588,6 +639,9 @@ func TestReceiptReviewLoadsReceiptJSON(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), `name="quantity_0" inputmode="decimal" value="10"`) {
 		t.Fatal("quantity should come from the scan")
+	}
+	if !strings.Contains(rec.Body.String(), `selected>szt</option>`) {
+		t.Fatal("integer qty should preselect szt")
 	}
 	if !strings.Contains(rec.Body.String(), `name="story_id"`) {
 		t.Fatal("review should include a story picker")

@@ -90,7 +90,7 @@ type receiptLineView struct {
 	Discount    string
 }
 
-func hydrateBill(bill ocr.Bill, products []store.ProductListItem, _ []store.Unit, aliases []store.ProductAlias, chainID int64) ocr.Bill {
+func hydrateBill(bill ocr.Bill, products []store.ProductListItem, aliases []store.ProductAlias, chainID, pieceUnitID, weightUnitID int64) ocr.Bill {
 	productByID := map[int64]store.ProductListItem{}
 	var names []match.Label
 	for _, p := range products {
@@ -113,7 +113,6 @@ func hydrateBill(bill ocr.Bill, products []store.ProductListItem, _ []store.Unit
 			global = append(global, lab)
 		}
 	}
-
 	for i, line := range bill.Lines {
 		if line.ProductID != 0 {
 			if p, ok := productByID[line.ProductID]; ok {
@@ -133,7 +132,7 @@ func hydrateBill(bill ocr.Bill, products []store.ProductListItem, _ []store.Unit
 			}
 		}
 		if line.ProductID == 0 {
-			line.UnitID = 0
+			line.UnitID = newProductUnitID(line, pieceUnitID, weightUnitID)
 		}
 		bill.Lines[i] = line
 	}
@@ -191,7 +190,7 @@ func billToView(bill ocr.Bill, receiptID int64, imagePath, status string) receip
 	return view
 }
 
-func receiptToView(r store.Receipt, products []store.ProductListItem, units []store.Unit, stories []store.Story, aliases []store.ProductAlias) (receiptView, error) {
+func receiptToView(r store.Receipt, products []store.ProductListItem, stories []store.Story, aliases []store.ProductAlias, defaults store.UnitDefaults) (receiptView, error) {
 	var bill ocr.Bill
 	if strings.TrimSpace(r.RawResponse) != "" {
 		parsed, err := ocr.Parse([]byte(r.RawResponse))
@@ -202,7 +201,7 @@ func receiptToView(r store.Receipt, products []store.ProductListItem, units []st
 		if bill.StoryID == 0 {
 			bill.StoryID = matchStory(bill, stories)
 		}
-		bill = hydrateBill(bill, products, units, aliases, storyChainID(bill.StoryID, stories))
+		bill = hydrateBill(bill, products, aliases, storyChainID(bill.StoryID, stories), defaults.PieceID, defaults.WeightID)
 	}
 	view := billToView(bill, r.ID, r.ImagePath, r.Status)
 	view.StoryID = knownStoryID(view.StoryID, stories)
@@ -502,4 +501,28 @@ func lineQuantity(line ocr.Line) string {
 		return q
 	}
 	return strings.TrimSpace(line.PackageCount)
+}
+
+func newProductUnitID(line ocr.Line, pieceUnitID, weightUnitID int64) int64 {
+	qty := lineQuantity(line)
+	if qty == "" {
+		return 0
+	}
+	if scaleQty(qty) {
+		return weightUnitID
+	}
+	return pieceUnitID
+}
+
+func scaleQty(s string) bool {
+	s = strings.ReplaceAll(strings.TrimSpace(s), ",", ".")
+	i := strings.IndexByte(s, '.')
+	if i < 0 {
+		return false
+	}
+	frac := s[i+1:]
+	if len(frac) < 3 {
+		return false
+	}
+	return strings.TrimRight(frac, "0") != ""
 }
