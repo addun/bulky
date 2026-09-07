@@ -45,6 +45,18 @@
     <p><button type="button" class="btn btn-ghost" id="add-extra-unit">Add conversion</button></p>
   </fieldset>
 
+  {{if .Groups}}
+  <fieldset class="form-group">
+    <legend>Comparison groups</legend>
+    <p class="hint">Same brand, whole market, or any other set. Ranked by latest price per the group’s unit.</p>
+    <div class="checks">
+      {{range .Groups}}
+      <label class="check"><input type="checkbox" name="group_id" value="{{.ID}}" {{if .Selected}}checked{{end}}> {{.Name}} <span class="meta">{{.UnitName}}</span></label>
+      {{end}}
+    </div>
+  </fieldset>
+  {{end}}
+
   <div class="photo-drop{{if and (not .New) .Product.ImagePath.Valid}} has-file{{end}}" id="photo-drop">
     <label>
       Photo

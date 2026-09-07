@@ -1,0 +1,37 @@
+{{template "header" .}}
+<h1>{{if .New}}Add comparison group{{else}}Edit comparison group{{end}}</h1>
+<form class="stack" method="post" action="{{if .New}}/admin/comparison-groups{{else}}/admin/comparison-groups/{{.Group.ID}}{{end}}">
+  <fieldset class="form-group">
+    <legend>Group</legend>
+    <label>Name <input name="name" required placeholder="Mlekovita, All butters…" value="{{.Group.Name}}" autofocus></label>
+    <label>
+      Compare in
+      <select name="unit_id" required>
+        <option value="">Select…</option>
+        {{range .Units}}
+        <option value="{{.ID}}" {{if eq .ID $.Group.UnitID}}selected{{end}}>{{.Name}}</option>
+        {{end}}
+      </select>
+    </label>
+    <p class="hint">Members need this as their purchase unit, or a conversion to it. Rankings use the latest logged price per kg, litre, or whichever unit you pick.</p>
+  </fieldset>
+
+  <fieldset class="form-group">
+    <legend>Products</legend>
+    {{if not .Products}}
+      <p class="hint">No products yet. <a href="/admin/products/new">Add a product</a> first.</p>
+    {{else}}
+      <div class="checks">
+        {{range .Products}}
+        <label class="check"><input type="checkbox" name="product_id" value="{{.ID}}" {{if .Selected}}checked{{end}}> {{.Name}} <span class="meta">{{.UnitName}}</span></label>
+        {{end}}
+      </div>
+    {{end}}
+  </fieldset>
+
+  <div class="form-actions">
+    <button type="submit" class="btn btn-tag">{{if .New}}Add group{{else}}Save group{{end}}</button>
+    <a href="/admin/comparison-groups">Cancel</a>
+  </div>
+</form>
+{{template "footer" .}}

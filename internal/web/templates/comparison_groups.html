@@ -1,0 +1,26 @@
+{{template "header" .}}
+<div class="page-head">
+  <h1>Comparison groups</h1>
+  <a class="btn btn-tag" href="/admin/comparison-groups/new">Add group</a>
+</div>
+<p class="hint">Flexible scopes for unit-price ranking — same brand, whole market, or any other set. Each group compares in one unit (usually kg or l).</p>
+
+{{if not .Groups}}
+  <p class="empty">No comparison groups yet.</p>
+{{else}}
+  <ul class="units">
+    {{range .Groups}}
+    <li>
+      <span class="row-main">
+        <span class="unit-name">{{.Name}}</span>
+        <span class="meta">{{.UnitName}} · {{.ProductCount}} product{{if ne .ProductCount 1}}s{{end}}</span>
+      </span>
+      <span class="tight">
+        <a href="/admin/comparison-groups/{{.ID}}/edit">Edit</a>
+        <a class="danger" href="/admin/comparison-groups/{{.ID}}/delete">Delete</a>
+      </span>
+    </li>
+    {{end}}
+  </ul>
+{{end}}
+{{template "footer" .}}

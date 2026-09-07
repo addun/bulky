@@ -15,21 +15,24 @@
   </div>
 </article>
 
-{{if .Years}}
 <section>
-  <h2>By year</h2>
-  <ul class="years">
-    {{range .Years}}
-    {{$y := .}}
-    <li>
-      <span class="year">{{$y.Year}}</span>
-      <span>{{qty $y.Quantity}} {{$.Product.UnitName}}</span>
-      <span class="row-amt">{{money $y.Amount}}</span>
-    </li>
-    {{end}}
-  </ul>
+  <h2>Comparison groups</h2>
+  {{if not .Groups}}
+    <p class="empty">Not in any comparison group. <a href="/admin/products/{{.Product.ID}}/edit">Edit</a> to assign one.</p>
+  {{else}}
+    <ul class="units">
+      {{range .Groups}}
+      <li>
+        <span class="row-main">
+          <span class="unit-name">{{.Name}}</span>
+          <span class="meta">{{.UnitName}}</span>
+        </span>
+        <a href="/admin/comparison-groups/{{.ID}}/edit">Edit</a>
+      </li>
+      {{end}}
+    </ul>
+  {{end}}
 </section>
-{{end}}
 
 <section>
   <h2>History</h2>

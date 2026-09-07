@@ -631,6 +631,11 @@ label .hint {
   width: auto;
 }
 
+.checks {
+  display: grid;
+  gap: 0.45rem;
+}
+
 .history li {
   padding: 1rem 0.15rem 1rem 0;
 }

@@ -19,7 +19,7 @@ func TestOpenFreshSeedsAndVersions(t *testing.T) {
 	defer s.Close()
 
 	assertCurrentSchema(t, s.db)
-	assertGooseVersion(t, s.db, 16)
+	assertGooseVersion(t, s.db, 17)
 
 	units, err := s.ListUnits()
 	if err != nil {
@@ -54,7 +54,7 @@ func TestOpenSecondBootNoops(t *testing.T) {
 	defer s.Close()
 
 	assertCurrentSchema(t, s.db)
-	assertGooseVersion(t, s.db, 16)
+	assertGooseVersion(t, s.db, 17)
 
 	units, err := s.ListUnits()
 	if err != nil {
@@ -123,7 +123,7 @@ VALUES (1, '2024-01-02', '10', '20.50', '2024-01-02T00:00:00Z');
 	defer s.Close()
 
 	assertCurrentSchema(t, s.db)
-	assertGooseVersion(t, s.db, 16)
+	assertGooseVersion(t, s.db, 17)
 
 	var n int
 	if err := s.db.QueryRow(`SELECT COUNT(*) FROM purchases`).Scan(&n); err != nil {
@@ -193,7 +193,7 @@ func TestOpenAddsKindWhenGooseAlreadyAtReceipts(t *testing.T) {
 	if !hasColumn(t, s.db, "purchases", "kind") {
 		t.Fatal("purchases missing kind after reopen")
 	}
-	assertGooseVersion(t, s.db, 16)
+	assertGooseVersion(t, s.db, 17)
 	if _, err := s.ListProducts(""); err != nil {
 		t.Fatalf("ListProducts: %v", err)
 	}
@@ -238,7 +238,7 @@ func TestOpenRenamesRecipesToReceipts(t *testing.T) {
 	defer s.Close()
 
 	assertCurrentSchema(t, s.db)
-	assertGooseVersion(t, s.db, 16)
+	assertGooseVersion(t, s.db, 17)
 }
 
 func TestPurchaseStoryOptional(t *testing.T) {
@@ -361,7 +361,7 @@ func assertGooseVersion(t *testing.T, db *sql.DB, want int64) {
 
 func assertCurrentSchema(t *testing.T, db *sql.DB) {
 	t.Helper()
-	for _, table := range []string{"units", "products", "stories", "retail_chains", "purchases", "receipts", "product_aliases", "product_unit_conversions", "settings", "goose_db_version"} {
+	for _, table := range []string{"units", "products", "stories", "retail_chains", "purchases", "receipts", "product_aliases", "product_unit_conversions", "settings", "comparison_groups", "comparison_group_products", "goose_db_version"} {
 		if !tableExists(t, db, table) {
 			t.Fatalf("missing table %s", table)
 		}
@@ -411,7 +411,17 @@ func assertCurrentSchema(t *testing.T, db *sql.DB) {
 	if !hasColumn(t, db, "product_unit_conversions", "factor") {
 		t.Fatal("product_unit_conversions missing factor")
 	}
-	for _, idx := range []string{"idx_products_name", "idx_purchases_product", "idx_stories_name", "idx_purchases_story", "idx_stories_retail_chain", "idx_stories_external_id", "idx_receipts_status", "idx_purchases_receipt", "idx_product_aliases_shop", "idx_product_aliases_chain", "idx_product_aliases_global", "idx_product_aliases_product"} {
+	for _, col := range []string{"name", "unit_id", "created_at"} {
+		if !hasColumn(t, db, "comparison_groups", col) {
+			t.Fatalf("comparison_groups missing %s", col)
+		}
+	}
+	for _, col := range []string{"group_id", "product_id"} {
+		if !hasColumn(t, db, "comparison_group_products", col) {
+			t.Fatalf("comparison_group_products missing %s", col)
+		}
+	}
+	for _, idx := range []string{"idx_products_name", "idx_purchases_product", "idx_stories_name", "idx_purchases_story", "idx_stories_retail_chain", "idx_stories_external_id", "idx_receipts_status", "idx_purchases_receipt", "idx_product_aliases_shop", "idx_product_aliases_chain", "idx_product_aliases_global", "idx_product_aliases_product", "idx_comparison_groups_unit", "idx_comparison_group_products_product"} {
 		if !indexExists(t, db, idx) {
 			t.Fatalf("missing index %s", idx)
 		}

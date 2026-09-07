@@ -33,9 +33,15 @@ func (s *Server) newProduct(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "could not load units")
 		return
 	}
+	groups, err := s.comparisonGroupOptions(nil)
+	if err != nil {
+		c.String(http.StatusInternalServerError, "could not load comparison groups")
+		return
+	}
 	c.HTML(http.StatusOK, "product_form.html", gin.H{
 		"Page":    s.adminPage("Add product", "", ""),
 		"Units":   units,
+		"Groups":  groups,
 		"Product": store.Product{},
 		"New":     true,
 	})
@@ -61,9 +67,20 @@ func (s *Server) editProduct(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "could not load units")
 		return
 	}
+	selected, err := s.selectedGroupIDs(p.ID)
+	if err != nil {
+		c.String(http.StatusInternalServerError, "could not load comparison groups")
+		return
+	}
+	groups, err := s.comparisonGroupOptions(selected)
+	if err != nil {
+		c.String(http.StatusInternalServerError, "could not load comparison groups")
+		return
+	}
 	c.HTML(http.StatusOK, "product_form.html", gin.H{
 		"Page":    s.adminPage("Edit "+p.Name, "", ""),
 		"Units":   units,
+		"Groups":  groups,
 		"Product": p,
 		"New":     false,
 	})
@@ -85,10 +102,13 @@ func (s *Server) updateProduct(c *gin.Context) {
 func (s *Server) saveProduct(c *gin.Context, id int64) {
 	name := strings.TrimSpace(c.PostForm("name"))
 	units, _ := s.store.ListUnits()
+	groupIDs := formInt64s(c, "group_id")
+	groups, _ := s.comparisonGroupOptions(groupIDs)
 	renderErr := func(msg string, p store.Product) {
 		c.HTML(http.StatusUnprocessableEntity, "product_form.html", gin.H{
 			"Page":    s.adminPage(ifThen(id == 0, "Add product", "Edit product"), "", msg),
 			"Units":   units,
+			"Groups":  groups,
 			"Product": p,
 			"New":     id == 0,
 		})
@@ -146,6 +166,10 @@ func (s *Server) saveProduct(c *gin.Context, id int64) {
 			renderErr("Could not save the product.", draft)
 			return
 		}
+		if err := s.store.SetProductComparisonGroups(p.ID, groupIDs); err != nil {
+			renderErr("Could not save comparison groups.", p)
+			return
+		}
 		c.Redirect(http.StatusSeeOther, "/admin/products/"+itoa(p.ID))
 		return
 	}
@@ -177,6 +201,10 @@ func (s *Server) saveProduct(c *gin.Context, id int64) {
 			return
 		}
 		renderErr("Could not save the product.", draft)
+		return
+	}
+	if err := s.store.SetProductComparisonGroups(id, groupIDs); err != nil {
+		renderErr("Could not save comparison groups.", draft)
 		return
 	}
 	if imgName != "" && cur.ImagePath.Valid {
@@ -319,13 +347,18 @@ func (s *Server) showProduct(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "could not load stores")
 		return
 	}
+	groups, err := s.store.ListComparisonGroupsForProduct(id)
+	if err != nil {
+		c.String(http.StatusInternalServerError, "could not load comparison groups")
+		return
+	}
 	errMsg := c.Query("error")
 	c.HTML(http.StatusOK, "product_show.html", gin.H{
 		"Page":      s.adminPage(p.Name, "", errMsg),
 		"Product":   p,
 		"Purchases": purchases,
 		"StoryByID": storiesByID(stories),
-		"Years":     store.YearlySummaries(purchases),
+		"Groups":    groups,
 	})
 }
 
