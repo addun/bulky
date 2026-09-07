@@ -354,6 +354,38 @@ func TestUpdateProductRejectsUnitChange(t *testing.T) {
 	}
 }
 
+func TestUnitsCRUD(t *testing.T) {
+	s, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	u, err := s.CreateUnit("box")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateUnit("BOX"); !errors.Is(err, ErrDuplicate) {
+		t.Fatalf("duplicate: %v", err)
+	}
+	if err := s.UpdateUnit(u.ID, "carton"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.FindUnitByName("CARTON")
+	if err != nil || got.ID != u.ID || got.Name != "carton" {
+		t.Fatalf("find: %v %#v", err, got)
+	}
+	if err := s.DeleteUnit(u.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.GetUnit(u.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("deleted: %v", err)
+	}
+	if err := s.UpdateUnit(u.ID, "box"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("update missing: %v", err)
+	}
+}
+
 func conversionFixture(t *testing.T) (*Store, Unit, Unit, Unit) {
 	t.Helper()
 	s, err := Open(t.TempDir())

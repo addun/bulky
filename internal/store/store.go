@@ -14,6 +14,7 @@ import (
 	_ "modernc.org/sqlite"
 
 	"github.com/adrian/bulkly/internal/match"
+	"github.com/adrian/bulkly/internal/store/sqlc"
 )
 
 var (
@@ -39,24 +40,6 @@ var (
 	ErrConversionMismatch = errors.New("products convert to a unit differently")
 )
 
-const storySelect = `
-SELECT c.id, c.name, c.street_name, c.building_number, c.apartment_number, c.postal_code, c.city,
-       c.external_id, COALESCE(c.retail_chain_id, 0), COALESCE(rc.name, ''), COUNT(p.id)
-FROM stories c
-LEFT JOIN retail_chains rc ON rc.id = c.retail_chain_id
-LEFT JOIN purchases p ON p.story_id = c.id`
-
-const purchaseSelect = `
-SELECT p.id, p.product_id, p.story_id, p.kind, p.receipt_id, p.bought_on, p.quantity, p.amount, p.created_at
-FROM purchases p`
-
-const receiptPurchaseSelect = `
-SELECT p.id, p.product_id, p.story_id, p.kind, p.receipt_id, p.bought_on, p.quantity, p.amount, p.created_at,
-       pr.name, u.name, pr.image_path
-FROM purchases p
-JOIN products pr ON pr.id = p.product_id
-JOIN units u ON u.id = pr.unit_id`
-
 type PurchaseKind string
 
 const (
@@ -77,6 +60,7 @@ func ParsePurchaseKind(s string) (PurchaseKind, error) {
 
 type Store struct {
 	db      *sql.DB
+	q       *sqlc.Queries
 	dataDir string
 }
 
@@ -192,7 +176,7 @@ func Open(dataDir string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
-	s := &Store{db: db, dataDir: dataDir}
+	s := &Store{db: db, q: sqlc.New(db), dataDir: dataDir}
 	if err := runMigrations(db); err != nil {
 		db.Close()
 		return nil, err
@@ -230,96 +214,16 @@ func nowRFC3339() string {
 	return time.Now().UTC().Format(time.RFC3339)
 }
 
-func (s *Store) CreateUnit(name string) (Unit, error) {
-	name = strings.TrimSpace(name)
-	if name == "" {
-		return Unit{}, ErrInvalidUnit
-	}
-	res, err := s.db.Exec(`INSERT INTO units (name) VALUES (?)`, name)
-	if err != nil {
-		if isUniqueErr(err) {
-			return Unit{}, ErrDuplicate
-		}
-		return Unit{}, err
-	}
-	id, err := res.LastInsertId()
-	if err != nil {
-		return Unit{}, err
-	}
-	return s.GetUnit(id)
-}
-
-func (s *Store) UpdateUnit(id int64, name string) error {
-	name = strings.TrimSpace(name)
-	if name == "" {
-		return ErrInvalidUnit
-	}
-	res, err := s.db.Exec(`UPDATE units SET name = ? WHERE id = ?`, name, id)
-	if err != nil {
-		if isUniqueErr(err) {
-			return ErrDuplicate
-		}
-		return err
-	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if n == 0 {
-		return ErrNotFound
-	}
-	return nil
-}
-
-func (s *Store) DeleteUnit(id int64) error {
-	u, err := s.GetUnit(id)
-	if err != nil {
-		return err
-	}
-	if u.ProductCount > 0 {
-		return ErrUnitInUse
-	}
-	res, err := s.db.Exec(`DELETE FROM units WHERE id = ?`, id)
-	if err != nil {
-		return err
-	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if n == 0 {
-		return ErrNotFound
-	}
-	return nil
-}
-
 func (s *Store) ListStories() ([]Story, error) {
-	rows, err := s.db.Query(storySelect + `
-GROUP BY c.id
-ORDER BY c.name COLLATE NOCASE, c.id`)
+	rows, err := s.q.ListStories(ctx())
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	var out []Story
-	for rows.Next() {
-		c, err := scanStoryRow(rows)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, c)
-	}
-	return out, rows.Err()
+	return mapStories(rows), nil
 }
 
 func (s *Store) GetStory(id int64) (Story, error) {
-	c, err := scanStoryRow(s.db.QueryRow(storySelect+`
-WHERE c.id = ?
-GROUP BY c.id`, id))
-	if errors.Is(err, sql.ErrNoRows) {
-		return Story{}, ErrNotFound
-	}
-	return c, err
+	return getStory(s.q, id)
 }
 
 func (s *Store) CreateStory(name, streetName, building, apartment, postalCode, city, externalID string, retailChainID int64) (Story, error) {
@@ -327,7 +231,7 @@ func (s *Store) CreateStory(name, streetName, building, apartment, postalCode, c
 	if err != nil {
 		return Story{}, err
 	}
-	id, err := insertStory(s.db, c, retailChainID)
+	id, err := insertStory(s.q, c, retailChainID)
 	if err != nil {
 		return Story{}, err
 	}
@@ -339,22 +243,25 @@ func (s *Store) UpdateStory(id int64, name, streetName, building, apartment, pos
 	if err != nil {
 		return err
 	}
-	chain, err := optionalRetailChainArgTx(s.db, retailChainID)
+	chain, err := optionalChain(s.q, retailChainID)
 	if err != nil {
 		return err
 	}
-	res, err := s.db.Exec(
-		`UPDATE stories SET name = ?, street_name = ?, building_number = ?, apartment_number = ?, postal_code = ?, city = ?, external_id = ?, retail_chain_id = ? WHERE id = ?`,
-		c.Name, c.StreetName, c.BuildingNumber, c.ApartmentNumber, c.PostalCode, c.City, c.ExternalID, chain, id,
-	)
+	n, err := s.q.UpdateStory(ctx(), sqlc.UpdateStoryParams{
+		Name:            c.Name,
+		StreetName:      c.StreetName,
+		BuildingNumber:  c.BuildingNumber,
+		ApartmentNumber: c.ApartmentNumber,
+		PostalCode:      c.PostalCode,
+		City:            c.City,
+		ExternalID:      c.ExternalID,
+		RetailChainID:   chain,
+		ID:              id,
+	})
 	if err != nil {
 		if isUniqueErr(err) {
 			return ErrDuplicate
 		}
-		return err
-	}
-	n, err := res.RowsAffected()
-	if err != nil {
 		return err
 	}
 	if n == 0 {
@@ -363,28 +270,28 @@ func (s *Store) UpdateStory(id int64, name, streetName, building, apartment, pos
 	return nil
 }
 
-func insertStory(db execRower, c Story, retailChainID int64) (int64, error) {
-	chain, err := optionalRetailChainArgTx(db, retailChainID)
+func insertStory(q *sqlc.Queries, c Story, retailChainID int64) (int64, error) {
+	chain, err := optionalChain(q, retailChainID)
 	if err != nil {
 		return 0, err
 	}
-	res, err := db.Exec(
-		`INSERT INTO stories (name, street_name, building_number, apartment_number, postal_code, city, external_id, retail_chain_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		c.Name, c.StreetName, c.BuildingNumber, c.ApartmentNumber, c.PostalCode, c.City, c.ExternalID, chain,
-	)
+	id, err := q.InsertStory(ctx(), sqlc.InsertStoryParams{
+		Name:            c.Name,
+		StreetName:      c.StreetName,
+		BuildingNumber:  c.BuildingNumber,
+		ApartmentNumber: c.ApartmentNumber,
+		PostalCode:      c.PostalCode,
+		City:            c.City,
+		ExternalID:      c.ExternalID,
+		RetailChainID:   chain,
+	})
 	if err != nil {
 		if isUniqueErr(err) {
 			return 0, ErrDuplicate
 		}
 		return 0, err
 	}
-	return res.LastInsertId()
-}
-
-func scanStoryRow(row rowScanner) (Story, error) {
-	var c Story
-	err := row.Scan(&c.ID, &c.Name, &c.StreetName, &c.BuildingNumber, &c.ApartmentNumber, &c.PostalCode, &c.City, &c.ExternalID, &c.RetailChainID, &c.RetailChainName, &c.PurchaseCount)
-	return c, err
+	return id, nil
 }
 
 func (s *Store) DeleteStory(id int64) error {
@@ -395,11 +302,7 @@ func (s *Store) DeleteStory(id int64) error {
 	if c.PurchaseCount > 0 {
 		return ErrStoryInUse
 	}
-	res, err := s.db.Exec(`DELETE FROM stories WHERE id = ?`, id)
-	if err != nil {
-		return err
-	}
-	n, err := res.RowsAffected()
+	n, err := s.q.DeleteStory(ctx(), id)
 	if err != nil {
 		return err
 	}
@@ -411,63 +314,43 @@ func (s *Store) DeleteStory(id int64) error {
 
 func (s *Store) ListProducts(q string) ([]ProductListItem, error) {
 	q = strings.TrimSpace(q)
-	rows, err := s.db.Query(`
-SELECT p.id, p.name, p.unit_id, u.name, p.image_path, p.created_at
-FROM products p
-JOIN units u ON u.id = p.unit_id
-ORDER BY p.name COLLATE NOCASE`)
+	rows, err := s.q.ListProducts(ctx())
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	var items []ProductListItem
+	items := make([]ProductListItem, len(rows))
 	index := map[int64]int{}
-	for rows.Next() {
-		var it ProductListItem
-		if err := rows.Scan(&it.ID, &it.Name, &it.UnitID, &it.UnitName, &it.ImagePath, &it.CreatedAt); err != nil {
-			return nil, err
+	for i, r := range rows {
+		items[i] = ProductListItem{
+			Product:        mapListProduct(r),
+			LifetimeAmount: decimal.Zero,
 		}
-		it.LifetimeAmount = decimal.Zero
-		index[it.ID] = len(items)
-		items = append(items, it)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
+		index[r.ID] = i
 	}
 	if len(items) == 0 {
 		return items, nil
 	}
 
-	prows, err := s.db.Query(`SELECT product_id, bought_on, amount FROM purchases WHERE kind = ?`, KindPurchase)
+	prows, err := s.q.ListPurchaseAmounts(ctx(), string(KindPurchase))
 	if err != nil {
 		return nil, err
 	}
-	defer prows.Close()
-	for prows.Next() {
-		var pid int64
-		var boughtOn, amount string
-		if err := prows.Scan(&pid, &boughtOn, &amount); err != nil {
-			return nil, err
-		}
-		i, ok := index[pid]
+	for _, pr := range prows {
+		i, ok := index[pr.ProductID]
 		if !ok {
 			continue
 		}
-		d, err := decimal.NewFromString(amount)
+		d, err := decimal.NewFromString(pr.Amount)
 		if err != nil {
 			return nil, err
 		}
 		items[i].LifetimeAmount = items[i].LifetimeAmount.Add(d)
 		items[i].PurchaseCount++
-		if !items[i].LastBought.Valid || boughtOn > items[i].LastBought.String {
-			items[i].LastBought = sql.NullString{String: boughtOn, Valid: true}
+		if !items[i].LastBought.Valid || pr.BoughtOn > items[i].LastBought.String {
+			items[i].LastBought = sql.NullString{String: pr.BoughtOn, Valid: true}
 		}
 	}
-	if err := prows.Err(); err != nil {
-		return nil, err
-	}
-	if err := attachItemConversions(s.db, items); err != nil {
+	if err := attachItemConversions(s.q, items); err != nil {
 		return nil, err
 	}
 	if q == "" {
@@ -512,19 +395,11 @@ func filterProductSearch(items []ProductListItem, q string, aliases []ProductAli
 }
 
 func (s *Store) GetProduct(id int64) (Product, error) {
-	var p Product
-	err := s.db.QueryRow(`
-SELECT p.id, p.name, p.unit_id, u.name, p.image_path, p.created_at
-FROM products p
-JOIN units u ON u.id = p.unit_id
-WHERE p.id = ?`, id).Scan(&p.ID, &p.Name, &p.UnitID, &p.UnitName, &p.ImagePath, &p.CreatedAt)
-	if errors.Is(err, sql.ErrNoRows) {
-		return Product{}, ErrNotFound
-	}
+	p, err := getProduct(s.q, id)
 	if err != nil {
 		return Product{}, err
 	}
-	if err := attachProductConversions(s.db, &p); err != nil {
+	if err := attachProductConversions(s.q, &p); err != nil {
 		return Product{}, err
 	}
 	return p, nil
@@ -552,26 +427,21 @@ func (s *Store) CreateProduct(name string, unitID int64, imagePath *string, conv
 	if len(conversions) > 0 {
 		convs = conversions[0]
 	}
-	tx, err := s.db.Begin()
+	var id int64
+	err = s.withTx(func(q *sqlc.Queries) error {
+		var err error
+		id, err = q.InsertProduct(ctx(), sqlc.InsertProductParams{
+			Name:      name,
+			UnitID:    unitID,
+			ImagePath: nullStringPtr(imagePath),
+			CreatedAt: nowRFC3339(),
+		})
+		if err != nil {
+			return err
+		}
+		return setProductConversions(q, id, unitID, convs)
+	})
 	if err != nil {
-		return Product{}, err
-	}
-	defer tx.Rollback()
-	res, err := tx.Exec(
-		`INSERT INTO products (name, unit_id, image_path, created_at) VALUES (?, ?, ?, ?)`,
-		name, unitID, imagePath, nowRFC3339(),
-	)
-	if err != nil {
-		return Product{}, err
-	}
-	id, err := res.LastInsertId()
-	if err != nil {
-		return Product{}, err
-	}
-	if err := setProductConversionsTx(tx, id, unitID, convs); err != nil {
-		return Product{}, err
-	}
-	if err := tx.Commit(); err != nil {
 		return Product{}, err
 	}
 	return s.GetProduct(id)
@@ -588,7 +458,7 @@ func (s *Store) UpdateProduct(id int64, name string, unitID int64, imagePath *st
 		}
 		return err
 	}
-	taken, err := aliasExistsExcept(s.db, name, id)
+	taken, err := aliasExistsExcept(s.q, name, id)
 	if err != nil {
 		return err
 	}
@@ -602,41 +472,33 @@ func (s *Store) UpdateProduct(id int64, name string, unitID int64, imagePath *st
 	if unitID != cur.UnitID {
 		return ErrInvalidUnit
 	}
-	var path any
+	var path sql.NullString
 	switch {
 	case clearImage:
-		path = nil
+		path = sql.NullString{}
 	case imagePath != nil:
-		path = *imagePath
+		path = sql.NullString{String: *imagePath, Valid: true}
 	default:
-		if cur.ImagePath.Valid {
-			path = cur.ImagePath.String
-		} else {
-			path = nil
-		}
+		path = cur.ImagePath
 	}
-	tx, err := s.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	res, err := tx.Exec(`UPDATE products SET name = ?, unit_id = ?, image_path = ? WHERE id = ?`, name, unitID, path, id)
-	if err != nil {
-		return err
-	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if n == 0 {
-		return ErrNotFound
-	}
-	if len(conversions) > 0 {
-		if err := setProductConversionsTx(tx, id, unitID, conversions[0]); err != nil {
+	return s.withTx(func(q *sqlc.Queries) error {
+		n, err := q.UpdateProduct(ctx(), sqlc.UpdateProductParams{
+			Name:      name,
+			UnitID:    unitID,
+			ImagePath: path,
+			ID:        id,
+		})
+		if err != nil {
 			return err
 		}
-	}
-	return tx.Commit()
+		if n == 0 {
+			return ErrNotFound
+		}
+		if len(conversions) > 0 {
+			return setProductConversions(q, id, unitID, conversions[0])
+		}
+		return nil
+	})
 }
 
 func (s *Store) DeleteProduct(id int64) (imageName string, err error) {
@@ -644,8 +506,7 @@ func (s *Store) DeleteProduct(id int64) (imageName string, err error) {
 	if err != nil {
 		return "", err
 	}
-	_, err = s.db.Exec(`DELETE FROM products WHERE id = ?`, id)
-	if err != nil {
+	if err := s.q.DeleteProduct(ctx(), id); err != nil {
 		return "", err
 	}
 	if p.ImagePath.Valid {
@@ -655,50 +516,23 @@ func (s *Store) DeleteProduct(id int64) (imageName string, err error) {
 }
 
 func (s *Store) ListPurchases(productID int64) ([]Purchase, error) {
-	rows, err := s.db.Query(purchaseSelect+`
-WHERE p.product_id = ?
-ORDER BY p.bought_on DESC, p.id DESC`, productID)
+	rows, err := s.q.ListPurchasesByProduct(ctx(), productID)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	var out []Purchase
-	for rows.Next() {
-		p, err := scanPurchase(rows)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, p)
-	}
-	return out, rows.Err()
+	return mapPurchases(rows)
 }
 
 func (s *Store) ListPurchasesByReceipt(receiptID int64) ([]ReceiptPurchase, error) {
-	rows, err := s.db.Query(receiptPurchaseSelect+`
-WHERE p.receipt_id = ?
-ORDER BY p.id`, receiptID)
+	rows, err := s.q.ListPurchasesByReceipt(ctx(), nullID(receiptID))
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	var out []ReceiptPurchase
-	for rows.Next() {
-		p, err := scanReceiptPurchase(rows)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, p)
-	}
-	return out, rows.Err()
+	return mapReceiptPurchases(rows)
 }
 
 func (s *Store) GetPurchase(id int64) (Purchase, error) {
-	row := s.db.QueryRow(purchaseSelect+` WHERE p.id = ?`, id)
-	p, err := scanPurchase(row)
-	if errors.Is(err, sql.ErrNoRows) {
-		return Purchase{}, ErrNotFound
-	}
-	return p, err
+	return getPurchase(s.q, id)
 }
 
 func (s *Store) CreatePurchase(productID, storyID int64, boughtOn string, quantity, amount decimal.Decimal, kind PurchaseKind) (Purchase, error) {
@@ -708,21 +542,23 @@ func (s *Store) CreatePurchase(productID, storyID int64, boughtOn string, quanti
 	if _, err := ParsePurchaseKind(string(kind)); err != nil {
 		return Purchase{}, err
 	}
-	story, err := s.optionalStoryArg(storyID)
+	story, err := optionalStory(s.q, storyID)
 	if err != nil {
 		return Purchase{}, err
 	}
 	if err := validQuantity(quantity); err != nil {
 		return Purchase{}, err
 	}
-	res, err := s.db.Exec(
-		`INSERT INTO purchases (product_id, story_id, kind, receipt_id, bought_on, quantity, amount, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		productID, story, kind, nil, boughtOn, quantity.String(), amount.String(), nowRFC3339(),
-	)
-	if err != nil {
-		return Purchase{}, err
-	}
-	id, err := res.LastInsertId()
+	id, err := s.q.InsertPurchase(ctx(), sqlc.InsertPurchaseParams{
+		ProductID: productID,
+		StoryID:   story,
+		Kind:      string(kind),
+		ReceiptID: sql.NullInt64{},
+		BoughtOn:  boughtOn,
+		Quantity:  quantity.String(),
+		Amount:    amount.String(),
+		CreatedAt: nowRFC3339(),
+	})
 	if err != nil {
 		return Purchase{}, err
 	}
@@ -733,21 +569,21 @@ func (s *Store) UpdatePurchase(id, storyID int64, boughtOn string, quantity, amo
 	if _, err := ParsePurchaseKind(string(kind)); err != nil {
 		return err
 	}
-	story, err := s.optionalStoryArg(storyID)
+	story, err := optionalStory(s.q, storyID)
 	if err != nil {
 		return err
 	}
 	if err := validQuantity(quantity); err != nil {
 		return err
 	}
-	res, err := s.db.Exec(
-		`UPDATE purchases SET story_id = ?, kind = ?, bought_on = ?, quantity = ?, amount = ? WHERE id = ?`,
-		story, kind, boughtOn, quantity.String(), amount.String(), id,
-	)
-	if err != nil {
-		return err
-	}
-	n, err := res.RowsAffected()
+	n, err := s.q.UpdatePurchase(ctx(), sqlc.UpdatePurchaseParams{
+		StoryID:  story,
+		Kind:     string(kind),
+		BoughtOn: boughtOn,
+		Quantity: quantity.String(),
+		Amount:   amount.String(),
+		ID:       id,
+	})
 	if err != nil {
 		return err
 	}
@@ -758,11 +594,7 @@ func (s *Store) UpdatePurchase(id, storyID int64, boughtOn string, quantity, amo
 }
 
 func (s *Store) DeletePurchase(id int64) error {
-	res, err := s.db.Exec(`DELETE FROM purchases WHERE id = ?`, id)
-	if err != nil {
-		return err
-	}
-	n, err := res.RowsAffected()
+	n, err := s.q.DeletePurchase(ctx(), id)
 	if err != nil {
 		return err
 	}
@@ -793,7 +625,6 @@ func YearlySummaries(purchases []Purchase) []YearSummary {
 		s.Amount = s.Amount.Add(p.Amount)
 	}
 	out := make([]YearSummary, 0, len(order))
-	// purchases are newest-first, so first-seen year is newest
 	seen := map[string]bool{}
 	for _, y := range order {
 		if seen[y] {
@@ -805,75 +636,11 @@ func YearlySummaries(purchases []Purchase) []YearSummary {
 	return out
 }
 
-type rowScanner interface {
-	Scan(dest ...any) error
-}
-
 func validQuantity(quantity decimal.Decimal) error {
 	if quantity.IsZero() || quantity.IsNegative() {
 		return ErrInvalidQuantity
 	}
 	return nil
-}
-
-func scanPurchase(row rowScanner) (Purchase, error) {
-	p, _, err := scanPurchaseRow(row, false)
-	return p, err
-}
-
-func scanReceiptPurchase(row rowScanner) (ReceiptPurchase, error) {
-	p, extra, err := scanPurchaseRow(row, true)
-	if err != nil {
-		return ReceiptPurchase{}, err
-	}
-	return ReceiptPurchase{Purchase: p, ProductName: extra.name, UnitName: extra.unit, ImagePath: extra.image}, nil
-}
-
-type purchaseProductCols struct {
-	name  string
-	unit  string
-	image sql.NullString
-}
-
-func scanPurchaseRow(row rowScanner, withProduct bool) (Purchase, purchaseProductCols, error) {
-	var p Purchase
-	var storyID, receiptID sql.NullInt64
-	var qty, amt, kind string
-	var extra purchaseProductCols
-	dest := []any{&p.ID, &p.ProductID, &storyID, &kind, &receiptID, &p.BoughtOn, &qty, &amt, &p.CreatedAt}
-	if withProduct {
-		dest = append(dest, &extra.name, &extra.unit, &extra.image)
-	}
-	if err := row.Scan(dest...); err != nil {
-		return Purchase{}, extra, err
-	}
-	p.StoryID = storyID.Int64
-	p.Kind = PurchaseKind(kind)
-	p.ReceiptID = receiptID.Int64
-	q, err := decimal.NewFromString(qty)
-	if err != nil {
-		return Purchase{}, extra, err
-	}
-	a, err := decimal.NewFromString(amt)
-	if err != nil {
-		return Purchase{}, extra, err
-	}
-	p.Quantity = q
-	p.Amount = a
-	return p, extra, nil
-}
-
-func (s *Store) optionalStoryArg(id int64) (any, error) {
-	if id == 0 {
-		return nil, nil
-	}
-	if _, err := s.GetStory(id); err != nil {
-		if errors.Is(err, ErrNotFound) {
-			return nil, ErrInvalidStory
-		}
-		return nil, err
-	}
-	return id, nil
 }
 
 func normalizeStory(name, streetName, building, apartment, postalCode, city, externalID string) (Story, error) {

@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"github.com/shopspring/decimal"
+
+	"github.com/adrian/bulkly/internal/store/sqlc"
 )
 
 type ProductConversion struct {
@@ -77,49 +79,89 @@ func (p Product) PackConversionsJSON() string {
 	return string(b)
 }
 
-const unitSelect = `
-SELECT u.id, u.name,
-  (SELECT COUNT(*) FROM products p WHERE p.unit_id = u.id)
-  + (SELECT COUNT(*) FROM product_unit_conversions c WHERE c.unit_id = u.id)
-FROM units u`
-
 func (s *Store) ListUnits() ([]Unit, error) {
-	rows, err := s.db.Query(unitSelect + ` ORDER BY u.name COLLATE NOCASE`)
+	rows, err := s.q.ListUnits(ctx())
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	var out []Unit
-	for rows.Next() {
-		var u Unit
-		if err := rows.Scan(&u.ID, &u.Name, &u.ProductCount); err != nil {
-			return nil, err
-		}
-		out = append(out, u)
-	}
-	return out, rows.Err()
+	return mapUnits(rows), nil
 }
 
 func (s *Store) GetUnit(id int64) (Unit, error) {
-	var u Unit
-	err := s.db.QueryRow(unitSelect+` WHERE u.id = ?`, id).Scan(&u.ID, &u.Name, &u.ProductCount)
+	row, err := s.q.GetUnit(ctx(), id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Unit{}, ErrNotFound
 	}
-	return u, err
+	if err != nil {
+		return Unit{}, err
+	}
+	return mapUnit(row), nil
 }
 
 func (s *Store) FindUnitByName(name string) (Unit, error) {
-	var u Unit
-	err := s.db.QueryRow(unitSelect+` WHERE u.name = ? COLLATE NOCASE`, name).Scan(&u.ID, &u.Name, &u.ProductCount)
+	row, err := s.q.FindUnitByName(ctx(), name)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Unit{}, ErrNotFound
 	}
-	return u, err
+	if err != nil {
+		return Unit{}, err
+	}
+	return mapFindUnit(row), nil
+}
+
+func (s *Store) CreateUnit(name string) (Unit, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return Unit{}, ErrInvalidUnit
+	}
+	id, err := s.q.InsertUnit(ctx(), name)
+	if err != nil {
+		if isUniqueErr(err) {
+			return Unit{}, ErrDuplicate
+		}
+		return Unit{}, err
+	}
+	return s.GetUnit(id)
+}
+
+func (s *Store) UpdateUnit(id int64, name string) error {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return ErrInvalidUnit
+	}
+	n, err := s.q.UpdateUnit(ctx(), sqlc.UpdateUnitParams{Name: name, ID: id})
+	if err != nil {
+		if isUniqueErr(err) {
+			return ErrDuplicate
+		}
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (s *Store) DeleteUnit(id int64) error {
+	u, err := s.GetUnit(id)
+	if err != nil {
+		return err
+	}
+	if u.ProductCount > 0 {
+		return ErrUnitInUse
+	}
+	n, err := s.q.DeleteUnit(ctx(), id)
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (s *Store) ListProductConversions(productID int64) ([]ProductConversion, error) {
-	return listProductConversions(s.db, productID)
+	return listProductConversions(s.q, productID)
 }
 
 func (s *Store) SetProductConversions(productID int64, conversions []ProductConversion) error {
@@ -127,15 +169,9 @@ func (s *Store) SetProductConversions(productID int64, conversions []ProductConv
 	if err != nil {
 		return err
 	}
-	tx, err := s.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	if err := setProductConversionsTx(tx, productID, p.UnitID, conversions); err != nil {
-		return err
-	}
-	return tx.Commit()
+	return s.withTx(func(q *sqlc.Queries) error {
+		return setProductConversions(q, productID, p.UnitID, conversions)
+	})
 }
 
 // ChangePurchaseUnit promotes an extra unit to the purchase unit.
@@ -154,47 +190,29 @@ func (s *Store) ChangePurchaseUnit(productID, newUnitID int64) error {
 		return ErrInvalidConversion
 	}
 	factor := conv.Factor
-	tx, err := s.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	if _, err := tx.Exec(`UPDATE products SET unit_id = ? WHERE id = ?`, newUnitID, productID); err != nil {
-		return err
-	}
-	if err := rewritePurchaseQuantitiesTx(tx, productID, factor); err != nil {
-		return err
-	}
-	if err := setProductConversionsTx(tx, productID, newUnitID, rebaseConversions(p.Conversions, p.UnitID, newUnitID, factor)); err != nil {
-		return err
-	}
-	return tx.Commit()
-}
-
-func rewritePurchaseQuantitiesTx(tx *sql.Tx, productID int64, factor decimal.Decimal) error {
-	rows, err := tx.Query(purchaseSelect+`
-WHERE p.product_id = ?
-ORDER BY p.id`, productID)
-	if err != nil {
-		return err
-	}
-	var buys []Purchase
-	for rows.Next() {
-		buy, err := scanPurchase(rows)
-		if err != nil {
-			rows.Close()
+	return s.withTx(func(q *sqlc.Queries) error {
+		if err := q.UpdateProductUnit(ctx(), sqlc.UpdateProductUnitParams{UnitID: newUnitID, ID: productID}); err != nil {
 			return err
 		}
-		buys = append(buys, buy)
+		if err := rewritePurchaseQuantities(q, productID, factor); err != nil {
+			return err
+		}
+		return setProductConversions(q, productID, newUnitID, rebaseConversions(p.Conversions, p.UnitID, newUnitID, factor))
+	})
+}
+
+func rewritePurchaseQuantities(q *sqlc.Queries, productID int64, factor decimal.Decimal) error {
+	rows, err := q.ListPurchasesByProductAsc(ctx(), productID)
+	if err != nil {
+		return err
 	}
-	err = rows.Err()
-	rows.Close()
+	buys, err := mapPurchasesAsc(rows)
 	if err != nil {
 		return err
 	}
 	for _, buy := range buys {
 		qty := buy.Quantity.Mul(factor)
-		if _, err := tx.Exec(`UPDATE purchases SET quantity = ? WHERE id = ?`, qty.String(), buy.ID); err != nil {
+		if err := q.UpdatePurchaseQuantity(ctx(), sqlc.UpdatePurchaseQuantityParams{Quantity: qty.String(), ID: buy.ID}); err != nil {
 			return err
 		}
 	}
@@ -213,66 +231,32 @@ func rebaseConversions(convs []ProductConversion, oldUnitID, newUnitID int64, fa
 	return out
 }
 
-type conversionQuerier interface {
-	Query(query string, args ...any) (*sql.Rows, error)
-}
-
-func listProductConversions(q conversionQuerier, productID int64) ([]ProductConversion, error) {
-	rows, err := q.Query(`
-SELECT c.unit_id, u.name, c.factor
-FROM product_unit_conversions c
-JOIN units u ON u.id = c.unit_id
-WHERE c.product_id = ?
-ORDER BY u.name COLLATE NOCASE`, productID)
+func listProductConversions(q *sqlc.Queries, productID int64) ([]ProductConversion, error) {
+	rows, err := q.ListProductConversions(ctx(), productID)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	var out []ProductConversion
-	for rows.Next() {
-		var c ProductConversion
-		var factor string
-		if err := rows.Scan(&c.UnitID, &c.UnitName, &factor); err != nil {
-			return nil, err
-		}
-		c.Factor, err = decimal.NewFromString(factor)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, c)
-	}
-	return out, rows.Err()
+	return mapConversions(rows)
 }
 
-func listAllProductConversions(db *sql.DB) (map[int64][]ProductConversion, error) {
-	rows, err := db.Query(`
-SELECT c.product_id, c.unit_id, u.name, c.factor
-FROM product_unit_conversions c
-JOIN units u ON u.id = c.unit_id
-ORDER BY u.name COLLATE NOCASE`)
+func listAllProductConversions(q *sqlc.Queries) (map[int64][]ProductConversion, error) {
+	rows, err := q.ListAllProductConversions(ctx())
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 	out := map[int64][]ProductConversion{}
-	for rows.Next() {
-		var productID int64
-		var c ProductConversion
-		var factor string
-		if err := rows.Scan(&productID, &c.UnitID, &c.UnitName, &factor); err != nil {
-			return nil, err
-		}
-		c.Factor, err = decimal.NewFromString(factor)
+	for _, r := range rows {
+		c, err := mapAllConversion(r)
 		if err != nil {
 			return nil, err
 		}
-		out[productID] = append(out[productID], c)
+		out[r.ProductID] = append(out[r.ProductID], c)
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
-func attachProductConversions(db *sql.DB, p *Product) error {
-	convs, err := listProductConversions(db, p.ID)
+func attachProductConversions(q *sqlc.Queries, p *Product) error {
+	convs, err := listProductConversions(q, p.ID)
 	if err != nil {
 		return err
 	}
@@ -280,11 +264,11 @@ func attachProductConversions(db *sql.DB, p *Product) error {
 	return nil
 }
 
-func attachItemConversions(db *sql.DB, items []ProductListItem) error {
+func attachItemConversions(q *sqlc.Queries, items []ProductListItem) error {
 	if len(items) == 0 {
 		return nil
 	}
-	byID, err := listAllProductConversions(db)
+	byID, err := listAllProductConversions(q)
 	if err != nil {
 		return err
 	}
@@ -294,26 +278,27 @@ func attachItemConversions(db *sql.DB, items []ProductListItem) error {
 	return nil
 }
 
-func setProductConversionsTx(tx *sql.Tx, productID, purchaseUnitID int64, conversions []ProductConversion) error {
-	normalized, err := normalizeConversions(tx, purchaseUnitID, conversions)
+func setProductConversions(q *sqlc.Queries, productID, purchaseUnitID int64, conversions []ProductConversion) error {
+	normalized, err := normalizeConversions(q, purchaseUnitID, conversions)
 	if err != nil {
 		return err
 	}
-	if _, err := tx.Exec(`DELETE FROM product_unit_conversions WHERE product_id = ?`, productID); err != nil {
+	if err := q.DeleteProductConversions(ctx(), productID); err != nil {
 		return err
 	}
 	for _, c := range normalized {
-		if _, err := tx.Exec(
-			`INSERT INTO product_unit_conversions (product_id, unit_id, factor) VALUES (?, ?, ?)`,
-			productID, c.UnitID, c.Factor.String(),
-		); err != nil {
+		if err := q.InsertProductConversion(ctx(), sqlc.InsertProductConversionParams{
+			ProductID: productID,
+			UnitID:    c.UnitID,
+			Factor:    c.Factor.String(),
+		}); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func normalizeConversions(tx *sql.Tx, purchaseUnitID int64, conversions []ProductConversion) ([]ProductConversion, error) {
+func normalizeConversions(q *sqlc.Queries, purchaseUnitID int64, conversions []ProductConversion) ([]ProductConversion, error) {
 	seen := map[int64]bool{}
 	out := make([]ProductConversion, 0, len(conversions))
 	for _, c := range conversions {
@@ -329,8 +314,8 @@ func normalizeConversions(tx *sql.Tx, purchaseUnitID int64, conversions []Produc
 		if c.Factor.IsNegative() || c.Factor.IsZero() {
 			return nil, ErrInvalidConversion
 		}
-		var n int
-		if err := tx.QueryRow(`SELECT COUNT(*) FROM units WHERE id = ?`, c.UnitID).Scan(&n); err != nil {
+		n, err := q.CountUnitsByID(ctx(), c.UnitID)
+		if err != nil {
 			return nil, err
 		}
 		if n == 0 {
@@ -342,12 +327,12 @@ func normalizeConversions(tx *sql.Tx, purchaseUnitID int64, conversions []Produc
 	return out, nil
 }
 
-func mergeConversionsTx(tx *sql.Tx, intoID, fromID int64) error {
-	into, err := listProductConversions(tx, intoID)
+func mergeConversions(q *sqlc.Queries, intoID, fromID int64) error {
+	into, err := listProductConversions(q, intoID)
 	if err != nil {
 		return err
 	}
-	from, err := listProductConversions(tx, fromID)
+	from, err := listProductConversions(q, fromID)
 	if err != nil {
 		return err
 	}
@@ -362,10 +347,11 @@ func mergeConversionsTx(tx *sql.Tx, intoID, fromID int64) error {
 		if intoByUnit[c.UnitID] {
 			continue
 		}
-		if _, err := tx.Exec(
-			`INSERT INTO product_unit_conversions (product_id, unit_id, factor) VALUES (?, ?, ?)`,
-			intoID, c.UnitID, c.Factor.String(),
-		); err != nil {
+		if err := q.InsertProductConversion(ctx(), sqlc.InsertProductConversionParams{
+			ProductID: intoID,
+			UnitID:    c.UnitID,
+			Factor:    c.Factor.String(),
+		}); err != nil {
 			return err
 		}
 	}

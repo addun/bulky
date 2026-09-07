@@ -1,9 +1,10 @@
 package store
 
 import (
-	"database/sql"
 	"errors"
 	"strings"
+
+	"github.com/adrian/bulkly/internal/store/sqlc"
 )
 
 type MergePlan struct {
@@ -62,82 +63,62 @@ func (s *Store) MergeProducts(intoID, fromID int64) (Product, string, error) {
 	if intoID == fromID {
 		return Product{}, "", ErrSameProduct
 	}
-	tx, err := s.db.Begin()
-	if err != nil {
-		return Product{}, "", err
-	}
-	defer tx.Rollback()
-	keeper, img, err := mergeProductsTx(tx, intoID, fromID)
-	if err != nil {
-		return Product{}, "", err
-	}
-	if err := tx.Commit(); err != nil {
-		return Product{}, "", err
-	}
-	return keeper, img, nil
+	var keeper Product
+	var img string
+	err := s.withTx(func(q *sqlc.Queries) error {
+		var err error
+		keeper, img, err = mergeProducts(q, intoID, fromID)
+		return err
+	})
+	return keeper, img, err
 }
 
-func mergeProductsTx(tx *sql.Tx, intoID, fromID int64) (Product, string, error) {
+func mergeProducts(q *sqlc.Queries, intoID, fromID int64) (Product, string, error) {
 	into, from, err := mergePair(func(id int64) (Product, error) {
-		return getProductTx(tx, id)
+		return getProduct(q, id)
 	}, intoID, fromID)
 	if err != nil {
 		return Product{}, "", err
 	}
 
-	if err := mergeConversionsTx(tx, into.ID, from.ID); err != nil {
+	if err := mergeConversions(q, into.ID, from.ID); err != nil {
 		return Product{}, "", err
 	}
 
-	if _, err := tx.Exec(`UPDATE purchases SET product_id = ? WHERE product_id = ?`, into.ID, from.ID); err != nil {
+	if err := q.ReassignPurchases(ctx(), sqlc.ReassignPurchasesParams{IntoID: into.ID, FromID: from.ID}); err != nil {
 		return Product{}, "", err
 	}
-	if err := dropConflictingAliases(tx, into, from.ID); err != nil {
+	if err := q.DropConflictingAliases(ctx(), sqlc.DropConflictingAliasesParams{
+		FromID:   from.ID,
+		IntoName: into.Name,
+		IntoID:   into.ID,
+	}); err != nil {
 		return Product{}, "", err
 	}
-	if _, err := tx.Exec(`UPDATE product_aliases SET product_id = ? WHERE product_id = ?`, into.ID, from.ID); err != nil {
+	if err := q.ReassignAliases(ctx(), sqlc.ReassignAliasesParams{IntoID: into.ID, FromID: from.ID}); err != nil {
 		return Product{}, "", err
 	}
 
-	dropImage, err := handOffImage(tx, into, from)
+	dropImage, err := handOffImage(q, into, from)
 	if err != nil {
 		return Product{}, "", err
 	}
 
-	if _, err := tx.Exec(`DELETE FROM products WHERE id = ?`, from.ID); err != nil {
+	if err := q.DeleteProduct(ctx(), from.ID); err != nil {
 		return Product{}, "", err
 	}
 
-	if err := maybeAliasDroppedName(tx, into.ID, into.Name, from.Name); err != nil {
+	if err := maybeAliasDroppedName(q, into.ID, into.Name, from.Name); err != nil {
 		return Product{}, "", err
 	}
-	keeper, err := getProductTx(tx, into.ID)
+	keeper, err := getProduct(q, into.ID)
 	if err != nil {
 		return Product{}, "", err
 	}
 	return keeper, dropImage, nil
 }
 
-func dropConflictingAliases(tx *sql.Tx, into Product, fromID int64) error {
-	_, err := tx.Exec(`
-DELETE FROM product_aliases
-WHERE product_id = ?
-  AND (
-    alias = ? COLLATE NOCASE
-    OR EXISTS (
-      SELECT 1 FROM product_aliases AS k
-      WHERE k.product_id = ?
-        AND k.alias = product_aliases.alias COLLATE NOCASE
-        AND (
-          (k.story_id IS NULL AND product_aliases.story_id IS NULL)
-          OR k.story_id = product_aliases.story_id
-        )
-    )
-  )`, fromID, into.Name, into.ID)
-	return err
-}
-
-func handOffImage(tx *sql.Tx, into, from Product) (string, error) {
+func handOffImage(q *sqlc.Queries, into, from Product) (string, error) {
 	if into.ImagePath.Valid {
 		if from.ImagePath.Valid && from.ImagePath.String != into.ImagePath.String {
 			return from.ImagePath.String, nil
@@ -147,21 +128,27 @@ func handOffImage(tx *sql.Tx, into, from Product) (string, error) {
 	if !from.ImagePath.Valid {
 		return "", nil
 	}
-	if _, err := tx.Exec(`UPDATE products SET image_path = ? WHERE id = ?`, from.ImagePath.String, into.ID); err != nil {
+	if err := q.UpdateProductImage(ctx(), sqlc.UpdateProductImageParams{
+		ImagePath: from.ImagePath,
+		ID:        into.ID,
+	}); err != nil {
 		return "", err
 	}
-	if _, err := tx.Exec(`UPDATE products SET image_path = NULL WHERE id = ?`, from.ID); err != nil {
+	if err := q.UpdateProductImage(ctx(), sqlc.UpdateProductImageParams{
+		ImagePath: nullStringPtr(nil),
+		ID:        from.ID,
+	}); err != nil {
 		return "", err
 	}
 	return "", nil
 }
 
-func maybeAliasDroppedName(tx *sql.Tx, intoID int64, intoName, fromName string) error {
+func maybeAliasDroppedName(q *sqlc.Queries, intoID int64, intoName, fromName string) error {
 	fromName = strings.TrimSpace(fromName)
 	if fromName == "" || strings.EqualFold(fromName, strings.TrimSpace(intoName)) {
 		return nil
 	}
-	_, err := createAliasTx(tx, intoID, 0, 0, fromName)
+	_, err := createAlias(q, intoID, 0, 0, fromName)
 	if err == nil || errors.Is(err, ErrDuplicate) || errors.Is(err, ErrInvalidAlias) {
 		return nil
 	}

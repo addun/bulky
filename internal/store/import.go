@@ -1,11 +1,12 @@
 package store
 
 import (
-	"database/sql"
 	"errors"
 	"strings"
 
 	"github.com/shopspring/decimal"
+
+	"github.com/adrian/bulkly/internal/store/sqlc"
 )
 
 type BillLineInput struct {
@@ -31,50 +32,35 @@ type BillImportResult struct {
 	Purchases  int
 }
 
-type queryRower interface {
-	QueryRow(query string, args ...any) *sql.Row
-}
-
-type execRower interface {
-	queryRower
-	Exec(query string, args ...any) (sql.Result, error)
-}
-
 func (s *Store) FindProductByName(name string, storyID int64) (Product, error) {
-	return findProductByNameTx(s.db, name, storyID)
+	return findProductByName(s.q, name, storyID)
 }
 
 func (s *Store) ImportBill(in BillImport) (BillImportResult, error) {
 	if len(in.Lines) == 0 {
 		return BillImportResult{}, fmtNoLines()
 	}
-	tx, err := s.db.Begin()
-	if err != nil {
-		return BillImportResult{}, err
-	}
-	defer tx.Rollback()
-	res, err := importBillTx(tx, in)
-	if err != nil {
-		return BillImportResult{}, err
-	}
-	if err := tx.Commit(); err != nil {
-		return BillImportResult{}, err
-	}
-	return res, nil
+	var res BillImportResult
+	err := s.withTx(func(q *sqlc.Queries) error {
+		var err error
+		res, err = importBill(q, in)
+		return err
+	})
+	return res, err
 }
 
-func importBillTx(tx *sql.Tx, in BillImport) (BillImportResult, error) {
+func importBill(q *sqlc.Queries, in BillImport) (BillImportResult, error) {
 	if len(in.Lines) == 0 {
 		return BillImportResult{}, fmtNoLines()
 	}
 
 	storyID := in.StoryID
 	if storyID > 0 {
-		if _, err := getStoryTx(tx, storyID); err != nil {
+		if _, err := getStory(q, storyID); err != nil {
 			return BillImportResult{}, err
 		}
 	} else if in.Story != nil {
-		c, err := createStoryTx(tx, *in.Story)
+		c, err := createStoryTx(q, *in.Story)
 		if err != nil {
 			return BillImportResult{}, err
 		}
@@ -86,12 +72,12 @@ func importBillTx(tx *sql.Tx, in BillImport) (BillImportResult, error) {
 	var result BillImportResult
 	result.StoryID = storyID
 	for _, line := range in.Lines {
-		pid, err := resolveImportProduct(tx, line, created, newIDs, storyID)
+		pid, err := resolveImportProduct(q, line, created, newIDs, storyID)
 		if err != nil {
 			return BillImportResult{}, err
 		}
 		result.ProductIDs = append(result.ProductIDs, pid)
-		if _, err := createPurchaseTx(tx, pid, storyID, in.ReceiptID, in.BoughtOn, line.Quantity, line.Amount); err != nil {
+		if _, err := createPurchase(q, pid, storyID, in.ReceiptID, in.BoughtOn, line.Quantity, line.Amount); err != nil {
 			return BillImportResult{}, err
 		}
 		result.Purchases++
@@ -103,13 +89,13 @@ func fmtNoLines() error {
 	return errors.New("no products to import")
 }
 
-func resolveImportProduct(tx *sql.Tx, line BillLineInput, created map[string]int64, newIDs map[int64]struct{}, storyID int64) (int64, error) {
+func resolveImportProduct(q *sqlc.Queries, line BillLineInput, created map[string]int64, newIDs map[int64]struct{}, storyID int64) (int64, error) {
 	if line.ProductID > 0 {
-		p, err := getProductTx(tx, line.ProductID)
+		p, err := getProduct(q, line.ProductID)
 		if err != nil {
 			return 0, err
 		}
-		if err := maybeAliasFromReceipt(tx, p.ID, storyID, line.ReceiptName); err != nil {
+		if err := maybeAliasFromReceipt(q, p.ID, storyID, line.ReceiptName); err != nil {
 			return 0, err
 		}
 		return p.ID, nil
@@ -120,13 +106,13 @@ func resolveImportProduct(tx *sql.Tx, line BillLineInput, created map[string]int
 	}
 	if id, ok := created[key]; ok {
 		if _, isNew := newIDs[id]; isNew {
-			if err := maybeAliasFromReceipt(tx, id, storyID, line.ReceiptName); err != nil {
+			if err := maybeAliasFromReceipt(q, id, storyID, line.ReceiptName); err != nil {
 				return 0, err
 			}
 		}
 		return id, nil
 	}
-	existing, err := findProductByNameTx(tx, line.ProductName, storyID)
+	existing, err := findProductByName(q, line.ProductName, storyID)
 	if err == nil {
 		created[key] = existing.ID
 		return existing.ID, nil
@@ -134,26 +120,26 @@ func resolveImportProduct(tx *sql.Tx, line BillLineInput, created map[string]int
 	if !errors.Is(err, ErrNotFound) {
 		return 0, err
 	}
-	p, err := createProductTx(tx, line.ProductName, line.UnitID)
+	p, err := createProduct(q, line.ProductName, line.UnitID)
 	if err != nil {
 		return 0, err
 	}
 	created[key] = p.ID
 	newIDs[p.ID] = struct{}{}
-	if err := maybeAliasFromReceipt(tx, p.ID, storyID, line.ReceiptName); err != nil {
+	if err := maybeAliasFromReceipt(q, p.ID, storyID, line.ReceiptName); err != nil {
 		return 0, err
 	}
 	return p.ID, nil
 }
 
-func maybeAliasFromReceipt(tx *sql.Tx, productID, storyID int64, receiptName string) error {
+func maybeAliasFromReceipt(q *sqlc.Queries, productID, storyID int64, receiptName string) error {
 	receiptName = strings.TrimSpace(receiptName)
 	if receiptName == "" {
 		return nil
 	}
 	var chainID int64
 	if storyID > 0 {
-		st, err := getStoryTx(tx, storyID)
+		st, err := getStory(q, storyID)
 		if err != nil {
 			return err
 		}
@@ -162,55 +148,32 @@ func maybeAliasFromReceipt(tx *sql.Tx, productID, storyID int64, receiptName str
 			storyID = 0
 		}
 	}
-	_, err := createAliasTx(tx, productID, storyID, chainID, receiptName)
+	_, err := createAlias(q, productID, storyID, chainID, receiptName)
 	if err == nil || errors.Is(err, ErrDuplicate) || errors.Is(err, ErrInvalidAlias) || errors.Is(err, ErrAliasScope) {
 		return nil
 	}
 	return err
 }
 
-func getProductTx(tx *sql.Tx, id int64) (Product, error) {
-	var p Product
-	err := tx.QueryRow(`
-SELECT p.id, p.name, p.unit_id, u.name, p.image_path, p.created_at
-FROM products p
-JOIN units u ON u.id = p.unit_id
-WHERE p.id = ?`, id).Scan(&p.ID, &p.Name, &p.UnitID, &p.UnitName, &p.ImagePath, &p.CreatedAt)
-	if errors.Is(err, sql.ErrNoRows) {
-		return Product{}, ErrNotFound
-	}
-	return p, err
-}
-
-func getStoryTx(tx *sql.Tx, id int64) (Story, error) {
-	c, err := scanStoryRow(tx.QueryRow(storySelect+`
-WHERE c.id = ?
-GROUP BY c.id`, id))
-	if errors.Is(err, sql.ErrNoRows) {
-		return Story{}, ErrNotFound
-	}
-	return c, err
-}
-
-func findProductByNameTx(q queryRower, name string, storyID int64) (Product, error) {
+func findProductByName(q *sqlc.Queries, name string, storyID int64) (Product, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return Product{}, ErrNotFound
 	}
 	if storyID > 0 {
-		p, err := productByAliasTx(q, name, storyID, 0)
+		p, err := productByAlias(q, name, storyID, 0)
 		if err == nil {
 			return p, nil
 		}
 		if !errors.Is(err, ErrNotFound) {
 			return Product{}, err
 		}
-		chainID, err := storyChainIDTx(q, storyID)
+		chainID, err := storyChainID(q, storyID)
 		if err != nil {
 			return Product{}, err
 		}
 		if chainID > 0 {
-			p, err := productByAliasTx(q, name, 0, chainID)
+			p, err := productByAlias(q, name, 0, chainID)
 			if err == nil {
 				return p, nil
 			}
@@ -219,90 +182,79 @@ func findProductByNameTx(q queryRower, name string, storyID int64) (Product, err
 			}
 		}
 	}
-	p, err := productByAliasTx(q, name, 0, 0)
+	p, err := productByAlias(q, name, 0, 0)
 	if err == nil {
 		return p, nil
 	}
 	if !errors.Is(err, ErrNotFound) {
 		return Product{}, err
 	}
-	return scanProductRow(q.QueryRow(`
-SELECT p.id, p.name, p.unit_id, u.name, p.image_path, p.created_at
-FROM products p
-JOIN units u ON u.id = p.unit_id
-WHERE p.name = ? COLLATE NOCASE
-ORDER BY p.id
-LIMIT 1`, name))
+	row, err := q.FindProductByName(ctx(), name)
+	if err != nil {
+		return Product{}, notFound(err)
+	}
+	return mapFindProduct(row), nil
 }
 
-func createProductTx(tx *sql.Tx, name string, unitID int64) (Product, error) {
+func createProduct(q *sqlc.Queries, name string, unitID int64) (Product, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return Product{}, errors.New("name is required")
 	}
-	var n int
-	if err := tx.QueryRow(`SELECT COUNT(*) FROM units WHERE id = ?`, unitID).Scan(&n); err != nil {
+	n, err := q.CountUnitsByID(ctx(), unitID)
+	if err != nil {
 		return Product{}, err
 	}
 	if n == 0 {
 		return Product{}, ErrInvalidUnit
 	}
-	var aliasCount int
-	if err := tx.QueryRow(`SELECT COUNT(*) FROM product_aliases WHERE alias = ? COLLATE NOCASE`, name).Scan(&aliasCount); err != nil {
+	aliasCount, err := q.CountAliasesByAlias(ctx(), name)
+	if err != nil {
 		return Product{}, err
 	}
 	if aliasCount > 0 {
 		return Product{}, ErrDuplicate
 	}
-	res, err := tx.Exec(
-		`INSERT INTO products (name, unit_id, image_path, created_at) VALUES (?, ?, ?, ?)`,
-		name, unitID, nil, nowRFC3339(),
-	)
+	id, err := q.InsertProduct(ctx(), sqlc.InsertProductParams{
+		Name:      name,
+		UnitID:    unitID,
+		ImagePath: nullStringPtr(nil),
+		CreatedAt: nowRFC3339(),
+	})
 	if err != nil {
 		return Product{}, err
 	}
-	id, err := res.LastInsertId()
-	if err != nil {
-		return Product{}, err
-	}
-	return getProductTx(tx, id)
+	return getProduct(q, id)
 }
 
-func createStoryTx(tx *sql.Tx, in Story) (Story, error) {
+func createStoryTx(q *sqlc.Queries, in Story) (Story, error) {
 	c, err := normalizeStory(in.Name, in.StreetName, in.BuildingNumber, in.ApartmentNumber, in.PostalCode, in.City, in.ExternalID)
 	if err != nil {
 		return Story{}, err
 	}
-	id, err := insertStory(tx, c, in.RetailChainID)
+	id, err := insertStory(q, c, in.RetailChainID)
 	if err != nil {
 		return Story{}, err
 	}
-	return getStoryTx(tx, id)
+	return getStory(q, id)
 }
 
-func createPurchaseTx(tx *sql.Tx, productID, storyID, receiptID int64, boughtOn string, quantity, amount decimal.Decimal) (Purchase, error) {
-	var story any
-	if storyID > 0 {
-		story = storyID
-	}
-	var receipt any
-	if receiptID > 0 {
-		receipt = receiptID
-	}
+func createPurchase(q *sqlc.Queries, productID, storyID, receiptID int64, boughtOn string, quantity, amount decimal.Decimal) (Purchase, error) {
 	if err := validQuantity(quantity); err != nil {
 		return Purchase{}, err
 	}
-	res, err := tx.Exec(
-		`INSERT INTO purchases (product_id, story_id, kind, receipt_id, bought_on, quantity, amount, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		productID, story, KindPurchase, receipt, boughtOn, quantity.String(), amount.String(), nowRFC3339(),
-	)
+	id, err := q.InsertPurchase(ctx(), sqlc.InsertPurchaseParams{
+		ProductID: productID,
+		StoryID:   nullID(storyID),
+		Kind:      string(KindPurchase),
+		ReceiptID: nullID(receiptID),
+		BoughtOn:  boughtOn,
+		Quantity:  quantity.String(),
+		Amount:    amount.String(),
+		CreatedAt: nowRFC3339(),
+	})
 	if err != nil {
 		return Purchase{}, err
 	}
-	id, err := res.LastInsertId()
-	if err != nil {
-		return Purchase{}, err
-	}
-	row := tx.QueryRow(purchaseSelect+` WHERE p.id = ?`, id)
-	return scanPurchase(row)
+	return getPurchase(q, id)
 }
