@@ -130,6 +130,14 @@ func (s *Server) routes() {
 	s.engine.GET("/admin/aliases/:id/delete", s.confirmDeleteAlias)
 	s.engine.POST("/admin/aliases/:id/delete", s.deleteAlias)
 
+	s.engine.GET("/admin/comparison-groups", s.comparisonGroups)
+	s.engine.GET("/admin/comparison-groups/new", s.newComparisonGroup)
+	s.engine.POST("/admin/comparison-groups", s.createComparisonGroup)
+	s.engine.GET("/admin/comparison-groups/:id/edit", s.editComparisonGroup)
+	s.engine.POST("/admin/comparison-groups/:id", s.updateComparisonGroup)
+	s.engine.GET("/admin/comparison-groups/:id/delete", s.confirmDeleteComparisonGroup)
+	s.engine.POST("/admin/comparison-groups/:id/delete", s.deleteComparisonGroup)
+
 	s.engine.GET("/admin/products/new", s.newProduct)
 	s.engine.POST("/admin/products", s.createProduct)
 	s.engine.GET("/admin/products/:id", s.showProduct)
@@ -184,6 +192,19 @@ func paramID(c *gin.Context, name string) (int64, bool) {
 func formInt64(c *gin.Context, name string) int64 {
 	v, _ := strconv.ParseInt(strings.TrimSpace(c.PostForm(name)), 10, 64)
 	return v
+}
+
+func formInt64s(c *gin.Context, name string) []int64 {
+	raw := c.PostFormArray(name)
+	out := make([]int64, 0, len(raw))
+	for _, s := range raw {
+		v, err := strconv.ParseInt(strings.TrimSpace(s), 10, 64)
+		if err != nil || v <= 0 {
+			continue
+		}
+		out = append(out, v)
+	}
+	return out
 }
 
 func formInt64Query(c *gin.Context, name string) int64 {

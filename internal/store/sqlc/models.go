@@ -8,6 +8,18 @@ import (
 	"database/sql"
 )
 
+type ComparisonGroup struct {
+	ID        int64
+	Name      string
+	UnitID    int64
+	CreatedAt string
+}
+
+type ComparisonGroupProduct struct {
+	GroupID   int64
+	ProductID int64
+}
+
 type Product struct {
 	ID        int64
 	Name      string

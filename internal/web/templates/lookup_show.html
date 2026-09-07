@@ -40,4 +40,27 @@
     <p class="empty">No prices in the last year.</p>
   {{end}}
 </section>
+
+{{if .Related}}
+<section>
+  <h2>Check also</h2>
+  <ul class="ledger">
+    {{range .Related}}
+    <li>
+      <a class="row" href="/products/{{.ID}}">
+        {{if .ImagePath.Valid}}
+          <img class="thumb" src="/images/{{.ImagePath.String}}" alt="">
+        {{else}}
+          <span class="thumb thumb-empty" aria-hidden="true"></span>
+        {{end}}
+        <span class="row-main">
+          <strong>{{.Name}}</strong>
+        </span>
+        <span class="row-amt">{{money .Low30.Price}} / {{.UnitName}}</span>
+      </a>
+    </li>
+    {{end}}
+  </ul>
+</section>
+{{end}}
 {{template "footer" .}}

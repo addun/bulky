@@ -98,6 +98,9 @@ func mergeProducts(q *sqlc.Queries, intoID, fromID int64) (Product, string, erro
 	if err := q.ReassignAliases(ctx(), sqlc.ReassignAliasesParams{IntoID: into.ID, FromID: from.ID}); err != nil {
 		return Product{}, "", err
 	}
+	if err := q.ReassignComparisonGroups(ctx(), sqlc.ReassignComparisonGroupsParams{IntoID: into.ID, FromID: from.ID}); err != nil {
+		return Product{}, "", err
+	}
 
 	dropImage, err := handOffImage(q, into, from)
 	if err != nil {

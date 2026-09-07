@@ -75,6 +75,19 @@ CREATE TABLE settings (
   value TEXT NOT NULL
 );
 
+CREATE TABLE comparison_groups (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+  unit_id INTEGER NOT NULL REFERENCES units(id),
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE comparison_group_products (
+  group_id INTEGER NOT NULL REFERENCES comparison_groups(id) ON DELETE CASCADE,
+  product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  PRIMARY KEY (group_id, product_id)
+);
+
 CREATE INDEX idx_products_name ON products(name COLLATE NOCASE);
 CREATE INDEX idx_purchases_product ON purchases(product_id, bought_on);
 CREATE INDEX idx_purchases_story ON purchases(story_id);
@@ -95,3 +108,5 @@ CREATE UNIQUE INDEX idx_product_aliases_global
   ON product_aliases(alias COLLATE NOCASE)
   WHERE story_id IS NULL AND retail_chain_id IS NULL;
 CREATE INDEX idx_product_aliases_product ON product_aliases(product_id);
+CREATE INDEX idx_comparison_groups_unit ON comparison_groups(unit_id);
+CREATE INDEX idx_comparison_group_products_product ON comparison_group_products(product_id);

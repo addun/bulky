@@ -353,7 +353,13 @@ func TestProductShowUsesPurchaseUnit(t *testing.T) {
 	}
 	body := rec.Body.String()
 	if !strings.Contains(body, "6 szt") {
-		t.Fatal("year should show purchase quantity")
+		t.Fatal("history should show purchase quantity")
+	}
+	if strings.Contains(body, "By year") {
+		t.Fatal("product page should not summarise by year")
+	}
+	if !strings.Contains(body, "Not in any comparison group") {
+		t.Fatal("product page should list comparison groups even when empty")
 	}
 	if strings.Contains(body, "9 l") || strings.Contains(body, "1,67 zł / l") {
 		t.Fatal("product page should not show extra unit quantities or prices")

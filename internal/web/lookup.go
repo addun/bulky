@@ -95,6 +95,11 @@ func (s *Server) showLookup(c *gin.Context) {
 	if err != nil {
 		chartJSON = []byte("[]")
 	}
+	comparisons, err := s.store.RelatedGroupProducts(id, since30)
+	if err != nil {
+		c.String(http.StatusInternalServerError, "could not load related products")
+		return
+	}
 	c.HTML(http.StatusOK, "lookup_show.html", gin.H{
 		"Page":      s.page(p.Name, "", ""),
 		"Product":   p,
@@ -104,5 +109,6 @@ func (s *Server) showLookup(c *gin.Context) {
 		"HasChart":  len(points) > 0,
 		"ChartFrom": from365.Format("2006-01-02"),
 		"ChartTo":   today.Format("2006-01-02"),
+		"Related":   comparisons,
 	})
 }

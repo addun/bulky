@@ -150,6 +150,13 @@ func (s *Store) DeleteUnit(id int64) error {
 	if u.ProductCount > 0 {
 		return ErrUnitInUse
 	}
+	groups, err := s.q.CountComparisonGroupsByUnit(ctx(), id)
+	if err != nil {
+		return err
+	}
+	if groups > 0 {
+		return ErrUnitInUse
+	}
 	n, err := s.q.DeleteUnit(ctx(), id)
 	if err != nil {
 		return err
