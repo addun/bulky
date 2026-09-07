@@ -549,6 +549,10 @@ func (s *Store) CreatePurchase(productID, storyID int64, boughtOn string, quanti
 	if err := validQuantity(quantity); err != nil {
 		return Purchase{}, err
 	}
+	boughtOn, err = NormalizeBoughtOn(boughtOn)
+	if err != nil {
+		return Purchase{}, err
+	}
 	id, err := s.q.InsertPurchase(ctx(), sqlc.InsertPurchaseParams{
 		ProductID: productID,
 		StoryID:   story,
@@ -574,6 +578,10 @@ func (s *Store) UpdatePurchase(id, storyID int64, boughtOn string, quantity, amo
 		return err
 	}
 	if err := validQuantity(quantity); err != nil {
+		return err
+	}
+	boughtOn, err = NormalizeBoughtOn(boughtOn)
+	if err != nil {
 		return err
 	}
 	n, err := s.q.UpdatePurchase(ctx(), sqlc.UpdatePurchaseParams{

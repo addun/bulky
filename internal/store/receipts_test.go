@@ -322,7 +322,7 @@ func TestUpdateReceiptVisitOnSavedBill(t *testing.T) {
 	if assigned[0].StoryID != co.ID || assigned[1].StoryID != co.ID {
 		t.Fatalf("after set: %#v", assigned)
 	}
-	if assigned[0].BoughtOn != "2026-08-21" || assigned[1].BoughtOn != "2026-08-21" {
+	if assigned[0].BoughtOn != "2026-08-21 12:00" || assigned[1].BoughtOn != "2026-08-21 12:00" {
 		t.Fatalf("date: %#v", assigned)
 	}
 	got, err := s.GetReceipt(r.ID)

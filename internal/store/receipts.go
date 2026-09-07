@@ -193,6 +193,10 @@ func (s *Store) UpdateReceiptVisit(id, storyID int64, boughtOn string) error {
 	if err != nil {
 		return err
 	}
+	boughtOn, err = NormalizeBoughtOn(boughtOn)
+	if err != nil {
+		return err
+	}
 	return s.withTx(func(q *sqlc.Queries) error {
 		r, err := getReceipt(q, id)
 		if err != nil {
