@@ -143,11 +143,14 @@ func TestLookupShowPricesAndChart(t *testing.T) {
 	if !strings.Contains(body, "Cake flour") {
 		t.Fatal("expected name")
 	}
-	if !strings.Contains(body, "9,00 zł") {
-		t.Fatal("expected last price")
-	}
 	if !strings.Contains(body, "4,00 zł") {
 		t.Fatal("expected 30-day low")
+	}
+	if strings.Contains(body, "No prices in the last 30 days") {
+		t.Fatal("30-day window should not be empty")
+	}
+	if !strings.Contains(body, "Lowest · 30 days") {
+		t.Fatal("expected 30-day label")
 	}
 	if !strings.Contains(body, `data-price-chart=`) {
 		t.Fatal("expected chart")
@@ -157,6 +160,39 @@ func TestLookupShowPricesAndChart(t *testing.T) {
 	}
 	if strings.Contains(body, `href="/admin/products/`) {
 		t.Fatal("lookup must not include admin product actions")
+	}
+}
+
+func TestLookupShowFallsBackToLastRecord(t *testing.T) {
+	st, flour, _ := aliasPageFixture(t)
+	today := time.Now()
+	old := today.AddDate(0, 0, -40).Format("2006-01-02")
+	if _, err := st.CreatePurchase(flour.ID, 0, old, decimal.RequireFromString("1"), decimal.RequireFromString("2.5"), store.KindPurchase); err != nil {
+		t.Fatal(err)
+	}
+	srv, err := New(st, Config{CurrencySymbol: "zł"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/products/"+itoa(flour.ID), nil)
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "Last recorded") {
+		t.Fatal("expected last-record label")
+	}
+	if strings.Contains(body, "Lowest · 30 days") {
+		t.Fatal("should not claim a 30-day low")
+	}
+	if !strings.Contains(body, "2,50 zł") {
+		t.Fatal("expected last recorded price")
+	}
+	if strings.Contains(body, "No prices in the last 30 days") {
+		t.Fatal("fallback should not look empty")
 	}
 }
 

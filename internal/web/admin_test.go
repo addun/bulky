@@ -44,6 +44,12 @@ func TestAdminPageAndSave(t *testing.T) {
 	if strings.Contains(body, "API key") {
 		t.Fatal("admin should not mention the API key")
 	}
+	if !strings.Contains(body, "<h2>MCP</h2>") || !strings.Contains(body, `"url": "https://YOUR_HOST/mcp"`) {
+		t.Fatal("settings should show the open MCP URL")
+	}
+	if strings.Contains(body, "MCP_TOKEN") || strings.Contains(body, "Bearer") {
+		t.Fatal("MCP is open; settings should not mention a token")
+	}
 	if strings.Contains(body, `value="gpt-4o"`) {
 		t.Fatal("model field should start empty")
 	}
@@ -147,6 +153,29 @@ func TestAdminRejectsEmptyModel(t *testing.T) {
 	}
 	if got != "" {
 		t.Fatalf("empty save wrote %q", got)
+	}
+}
+
+func TestMCPRouteIsOpen(t *testing.T) {
+	st, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	srv, err := New(st, Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"name":"bulkly"`) {
+		t.Fatalf("initialize: %s", rec.Body.String())
 	}
 }
 

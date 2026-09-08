@@ -50,3 +50,19 @@ Optional environment:
 | `OCR_BASE_URL`    | `https://api.openai.com/v1` | OpenAI-compatible base URL (Ollama, etc.)   |
 
 **Scan a bill:** open [http://localhost:8080/admin/receipts](http://localhost:8080/admin/receipts) and upload a photo or a PDF of a receipt. That stores the file, creates a `receipts` row, and reads the bill in the background. Open the receipt (or refresh it) to see whether it is still reading, failed, or ready to confirm. Confirm or edit the product list to migrate those lines into purchases; the receipt status then becomes `migrated`. For OpenAI, set `OCR_API_KEY`. Set the model on **Admin** (`/admin`); photos and PDFs both use that name as images (PDFs are rasterized with `pdftoppm`). Docker includes Poppler; locally you also need `brew install poppler`. For a local OpenAI-compatible server (for example Ollama), set `OCR_BASE_URL` to that server’s `/v1` endpoint and pick a model on **Admin**.
+
+## MCP
+
+The web app serves Streamable HTTP MCP at `/mcp` on the same port as the UI. It is open: no token.
+
+Catalog names are Polish. The `best_price` tool searches product names and aliases; if an English query misses, ask again with a Polish translation.
+
+```json
+{
+  "mcpServers": {
+    "bulkly": {
+      "url": "https://YOUR_HOST/mcp"
+    }
+  }
+}
+```

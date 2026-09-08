@@ -12,22 +12,17 @@
 
 <section class="price-stats">
   <div>
-    <p class="eyebrow">Last</p>
-    {{if .Last}}
-      <p class="price-stat">{{money .Last.Price}} / {{$.Product.UnitName}}</p>
-      <p class="meta">{{date .Last.BoughtOn}}</p>
+    {{if .Quote}}
+      {{if .Quote.IsLast30Days}}
+        <p class="eyebrow">Lowest · 30 days</p>
+      {{else}}
+        <p class="eyebrow">Last recorded</p>
+      {{end}}
+      <p class="price-stat">{{money .Quote.Price}} / {{$.Product.UnitName}}</p>
+      <p class="meta">{{date .Quote.BoughtOn}}</p>
     {{else}}
+      <p class="eyebrow">Lowest · 30 days</p>
       <p class="price-stat">—</p>
-    {{end}}
-  </div>
-  <div>
-    <p class="eyebrow">Lowest · 30 days</p>
-    {{if .Low30}}
-      <p class="price-stat">{{money .Low30.Price}} / {{$.Product.UnitName}}</p>
-      <p class="meta">{{date .Low30.BoughtOn}}</p>
-    {{else}}
-      <p class="price-stat">—</p>
-      <p class="meta">No prices in the last 30 days</p>
     {{end}}
   </div>
 </section>
@@ -56,7 +51,7 @@
         <span class="row-main">
           <strong>{{.Name}}</strong>
         </span>
-        <span class="row-amt">{{money .Low30.Price}} / {{.UnitName}}</span>
+        <span class="row-amt">{{money .Quote.Price}} / {{.UnitName}}</span>
       </a>
     </li>
     {{end}}

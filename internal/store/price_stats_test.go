@@ -49,6 +49,35 @@ func TestLowestSinceNoneInWindow(t *testing.T) {
 	}
 }
 
+func TestBestRecentPricePrefers30DayLow(t *testing.T) {
+	now := time.Date(2026, 9, 8, 15, 0, 0, 0, time.UTC)
+	got := BestRecentPrice([]Purchase{
+		{BoughtOn: "2026-09-08", Quantity: mustDec(t, "1"), Amount: mustDec(t, "9"), Kind: KindPurchase},
+		{BoughtOn: "2026-08-20", Quantity: mustDec(t, "2"), Amount: mustDec(t, "8"), Kind: KindPrice},
+		{BoughtOn: "2026-07-01", Quantity: mustDec(t, "1"), Amount: mustDec(t, "1"), Kind: KindPurchase},
+	}, now)
+	if got == nil || got.Window != WindowLast30Days || got.BoughtOn != "2026-08-20" || !got.Price.Equal(mustDec(t, "4")) {
+		t.Fatalf("30-day: %#v", got)
+	}
+}
+
+func TestBestRecentPriceFallsBackToLastRecord(t *testing.T) {
+	now := time.Date(2026, 9, 8, 0, 0, 0, 0, time.UTC)
+	got := BestRecentPrice([]Purchase{
+		{BoughtOn: "2026-07-31", Quantity: mustDec(t, "1"), Amount: mustDec(t, "2"), Kind: KindPurchase},
+		{BoughtOn: "2026-06-01", Quantity: mustDec(t, "1"), Amount: mustDec(t, "1"), Kind: KindPurchase},
+	}, now)
+	if got == nil || got.Window != WindowLastRecord || got.BoughtOn != "2026-07-31" || !got.Price.Equal(mustDec(t, "2")) {
+		t.Fatalf("last: %#v", got)
+	}
+}
+
+func TestBestRecentPriceEmpty(t *testing.T) {
+	if got := BestRecentPrice(nil, time.Date(2026, 9, 8, 0, 0, 0, 0, time.UTC)); got != nil {
+		t.Fatalf("empty: %#v", got)
+	}
+}
+
 func TestPricesBetweenChronologicalLast365(t *testing.T) {
 	from := time.Date(2025, 9, 2, 0, 0, 0, 0, time.UTC)
 	to := time.Date(2026, 9, 2, 0, 0, 0, 0, time.UTC)
