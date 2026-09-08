@@ -768,14 +768,24 @@ code {
   background: rgba(255, 212, 0, 0.22);
 }
 
-.photo-drop > label {
-  width: max-content;
+.photo-picks {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.3rem;
+  min-width: 0;
   max-width: calc(100% - 5.5rem);
 }
 
-.photo-drop input[type="file"] {
-  width: auto;
-  max-width: 100%;
+.photo-heading {
+  font-weight: 500;
+}
+
+.photo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
 }
 
 .photo-drop .preview {

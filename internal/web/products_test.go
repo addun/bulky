@@ -298,6 +298,9 @@ func TestProductFormOffersPhotoPaste(t *testing.T) {
 	if !strings.Contains(body, `id="photo-drop"`) || !strings.Contains(body, `id="product-image"`) {
 		t.Fatal("product form should offer a photo picker")
 	}
+	if !strings.Contains(body, `id="paste-photo"`) || !strings.Contains(body, "Choose file") {
+		t.Fatal("product form should offer choose-file and paste side by side")
+	}
 	if !strings.Contains(body, `id="photo-preview"`) || !strings.Contains(body, "photo-frame") {
 		t.Fatal("product form should reserve a photo placeholder")
 	}

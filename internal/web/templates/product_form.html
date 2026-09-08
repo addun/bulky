@@ -58,10 +58,16 @@
   {{end}}
 
   <div class="photo-drop{{if and (not .New) .Product.ImagePath.Valid}} has-file{{end}}" id="photo-drop">
-    <label>
-      Photo
-      <input id="product-image" name="image" type="file" accept="image/*">
-    </label>
+    <div class="photo-picks">
+      <span class="photo-heading">Photo</span>
+      <div class="photo-actions">
+        <label class="btn btn-plain scan-pick">
+          Choose file
+          <input id="product-image" name="image" type="file" accept="image/*">
+        </label>
+        <button type="button" class="btn btn-plain" id="paste-photo">Paste</button>
+      </div>
+    </div>
     <div class="preview" id="photo-preview">
       <span class="photo-frame thumb-empty">
         <img id="photo-preview-img" alt=""{{if and (not .New) .Product.ImagePath.Valid}} src="/images/{{.Product.ImagePath.String}}"{{end}}>
