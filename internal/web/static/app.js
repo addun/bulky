@@ -522,6 +522,61 @@
     return null;
   }
 
+  function pasteFailMessage(kind) {
+    if (kind === "empty") return "No image on the clipboard.";
+    if (kind === "denied") return "Could not read the clipboard.";
+    return "This browser cannot paste an image. Choose a photo instead.";
+  }
+
+  function readClipboardImage() {
+    if (!navigator.clipboard || typeof navigator.clipboard.read !== "function") {
+      return Promise.resolve({ error: "unsupported" });
+    }
+    return navigator.clipboard.read().then(function (items) {
+      var reads = [];
+      for (var i = 0; i < items.length; i++) {
+        var types = items[i].types || [];
+        for (var j = 0; j < types.length; j++) {
+          if (types[j].indexOf("image/") === 0) {
+            reads.push(items[i].getType(types[j]));
+          }
+        }
+      }
+      if (!reads.length) return { error: "empty" };
+      return reads[0].then(function (blob) {
+        if (!blob) return { error: "empty" };
+        return { file: namedFile(blob, "paste") };
+      });
+    }).catch(function () {
+      return { error: "denied" };
+    });
+  }
+
+  function onPasteImage(handler) {
+    document.addEventListener("paste", function (e) {
+      var f = clipboardImage(e);
+      if (!f) return;
+      if (pasteIntoField(e) && e.clipboardData && e.clipboardData.getData("text/plain")) return;
+      e.preventDefault();
+      handler(f);
+    });
+  }
+
+  function bindPasteButton(btn, input, apply) {
+    if (!btn) return;
+    btn.addEventListener("click", function () {
+      readClipboardImage().then(function (result) {
+        if (result.file) {
+          apply(result.file);
+          return;
+        }
+        if (!input) return;
+        input.setCustomValidity(pasteFailMessage(result.error));
+        input.reportValidity();
+      });
+    });
+  }
+
   function pasteIntoField(e) {
     var t = e.target;
     if (!t) return false;
@@ -626,13 +681,8 @@
     productImage.addEventListener("change", function () {
       if (productImage.files && productImage.files[0]) showProductPhoto(productImage.files[0]);
     });
-    document.addEventListener("paste", function (e) {
-      var f = clipboardImage(e);
-      if (!f) return;
-      if (pasteIntoField(e) && e.clipboardData && e.clipboardData.getData("text/plain")) return;
-      e.preventDefault();
-      takeProductPhoto(f);
-    });
+    onPasteImage(takeProductPhoto);
+    bindPasteButton(document.getElementById("paste-photo"), productImage, takeProductPhoto);
     bindFileDrop(photoWrap, function (files) {
       takeProductPhoto(firstMatching(files, isImageFile));
     });
@@ -704,13 +754,8 @@
     assignFile(f);
   });
 
-  document.addEventListener("paste", function (e) {
-    var f = clipboardImage(e);
-    if (!f) return;
-    if (pasteIntoField(e) && e.clipboardData && e.clipboardData.getData("text/plain")) return;
-    e.preventDefault();
-    assignFile(f);
-  });
+  onPasteImage(assignFile);
+  bindPasteButton(document.getElementById("paste-bill"), file, assignFile);
 
   form.addEventListener("submit", function (e) {
     if (!picked()) {
