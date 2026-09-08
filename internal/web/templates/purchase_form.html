@@ -16,13 +16,13 @@
 
   <fieldset class="form-group">
     <legend>Quantity</legend>
-    <label>Quantity ({{.Product.UnitName}}) <input name="quantity" required inputmode="decimal" placeholder="2" value="{{if not .Purchase.Quantity.IsZero}}{{qty .Purchase.Quantity}}{{end}}" data-qty></label>
+    <label>Quantity ({{.Product.UnitName}}) <input name="quantity" required inputmode="decimal" value="{{if not .Purchase.Quantity.IsZero}}{{qty .Purchase.Quantity}}{{end}}" data-qty></label>
     <p class="hint pack-total" data-qty-total hidden></p>
   </fieldset>
 
   <fieldset class="form-group">
     <legend>Paid</legend>
-    <label>Amount ({{.Page.Currency}}) <input name="amount" required inputmode="decimal" placeholder="12.40" value="{{if not .Purchase.Amount.IsZero}}{{.Purchase.Amount}}{{end}}" data-qty-amount></label>
+    <label>Amount ({{.Page.Currency}}) <input name="amount" required inputmode="decimal" value="{{if not .Purchase.Amount.IsZero}}{{.Purchase.Amount}}{{end}}" data-qty-amount></label>
     <label>
       Store
       <select name="story_id">

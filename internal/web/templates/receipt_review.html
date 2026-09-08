@@ -58,7 +58,7 @@
         <input type="hidden" name="vat_type_{{$i}}" value="{{$line.VatType}}">
         <input type="hidden" name="unit_price_{{$i}}" value="{{$line.UnitPrice}}">
         <input type="hidden" name="discount_{{$i}}" value="{{$line.Discount}}">
-        <label>Alias <input name="receipt_name_{{$i}}" value="{{$line.ReceiptName}}" placeholder="As printed on the bill"></label>
+        <label>Alias <input name="receipt_name_{{$i}}" value="{{$line.ReceiptName}}"></label>
         <label>
           Product
           <select name="product_choice_{{$i}}" data-product-choice>
@@ -100,7 +100,7 @@
       <input type="checkbox" name="include___I__" value="1" checked>
       Include
     </label>
-    <label>Alias <input name="receipt_name___I__" value="" placeholder="As printed on the bill"></label>
+    <label>Alias <input name="receipt_name___I__" value=""></label>
     <label>
       Product
       <select name="product_choice___I__" data-product-choice>

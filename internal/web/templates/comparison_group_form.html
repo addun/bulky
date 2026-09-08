@@ -3,7 +3,7 @@
 <form class="stack" method="post" action="{{if .New}}/admin/comparison-groups{{else}}/admin/comparison-groups/{{.Group.ID}}{{end}}">
   <fieldset class="form-group">
     <legend>Group</legend>
-    <label>Name <input name="name" required placeholder="Mlekovita, All butters…" value="{{.Group.Name}}" autofocus></label>
+    <label>Name <input name="name" required value="{{.Group.Name}}" autofocus></label>
     <label>
       Compare in
       <select name="unit_id" required>

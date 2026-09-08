@@ -3,9 +3,9 @@
 <form class="stack" method="post" action="{{if .New}}/admin/retail-chains{{else}}/admin/retail-chains/{{.RetailChain.ID}}{{end}}">
   <fieldset class="form-group">
     <legend>Chain</legend>
-    <label>Name <input name="name" required placeholder="Biedronka" value="{{.RetailChain.Name}}" autofocus></label>
-    <label>Legal name <input name="legal_name" required placeholder="Jeronimo Martins Polska S.A." value="{{.RetailChain.LegalName}}"></label>
-    <label>Tax ID <input name="tax_id" required placeholder="7791011327" value="{{.RetailChain.TaxID}}" inputmode="numeric" autocomplete="off"></label>
+    <label>Name <input name="name" required value="{{.RetailChain.Name}}" autofocus></label>
+    <label>Legal name <input name="legal_name" required value="{{.RetailChain.LegalName}}"></label>
+    <label>Tax ID <input name="tax_id" required value="{{.RetailChain.TaxID}}" inputmode="numeric" autocomplete="off"></label>
   </fieldset>
   <div class="form-actions">
     <button type="submit" class="btn btn-tag">{{if .New}}Add chain{{else}}Save chain{{end}}</button>
