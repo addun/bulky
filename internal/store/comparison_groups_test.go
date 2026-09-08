@@ -180,10 +180,10 @@ func TestComparisonLeadersNoneWhenProductHasNoGroups(t *testing.T) {
 	}
 }
 
-func TestRelatedGroupProductsListsPeersWith30DayLow(t *testing.T) {
+func TestRelatedGroupProductsListsPeersWithBestPrice(t *testing.T) {
 	s, _, _, small, _, market := butterFixture(t)
-	since := time.Date(2026, 8, 10, 0, 0, 0, 0, time.UTC)
-	got, err := s.RelatedGroupProducts(small.ID, since)
+	now := time.Date(2026, 8, 10, 0, 0, 0, 0, time.UTC)
+	got, err := s.RelatedGroupProducts(small.ID, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -196,15 +196,18 @@ func TestRelatedGroupProductsListsPeersWith30DayLow(t *testing.T) {
 	if got[0].ID == small.ID || got[1].ID == small.ID {
 		t.Fatal("selected pack should not list itself")
 	}
-	if got[0].Low30 == nil || !got[0].Low30.Price.Equal(mustDec(t, "8")) {
-		t.Fatalf("500g low: %#v", got[0].Low30)
+	if got[0].Quote == nil || !got[0].Quote.Price.Equal(mustDec(t, "8")) || got[0].Quote.Window != WindowLast30Days {
+		t.Fatalf("500g quote: %#v", got[0].Quote)
 	}
-	if got[1].Low30 == nil || !got[1].Low30.Price.Equal(mustDec(t, "6")) || got[1].ID != market.ID {
-		t.Fatalf("Łaciate low: %#v", got[1].Low30)
+	if got[1].Quote == nil || !got[1].Quote.Price.Equal(mustDec(t, "6")) || got[1].ID != market.ID {
+		t.Fatalf("Łaciate quote: %#v", got[1].Quote)
 	}
-	none, err := s.RelatedGroupProducts(small.ID, time.Date(2026, 9, 2, 0, 0, 0, 0, time.UTC))
-	if err != nil || none != nil {
-		t.Fatalf("outside window: %v %#v", err, none)
+	old, err := s.RelatedGroupProducts(small.ID, time.Date(2026, 10, 2, 0, 0, 0, 0, time.UTC))
+	if err != nil || len(old) != 2 {
+		t.Fatalf("fallback to last record: %v %#v", err, old)
+	}
+	if old[0].Quote == nil || old[0].Quote.Window != WindowLastRecord || !old[0].Quote.Price.Equal(mustDec(t, "8")) {
+		t.Fatalf("stale 500g: %#v", old[0].Quote)
 	}
 }
 

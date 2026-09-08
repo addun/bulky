@@ -13,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/shopspring/decimal"
 
+	"github.com/adrian/bulkly/internal/mcpserver"
 	"github.com/adrian/bulkly/internal/ocr"
 	"github.com/adrian/bulkly/internal/store"
 )
@@ -85,6 +86,9 @@ func (s *Server) routes() {
 	s.engine.GET("/", s.home)
 	s.engine.GET("/api/products/suggestions", s.productSuggestions)
 	s.engine.GET("/products/:id", s.showLookup)
+	s.engine.Any("/mcp", gin.WrapH(mcpserver.Handler(s.store, mcpserver.Config{
+		Currency: s.cfg.Currency,
+	})))
 
 	s.engine.GET("/admin", s.index)
 	s.engine.GET("/admin/settings", s.admin)

@@ -37,7 +37,7 @@ type GroupComparison struct {
 
 type RelatedProduct struct {
 	Product
-	Low30 *PricePoint
+	Quote *QuotedPrice
 }
 
 func (s *Store) ListComparisonGroups() ([]ComparisonGroup, error) {
@@ -185,7 +185,7 @@ func (s *Store) ComparisonLeaders(productID int64) ([]GroupComparison, error) {
 	return pickGroupLeaders(productID, members, last), nil
 }
 
-func (s *Store) RelatedGroupProducts(productID int64, since time.Time) ([]RelatedProduct, error) {
+func (s *Store) RelatedGroupProducts(productID int64, now time.Time) ([]RelatedProduct, error) {
 	if _, err := s.GetProduct(productID); err != nil {
 		return nil, err
 	}
@@ -207,10 +207,10 @@ func (s *Store) RelatedGroupProducts(productID int64, since time.Time) ([]Relate
 	if err != nil {
 		return nil, err
 	}
-	lows := lowsByProduct(buys, since)
+	quotes := quotesByProduct(buys, now)
 	out := make([]RelatedProduct, 0, len(rows))
 	for _, r := range rows {
-		pt, ok := lows[r.ID]
+		pt, ok := quotes[r.ID]
 		if !ok {
 			continue
 		}
@@ -220,27 +220,13 @@ func (s *Store) RelatedGroupProducts(productID int64, since time.Time) ([]Relate
 				ID: r.ID, Name: r.Name, UnitID: r.UnitID, UnitName: r.UnitName,
 				ImagePath: r.ImagePath, CreatedAt: r.CreatedAt,
 			},
-			Low30: &cp,
+			Quote: &cp,
 		})
 	}
 	if len(out) == 0 {
 		return nil, nil
 	}
 	return out, nil
-}
-
-func lowsByProduct(buys []Purchase, since time.Time) map[int64]PricePoint {
-	byProduct := map[int64][]Purchase{}
-	for _, p := range buys {
-		byProduct[p.ProductID] = append(byProduct[p.ProductID], p)
-	}
-	out := map[int64]PricePoint{}
-	for id, list := range byProduct {
-		if pt := LowestSince(list, since); pt != nil {
-			out[id] = *pt
-		}
-	}
-	return out
 }
 
 func pickGroupLeaders(selectedID int64, members []sqlc.ListComparisonMembersForProductRow, last map[int64]PricePoint) []GroupComparison {
