@@ -84,7 +84,6 @@ func (s *Server) showLookup(c *gin.Context) {
 	}
 	now := time.Now()
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	since30 := today.AddDate(0, 0, -30)
 	from365 := today.AddDate(0, 0, -365)
 	points := store.PricesBetween(purchases, from365, today)
 	rows := make([]chartPoint, 0, len(points))
@@ -95,7 +94,7 @@ func (s *Server) showLookup(c *gin.Context) {
 	if err != nil {
 		chartJSON = []byte("[]")
 	}
-	comparisons, err := s.store.RelatedGroupProducts(id, since30)
+	comparisons, err := s.store.RelatedGroupProducts(id, now)
 	if err != nil {
 		c.String(http.StatusInternalServerError, "could not load related products")
 		return
@@ -103,8 +102,7 @@ func (s *Server) showLookup(c *gin.Context) {
 	c.HTML(http.StatusOK, "lookup_show.html", gin.H{
 		"Page":      s.page(p.Name, "", ""),
 		"Product":   p,
-		"Last":      store.LastUnitPrice(purchases),
-		"Low30":     store.LowestSince(purchases, since30),
+		"Quote":     store.BestRecentPrice(purchases, now),
 		"ChartJSON": string(chartJSON),
 		"HasChart":  len(points) > 0,
 		"ChartFrom": from365.Format("2006-01-02"),

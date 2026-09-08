@@ -6,9 +6,25 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+const (
+	WindowLast30Days = "last_30_days"
+	WindowLastRecord = "last_record"
+)
+
 type PricePoint struct {
 	BoughtOn string
 	Price    decimal.Decimal
+}
+
+// QuotedPrice is the lookup/MCP price: lowest in the last 30 days, else the
+// newest recorded unit price.
+type QuotedPrice struct {
+	PricePoint
+	Window string
+}
+
+func (q QuotedPrice) IsLast30Days() bool {
+	return q.Window == WindowLast30Days
 }
 
 func unitPriceOf(p Purchase) (decimal.Decimal, bool) {
@@ -58,6 +74,33 @@ func LowestSince(purchases []Purchase, since time.Time) *PricePoint {
 		}
 	}
 	return best
+}
+
+// BestRecentPrice is the lowest unit price on or after 30 days before now.
+// If the window is empty, it is the newest recorded unit price.
+func BestRecentPrice(purchases []Purchase, now time.Time) *QuotedPrice {
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	if low := LowestSince(purchases, today.AddDate(0, 0, -30)); low != nil {
+		return &QuotedPrice{PricePoint: *low, Window: WindowLast30Days}
+	}
+	if last := LastUnitPrice(purchases); last != nil {
+		return &QuotedPrice{PricePoint: *last, Window: WindowLastRecord}
+	}
+	return nil
+}
+
+func quotesByProduct(buys []Purchase, now time.Time) map[int64]QuotedPrice {
+	byProduct := map[int64][]Purchase{}
+	for _, p := range buys {
+		byProduct[p.ProductID] = append(byProduct[p.ProductID], p)
+	}
+	out := map[int64]QuotedPrice{}
+	for id, list := range byProduct {
+		if q := BestRecentPrice(list, now); q != nil {
+			out[id] = *q
+		}
+	}
+	return out
 }
 
 // PricesBetween is chronological unit prices from..to inclusive (date part only).
