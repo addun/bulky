@@ -30,7 +30,7 @@
       <div class="form-row extra-unit">
         <div class="extra-eq">
           <span class="extra-eq-lead">1 <span data-primary-unit>{{$.Product.UnitName}}</span> equals</span>
-          <input name="extra_factor" inputmode="decimal" value="{{qty $c.Factor}}" placeholder="1.5" aria-label="Conversion amount">
+          <input name="extra_factor" inputmode="decimal" value="{{qty $c.Factor}}" aria-label="Conversion amount">
           <select name="extra_unit_id" data-extra-unit aria-label="Conversion unit">
             <option value="">Select…</option>
             {{range $.Units}}
@@ -86,7 +86,7 @@
   <div class="form-row extra-unit">
     <div class="extra-eq">
       <span class="extra-eq-lead">1 <span data-primary-unit>{{.Product.UnitName}}</span> equals</span>
-      <input name="extra_factor" inputmode="decimal" placeholder="1.5" aria-label="Conversion amount">
+      <input name="extra_factor" inputmode="decimal" aria-label="Conversion amount">
       <select name="extra_unit_id" data-extra-unit aria-label="Conversion unit">
         <option value="">Select…</option>
         {{range .Units}}

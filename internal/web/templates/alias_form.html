@@ -39,7 +39,7 @@
   </fieldset>
   <fieldset class="form-group">
     <legend>Name on the bill</legend>
-    <label>Alias <input name="alias" required placeholder="Mąka tortowa 1kg" value="{{.Alias.Alias}}" autofocus></label>
+    <label>Alias <input name="alias" required value="{{.Alias.Alias}}" autofocus></label>
   </fieldset>
   {{if not .Products}}
     <p class="hint">No products yet. <a href="/admin/products/new">Add a product</a> first.</p>
