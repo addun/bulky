@@ -97,3 +97,25 @@ func TestPricesBetweenChronologicalLast365(t *testing.T) {
 		t.Fatalf("last %#v", got[1])
 	}
 }
+
+func TestUnitQuotesConvertsExtras(t *testing.T) {
+	p := Product{
+		UnitName: "szt",
+		Conversions: []ProductConversion{
+			{UnitID: 2, UnitName: "l", Factor: mustDec(t, "1.5")},
+		},
+	}
+	got := UnitQuotes(QuotedPrice{PricePoint: PricePoint{Price: mustDec(t, "5")}}, p)
+	if len(got) != 2 {
+		t.Fatalf("len %d: %#v", len(got), got)
+	}
+	if got[0].UnitName != "szt" || !got[0].Price.Equal(mustDec(t, "5")) {
+		t.Fatalf("primary %#v", got[0])
+	}
+	if got[1].UnitName != "l" || !got[1].Price.Equal(mustDec(t, "10").Div(mustDec(t, "3"))) {
+		t.Fatalf("extra %#v", got[1])
+	}
+	if !got[1].Price.Round(2).Equal(mustDec(t, "3.33")) {
+		t.Fatalf("extra rounded: %s", got[1].Price)
+	}
+}

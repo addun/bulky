@@ -19,6 +19,7 @@ type suggestItem struct {
 	Name  string `json:"name"`
 	Unit  string `json:"unit"`
 	Image string `json:"image"`
+	Price string `json:"price,omitempty"`
 }
 
 type chartPoint struct {
@@ -38,26 +39,27 @@ func (s *Server) productSuggestions(c *gin.Context) {
 		c.JSON(http.StatusOK, []suggestItem{})
 		return
 	}
-	items, err := s.store.ListProducts(q)
+	quotes, err := s.store.SearchProductQuotes(q, time.Now(), suggestLimit)
 	if err != nil {
 		c.String(http.StatusInternalServerError, "could not search products")
 		return
 	}
-	if len(items) > suggestLimit {
-		items = items[:suggestLimit]
-	}
-	out := make([]suggestItem, 0, len(items))
-	for _, it := range items {
+	out := make([]suggestItem, 0, len(quotes))
+	for _, it := range quotes {
 		img := ""
-		if it.ImagePath.Valid && strings.TrimSpace(it.ImagePath.String) != "" {
-			img = "/images/" + it.ImagePath.String
+		if it.Product.ImagePath.Valid && strings.TrimSpace(it.Product.ImagePath.String) != "" {
+			img = "/images/" + it.Product.ImagePath.String
 		}
-		out = append(out, suggestItem{
-			ID:    it.ID,
-			Name:  it.Name,
-			Unit:  it.UnitName,
+		item := suggestItem{
+			ID:    it.Product.ID,
+			Name:  it.Product.Name,
+			Unit:  it.Product.UnitName,
 			Image: img,
-		})
+		}
+		if it.Quote != nil {
+			item.Price = formatMoneyPerUnit(it.Quote.Price, s.cfg.CurrencySymbol, it.Product.UnitName)
+		}
+		out = append(out, item)
 	}
 	c.JSON(http.StatusOK, out)
 }

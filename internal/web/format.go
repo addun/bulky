@@ -13,7 +13,7 @@ import (
 func templateFuncs(symbol string) template.FuncMap {
 	return template.FuncMap{
 		"money": func(d decimal.Decimal) string {
-			return formatGrouped(d, 2) + " " + symbol
+			return formatMoney(d, symbol)
 		},
 		"qty": formatQuantity,
 		"date": func(iso string) string {
@@ -29,7 +29,17 @@ func templateFuncs(symbol string) template.FuncMap {
 			if quantity.IsZero() {
 				return "—"
 			}
-			return formatGrouped(amount.Div(quantity), 2) + " " + symbol
+			return formatMoney(amount.Div(quantity), symbol)
+		},
+		"extraQuotes": func(quote *store.QuotedPrice, p store.Product) []store.UnitQuote {
+			if quote == nil {
+				return nil
+			}
+			all := store.UnitQuotes(*quote, p)
+			if len(all) <= 1 {
+				return nil
+			}
+			return all[1:]
 		},
 		"qtyIn": func(qty decimal.Decimal, conv store.ProductConversion) decimal.Decimal {
 			return store.QtyIn(qty, conv)
@@ -48,6 +58,14 @@ func formatQuantity(d decimal.Decimal) string {
 		s = strings.TrimRight(s, ".")
 	}
 	return strings.ReplaceAll(s, ".", ",")
+}
+
+func formatMoney(d decimal.Decimal, symbol string) string {
+	return formatGrouped(d, 2) + " " + symbol
+}
+
+func formatMoneyPerUnit(d decimal.Decimal, symbol, unit string) string {
+	return formatMoney(d, symbol) + " / " + unit
 }
 
 func formatGrouped(d decimal.Decimal, places int32) string {
