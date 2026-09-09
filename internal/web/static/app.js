@@ -256,12 +256,20 @@
         main.className = "row-main";
         var name = document.createElement("strong");
         name.textContent = it.name;
-        var meta = document.createElement("span");
-        meta.className = "meta";
-        meta.textContent = it.unit || "";
         main.appendChild(name);
-        main.appendChild(meta);
+        if (!it.price && it.unit) {
+          var meta = document.createElement("span");
+          meta.className = "meta";
+          meta.textContent = it.unit;
+          main.appendChild(meta);
+        }
         a.appendChild(main);
+        if (it.price) {
+          var amt = document.createElement("span");
+          amt.className = "row-amt";
+          amt.textContent = it.price;
+          a.appendChild(amt);
+        }
         li.appendChild(a);
         searchList.appendChild(li);
       });

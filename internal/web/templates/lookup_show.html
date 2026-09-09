@@ -19,6 +19,9 @@
         <p class="eyebrow">Last recorded</p>
       {{end}}
       <p class="price-stat">{{money .Quote.Price}} / {{$.Product.UnitName}}</p>
+      {{range extraQuotes .Quote $.Product}}
+      <p class="price-extra">{{money .Price}} / {{.UnitName}}</p>
+      {{end}}
       <p class="meta">{{date .Quote.BoughtOn}}</p>
     {{else}}
       <p class="eyebrow">Lowest · 30 days</p>

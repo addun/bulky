@@ -82,6 +82,55 @@ func TestProductSuggestJSON(t *testing.T) {
 	}
 }
 
+func TestProductSuggestIncludesPurchaseUnitPrice(t *testing.T) {
+	st, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+	szt, err := st.CreateUnit("szt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	liter, err := st.CreateUnit("l")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := st.CreateProduct("Water", szt.ID, nil, []store.ProductConversion{
+		{UnitID: liter.ID, Factor: decimal.RequireFromString("1.5")},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.CreatePurchase(p.ID, 0, time.Now().Format("2006-01-02"), decimal.RequireFromString("6"), decimal.RequireFromString("15"), store.KindPurchase); err != nil {
+		t.Fatal(err)
+	}
+	srv, err := New(st, Config{CurrencySymbol: "zł"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/products/suggestions?q=water", nil)
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d", rec.Code)
+	}
+	var got []suggestItem
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Name != "Water" {
+		t.Fatalf("got %#v", got)
+	}
+	if got[0].Price != "2,50 zł / szt" {
+		t.Fatalf("price %q", got[0].Price)
+	}
+	if strings.Contains(got[0].Price, " / l") {
+		t.Fatal("suggest must not include extra units")
+	}
+}
+
 func TestProductSuggestCapsAtTen(t *testing.T) {
 	st, err := store.Open(t.TempDir())
 	if err != nil {
@@ -193,6 +242,49 @@ func TestLookupShowFallsBackToLastRecord(t *testing.T) {
 	}
 	if strings.Contains(body, "No prices in the last 30 days") {
 		t.Fatal("fallback should not look empty")
+	}
+}
+
+func TestLookupShowExtraUnitPrices(t *testing.T) {
+	st, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+	szt, err := st.CreateUnit("szt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	liter, err := st.CreateUnit("l")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := st.CreateProduct("Water", szt.ID, nil, []store.ProductConversion{
+		{UnitID: liter.ID, Factor: decimal.RequireFromString("1.5")},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.CreatePurchase(p.ID, 0, "2026-08-20", decimal.RequireFromString("6"), decimal.RequireFromString("15"), store.KindPurchase); err != nil {
+		t.Fatal(err)
+	}
+	srv, err := New(st, Config{CurrencySymbol: "zł"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/products/"+itoa(p.ID), nil)
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "2,50 zł / szt") {
+		t.Fatal("expected purchase unit price")
+	}
+	if !strings.Contains(body, `class="price-extra">1,67 zł / l</p>`) {
+		t.Fatalf("expected extra unit price: %s", body)
 	}
 }
 

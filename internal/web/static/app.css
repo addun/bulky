@@ -977,6 +977,14 @@ code {
   margin: 0;
 }
 
+.price-extra {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.9rem;
+  font-weight: 400;
+  color: var(--pine);
+  margin: 0.2rem 0 0;
+}
+
 .price-chart {
   width: 100%;
 }
