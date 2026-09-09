@@ -43,3 +43,34 @@ func TestSearchProductQuotesRanksAndQuotes(t *testing.T) {
 		t.Fatalf("blank: %v %#v", err, got)
 	}
 }
+
+func TestListProductsQuotesBestRecent(t *testing.T) {
+	s, _, flour, rice, _, _ := aliasFixture(t)
+	now := time.Date(2026, 9, 8, 0, 0, 0, 0, time.UTC)
+	if _, err := s.CreatePurchase(flour.ID, 0, "2026-09-01", mustDec(t, "2"), mustDec(t, "10"), KindPurchase); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreatePurchase(flour.ID, 0, "2026-07-01", mustDec(t, "1"), mustDec(t, "1"), KindPurchase); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreatePurchase(rice.ID, 0, "2026-06-01", mustDec(t, "1"), mustDec(t, "3"), KindPurchase); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.listProducts("", now, 0)
+	if err != nil || len(got) != 2 {
+		t.Fatalf("list: %v %#v", err, got)
+	}
+	byID := map[int64]ProductListItem{}
+	for _, it := range got {
+		byID[it.ID] = it
+	}
+	fq := byID[flour.ID].Quote
+	if fq == nil || fq.Window != WindowLast30Days || !fq.Price.Equal(mustDec(t, "5")) {
+		t.Fatalf("flour quote: %#v", fq)
+	}
+	rq := byID[rice.ID].Quote
+	if rq == nil || rq.Window != WindowLastRecord || !rq.Price.Equal(mustDec(t, "3")) {
+		t.Fatalf("rice quote: %#v", rq)
+	}
+}

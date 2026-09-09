@@ -87,6 +87,7 @@ type ProductListItem struct {
 	LastBought     sql.NullString
 	LifetimeAmount decimal.Decimal
 	PurchaseCount  int
+	Quote          *QuotedPrice
 }
 
 type Story struct {
@@ -315,6 +316,10 @@ func (s *Store) DeleteStory(id int64) error {
 }
 
 func (s *Store) ListProducts(q string) ([]ProductListItem, error) {
+	return s.listProducts(q, time.Now(), 0)
+}
+
+func (s *Store) listProducts(q string, now time.Time, limit int) ([]ProductListItem, error) {
 	q = strings.TrimSpace(q)
 	rows, err := s.q.ListProducts(ctx())
 	if err != nil {
@@ -355,14 +360,20 @@ func (s *Store) ListProducts(q string) ([]ProductListItem, error) {
 	if err := attachItemConversions(s.q, items); err != nil {
 		return nil, err
 	}
-	if q == "" {
-		return items, nil
+	if q != "" {
+		aliases, err := s.ListAliases()
+		if err != nil {
+			return nil, err
+		}
+		items = filterProductSearch(items, q, aliases)
 	}
-	aliases, err := s.ListAliases()
-	if err != nil {
+	if limit > 0 && len(items) > limit {
+		items = items[:limit]
+	}
+	if err := attachProductQuotes(s.q, items, now); err != nil {
 		return nil, err
 	}
-	return filterProductSearch(items, q, aliases), nil
+	return items, nil
 }
 
 func filterProductSearch(items []ProductListItem, q string, aliases []ProductAlias) []ProductListItem {
