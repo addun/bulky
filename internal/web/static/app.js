@@ -208,7 +208,6 @@
   if (searchRoot) {
     var searchInput = searchRoot.querySelector("input[type=search]");
     var searchList = searchRoot.querySelector("[data-suggest]");
-    var searchEmpty = searchRoot.querySelector("[data-suggest-empty]");
     var searchTimer = 0;
     var searchAbort = null;
     var active = -1;
@@ -227,66 +226,21 @@
       });
     }
 
-    function showItems(items) {
-      searchList.innerHTML = "";
-      active = -1;
-      if (!items || !items.length) {
-        searchEmpty.hidden = false;
-        return;
-      }
-      searchEmpty.hidden = true;
-      items.forEach(function (it) {
-        var li = document.createElement("li");
-        var a = document.createElement("a");
-        a.className = "row";
-        a.href = "/products/" + it.id;
-        if (it.image) {
-          var img = document.createElement("img");
-          img.className = "thumb";
-          img.src = it.image;
-          img.alt = "";
-          a.appendChild(img);
-        } else {
-          var ph = document.createElement("span");
-          ph.className = "thumb thumb-empty";
-          ph.setAttribute("aria-hidden", "true");
-          a.appendChild(ph);
-        }
-        var main = document.createElement("span");
-        main.className = "row-main";
-        var name = document.createElement("strong");
-        name.textContent = it.name;
-        main.appendChild(name);
-        if (!it.price && it.unit) {
-          var meta = document.createElement("span");
-          meta.className = "meta";
-          meta.textContent = it.unit;
-          main.appendChild(meta);
-        }
-        a.appendChild(main);
-        if (it.price) {
-          var amt = document.createElement("span");
-          amt.className = "row-amt";
-          amt.textContent = it.price;
-          a.appendChild(amt);
-        }
-        li.appendChild(a);
-        searchList.appendChild(li);
-      });
-    }
-
     function runSearch() {
       var q = (searchInput.value || "").trim();
       if (!q) {
         searchList.innerHTML = "";
-        searchEmpty.hidden = true;
+        active = -1;
         return;
       }
       if (searchAbort) searchAbort.abort();
       searchAbort = new AbortController();
-      fetch("/api/products/suggestions?q=" + encodeURIComponent(q), { signal: searchAbort.signal })
-        .then(function (r) { return r.json(); })
-        .then(showItems)
+      fetch("/api/products/suggestions.html?q=" + encodeURIComponent(q), { signal: searchAbort.signal })
+        .then(function (r) { return r.text(); })
+        .then(function (html) {
+          searchList.innerHTML = html;
+          active = -1;
+        })
         .catch(function (err) {
           if (err && err.name === "AbortError") return;
         });
