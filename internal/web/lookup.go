@@ -28,24 +28,48 @@ type chartPoint struct {
 }
 
 func (s *Server) home(c *gin.Context) {
-	c.HTML(http.StatusOK, "lookup.html", gin.H{
-		"Page": s.page("Find a product", "", ""),
-	})
-}
-
-func (s *Server) productSuggestions(c *gin.Context) {
 	q := strings.TrimSpace(c.Query("q"))
-	if q == "" {
-		c.JSON(http.StatusOK, []suggestItem{})
-		return
-	}
-	quotes, err := s.store.SearchProductQuotes(q, time.Now(), suggestLimit)
+	items, err := s.loadSuggestions(q)
 	if err != nil {
 		c.String(http.StatusInternalServerError, "could not search products")
 		return
 	}
-	out := make([]suggestItem, 0, len(quotes))
-	for _, it := range quotes {
+	c.HTML(http.StatusOK, "lookup.html", gin.H{
+		"Page":     s.page("Find a product", q, ""),
+		"Query":    q,
+		"Products": items,
+	})
+}
+
+func (s *Server) productSuggestionsJSON(c *gin.Context) {
+	items, err := s.loadSuggestions(c.Query("q"))
+	if err != nil {
+		c.String(http.StatusInternalServerError, "could not search products")
+		return
+	}
+	c.JSON(http.StatusOK, s.toSuggestItems(items))
+}
+
+func (s *Server) productSuggestionsHTML(c *gin.Context) {
+	q := strings.TrimSpace(c.Query("q"))
+	items, err := s.loadSuggestions(q)
+	if err != nil {
+		c.String(http.StatusInternalServerError, "could not search products")
+		return
+	}
+	c.HTML(http.StatusOK, "lookup_suggestions.html", gin.H{
+		"Query":    q,
+		"Products": items,
+	})
+}
+
+func (s *Server) loadSuggestions(q string) ([]store.ProductQuote, error) {
+	return s.store.SearchProductQuotes(strings.TrimSpace(q), time.Now(), suggestLimit)
+}
+
+func (s *Server) toSuggestItems(items []store.ProductQuote) []suggestItem {
+	out := make([]suggestItem, 0, len(items))
+	for _, it := range items {
 		img := ""
 		if it.Product.ImagePath.Valid && strings.TrimSpace(it.Product.ImagePath.String) != "" {
 			img = "/images/" + it.Product.ImagePath.String
@@ -61,7 +85,7 @@ func (s *Server) productSuggestions(c *gin.Context) {
 		}
 		out = append(out, item)
 	}
-	c.JSON(http.StatusOK, out)
+	return out
 }
 
 func (s *Server) showLookup(c *gin.Context) {

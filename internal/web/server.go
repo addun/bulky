@@ -84,7 +84,8 @@ func (s *Server) routes() {
 	s.engine.Static("/images", s.store.ImagesDir())
 
 	s.engine.GET("/", s.home)
-	s.engine.GET("/api/products/suggestions", s.productSuggestions)
+	s.engine.GET("/api/products/suggestions.json", s.productSuggestionsJSON)
+	s.engine.GET("/api/products/suggestions.html", s.productSuggestionsHTML)
 	s.engine.GET("/products/:id", s.showLookup)
 	s.engine.Any("/mcp", gin.WrapH(mcpserver.Handler(s.store, mcpserver.Config{
 		Currency: s.cfg.Currency,

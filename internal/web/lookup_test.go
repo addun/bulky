@@ -51,7 +51,7 @@ func TestProductSuggestJSON(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/products/suggestions?q=tortova", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/products/suggestions.json?q=tortova", nil)
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d", rec.Code)
@@ -65,7 +65,7 @@ func TestProductSuggestJSON(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodGet, "/api/products/suggestions?q=maka", nil)
+	req = httptest.NewRequest(http.MethodGet, "/api/products/suggestions.json?q=maka", nil)
 	srv.Handler().ServeHTTP(rec, req)
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 		t.Fatal(err)
@@ -75,7 +75,7 @@ func TestProductSuggestJSON(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodGet, "/api/products/suggestions?q=", nil)
+	req = httptest.NewRequest(http.MethodGet, "/api/products/suggestions.json?q=", nil)
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Body.String() != "[]" {
 		t.Fatalf("empty q: %s", rec.Body.String())
@@ -111,7 +111,7 @@ func TestProductSuggestIncludesPurchaseUnitPrice(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/products/suggestions?q=water", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/products/suggestions.json?q=water", nil)
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d", rec.Code)
@@ -128,6 +128,20 @@ func TestProductSuggestIncludesPurchaseUnitPrice(t *testing.T) {
 	}
 	if strings.Contains(got[0].Price, " / l") {
 		t.Fatal("suggest must not include extra units")
+	}
+
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/products/suggestions.html?q=water", nil)
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("html status %d", rec.Code)
+	}
+	html := rec.Body.String()
+	if !strings.Contains(html, "2,50 zł / szt") {
+		t.Fatal("html expected purchase unit price")
+	}
+	if strings.Contains(html, " / l") {
+		t.Fatal("html must not include extra units")
 	}
 }
 
@@ -151,7 +165,7 @@ func TestProductSuggestCapsAtTen(t *testing.T) {
 		t.Fatal(err)
 	}
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/products/suggestions?q=oats", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/products/suggestions.json?q=oats", nil)
 	srv.Handler().ServeHTTP(rec, req)
 	var got []suggestItem
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
@@ -159,6 +173,78 @@ func TestProductSuggestCapsAtTen(t *testing.T) {
 	}
 	if len(got) != 10 {
 		t.Fatalf("got %d want 10", len(got))
+	}
+}
+
+func TestProductSuggestHTML(t *testing.T) {
+	st, flour, _ := aliasPageFixture(t)
+	if _, err := st.CreateAlias(flour.ID, 0, 0, "Mąka tortowa 1kg"); err != nil {
+		t.Fatal(err)
+	}
+	srv, err := New(st, Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/products/suggestions.html?q=tortova", nil)
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "Cake flour") {
+		t.Fatal("expected product name")
+	}
+	if !strings.Contains(body, `href="/products/`+itoa(flour.ID)+`"`) {
+		t.Fatal("expected lookup link")
+	}
+	if strings.Contains(body, "wordmark") || strings.Contains(body, "<html") {
+		t.Fatal("fragment must not include chrome")
+	}
+
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/products/suggestions.html?q=zzzz-no-match", nil)
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("empty status %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "No product matches") {
+		t.Fatal("expected empty copy")
+	}
+
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/products/suggestions.html?q=", nil)
+	srv.Handler().ServeHTTP(rec, req)
+	if strings.TrimSpace(rec.Body.String()) != "" {
+		t.Fatalf("empty q should render nothing: %q", rec.Body.String())
+	}
+}
+
+func TestHomeSearchQuery(t *testing.T) {
+	st, flour, _ := aliasPageFixture(t)
+	srv, err := New(st, Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/?q=cake", nil)
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "Cake flour") {
+		t.Fatal("expected hit on home")
+	}
+	if !strings.Contains(body, `href="/products/`+itoa(flour.ID)+`"`) {
+		t.Fatal("expected lookup link")
+	}
+	if !strings.Contains(body, `class="wordmark"`) {
+		t.Fatal("full page should include chrome")
+	}
+	if !strings.Contains(body, `value="cake"`) {
+		t.Fatal("search field should keep q")
 	}
 }
 

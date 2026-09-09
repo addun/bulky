@@ -1,0 +1,28 @@
+{{if .Query}}
+{{if .Products}}
+<ul class="ledger lookup-results">
+  {{range .Products}}
+  <li>
+    <a class="row" href="/products/{{.Product.ID}}">
+      {{if .Product.ImagePath.Valid}}
+        <img class="thumb" src="/images/{{.Product.ImagePath.String}}" alt="">
+      {{else}}
+        <span class="thumb thumb-empty" aria-hidden="true"></span>
+      {{end}}
+      <span class="row-main">
+        <strong>{{.Product.Name}}</strong>
+        {{if not .Quote}}
+        <span class="meta">{{.Product.UnitName}}</span>
+        {{end}}
+      </span>
+      {{if .Quote}}
+      <span class="row-amt">{{money .Quote.Price}} / {{.Product.UnitName}}</span>
+      {{end}}
+    </a>
+  </li>
+  {{end}}
+</ul>
+{{else}}
+<p class="empty lookup-empty">No product matches.</p>
+{{end}}
+{{end}}
