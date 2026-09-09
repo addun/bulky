@@ -1,4 +1,8 @@
-data
 .git
+.github
+data
+doc
 bulkly
 *.db
+*.md
+**/*_test.go
