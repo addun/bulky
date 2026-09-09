@@ -6,11 +6,49 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/shopspring/decimal"
 
 	"github.com/adrian/bulkly/internal/store"
 )
+
+func TestAdminProductListShowsQuotedUnitPrice(t *testing.T) {
+	st, flour, rice := aliasPageFixture(t)
+	now := time.Now()
+	recent := now.AddDate(0, 0, -5).Format("2006-01-02")
+	stale := now.AddDate(0, 0, -60).Format("2006-01-02")
+	if _, err := st.CreatePurchase(flour.ID, 0, recent, decimal.RequireFromString("2"), decimal.RequireFromString("10"), store.KindPurchase); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.CreatePurchase(flour.ID, 0, stale, decimal.RequireFromString("1"), decimal.RequireFromString("3"), store.KindPurchase); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.CreatePurchase(rice.ID, 0, stale, decimal.RequireFromString("1"), decimal.RequireFromString("8"), store.KindPurchase); err != nil {
+		t.Fatal(err)
+	}
+	srv, err := New(st, Config{Currency: "PLN", CurrencySymbol: "zł"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/admin", nil)
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "5,00 zł /") {
+		t.Fatal("list should show the 30-day unit price, not lifetime spend")
+	}
+	if strings.Contains(body, "13,00 zł") {
+		t.Fatal("list must not show lifetime spend")
+	}
+	if !strings.Contains(body, "8,00 zł /") {
+		t.Fatal("list should fall back to the last recorded unit price")
+	}
+}
 
 func TestProductsPageFuzzySearch(t *testing.T) {
 	st, flour, _ := aliasPageFixture(t)

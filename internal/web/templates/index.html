@@ -33,7 +33,7 @@
           <strong>{{.Name}}</strong>
           <span class="meta">{{.UnitName}}{{if .LastBought.Valid}} · last {{datetime .LastBought.String}}{{end}}</span>
         </span>
-        <span class="row-amt">{{if gt .PurchaseCount 0}}{{money .LifetimeAmount}}{{else}}—{{end}}</span>
+        <span class="row-amt">{{if .Quote}}{{money .Quote.Price}} / {{.UnitName}}{{else}}—{{end}}</span>
       </a>
     </li>
     {{end}}
