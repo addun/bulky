@@ -277,6 +277,18 @@ label textarea {
   display: inline-block;
 }
 
+.btn[hidden] {
+  display: none;
+}
+
+.stack[hidden],
+#biedronka-signed-out[hidden],
+#biedronka-code-step[hidden],
+#biedronka-auth-link[hidden],
+#biedronka-results[hidden] {
+  display: none;
+}
+
 .btn-tag {
   background: var(--tag);
   color: var(--ink);
@@ -1130,4 +1142,58 @@ code {
     position: static;
     max-height: 24rem;
   }
+}
+
+label.check {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-weight: 400;
+}
+
+label.check input {
+  width: auto;
+}
+
+.table-wrap {
+  overflow: auto;
+  margin: 1rem 0;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.data-table th,
+.data-table td {
+  text-align: left;
+  padding: 0.5rem 0.7rem;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+.data-table th {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.data-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.json-block {
+  margin: 1rem 0 0;
+}
+
+.json-block summary {
+  cursor: pointer;
+  font-weight: 500;
+}
+
+#biedronka-advanced {
+  margin-top: 1.4rem;
 }

@@ -19,7 +19,7 @@ func TestOpenFreshSeedsAndVersions(t *testing.T) {
 	defer s.Close()
 
 	assertCurrentSchema(t, s.db)
-	assertGooseVersion(t, s.db, 17)
+	assertGooseVersion(t, s.db, 18)
 
 	units, err := s.ListUnits()
 	if err != nil {
@@ -54,7 +54,7 @@ func TestOpenSecondBootNoops(t *testing.T) {
 	defer s.Close()
 
 	assertCurrentSchema(t, s.db)
-	assertGooseVersion(t, s.db, 17)
+	assertGooseVersion(t, s.db, 18)
 
 	units, err := s.ListUnits()
 	if err != nil {
@@ -123,7 +123,7 @@ VALUES (1, '2024-01-02', '10', '20.50', '2024-01-02T00:00:00Z');
 	defer s.Close()
 
 	assertCurrentSchema(t, s.db)
-	assertGooseVersion(t, s.db, 17)
+	assertGooseVersion(t, s.db, 18)
 
 	var n int
 	if err := s.db.QueryRow(`SELECT COUNT(*) FROM purchases`).Scan(&n); err != nil {
@@ -193,7 +193,7 @@ func TestOpenAddsKindWhenGooseAlreadyAtReceipts(t *testing.T) {
 	if !hasColumn(t, s.db, "purchases", "kind") {
 		t.Fatal("purchases missing kind after reopen")
 	}
-	assertGooseVersion(t, s.db, 17)
+	assertGooseVersion(t, s.db, 18)
 	if _, err := s.ListProducts(""); err != nil {
 		t.Fatalf("ListProducts: %v", err)
 	}
@@ -238,7 +238,7 @@ func TestOpenRenamesRecipesToReceipts(t *testing.T) {
 	defer s.Close()
 
 	assertCurrentSchema(t, s.db)
-	assertGooseVersion(t, s.db, 17)
+	assertGooseVersion(t, s.db, 18)
 }
 
 func TestPurchaseStoryOptional(t *testing.T) {
@@ -394,7 +394,7 @@ func assertCurrentSchema(t *testing.T, db *sql.DB) {
 	if tableExists(t, db, "ocr_scans") || tableExists(t, db, "ocr_scan_lines") || tableExists(t, db, "recipes") {
 		t.Fatal("ocr_scans and recipes tables should be gone")
 	}
-	for _, col := range []string{"image_path", "raw_response", "status", "error_message", "created_at"} {
+	for _, col := range []string{"image_path", "raw_response", "status", "error_message", "created_at", "source", "external_id"} {
 		if !hasColumn(t, db, "receipts", col) {
 			t.Fatalf("receipts missing %s", col)
 		}
@@ -421,7 +421,7 @@ func assertCurrentSchema(t *testing.T, db *sql.DB) {
 			t.Fatalf("comparison_group_products missing %s", col)
 		}
 	}
-	for _, idx := range []string{"idx_products_name", "idx_purchases_product", "idx_stories_name", "idx_purchases_story", "idx_stories_retail_chain", "idx_stories_external_id", "idx_receipts_status", "idx_purchases_receipt", "idx_product_aliases_shop", "idx_product_aliases_chain", "idx_product_aliases_global", "idx_product_aliases_product", "idx_comparison_groups_unit", "idx_comparison_group_products_product"} {
+	for _, idx := range []string{"idx_products_name", "idx_purchases_product", "idx_stories_name", "idx_purchases_story", "idx_stories_retail_chain", "idx_stories_external_id", "idx_receipts_status", "idx_receipts_source_external", "idx_purchases_receipt", "idx_product_aliases_shop", "idx_product_aliases_chain", "idx_product_aliases_global", "idx_product_aliases_product", "idx_comparison_groups_unit", "idx_comparison_group_products_product"} {
 		if !indexExists(t, db, idx) {
 			t.Fatalf("missing index %s", idx)
 		}

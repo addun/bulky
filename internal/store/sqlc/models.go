@@ -61,6 +61,8 @@ type Receipt struct {
 	Status       string
 	CreatedAt    string
 	ErrorMessage string
+	Source       string
+	ExternalID   string
 }
 
 type RetailChain struct {
