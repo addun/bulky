@@ -368,3 +368,39 @@ func TestUpdateReceiptVisitOnSavedBill(t *testing.T) {
 		t.Fatalf("missing story: %v", err)
 	}
 }
+
+func TestSourcedReceiptUniqueAndLatestDate(t *testing.T) {
+	s, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	r, err := s.CreateSourcedReceipt("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", ReceiptSourceBiedronka, "tx-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Source != ReceiptSourceBiedronka || r.ExternalID != "tx-1" {
+		t.Fatalf("got %#v", r)
+	}
+	if err := s.SaveAIResponse(r.ID, `{"bought_on":"2026-09-08","lines":[]}`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateSourcedReceipt("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", ReceiptSourceBiedronka, "tx-1"); !errors.Is(err, ErrDuplicate) {
+		t.Fatalf("dup: %v", err)
+	}
+	if _, err := s.CreateSourcedReceipt("cccccccccccccccccccccccccccccccc", ReceiptSourceBiedronka, "tx-2"); err != nil {
+		t.Fatal(err)
+	}
+	ids, err := s.ListReceiptExternalIDs(ReceiptSourceBiedronka)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ids) != 2 {
+		t.Fatalf("ids %#v", ids)
+	}
+	got, err := s.LatestSourcedBoughtOn(ReceiptSourceBiedronka)
+	if err != nil || got != "2026-09-08" {
+		t.Fatalf("latest %q %v", got, err)
+	}
+}

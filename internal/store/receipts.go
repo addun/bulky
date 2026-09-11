@@ -13,6 +13,8 @@ const (
 	ReceiptReady    = "ready"
 	ReceiptFailed   = "failed"
 	ReceiptMigrated = "migrated"
+
+	ReceiptSourceBiedronka = "biedronka"
 )
 
 var (
@@ -27,22 +29,70 @@ type Receipt struct {
 	Status       string
 	ErrorMessage string
 	CreatedAt    string
+	Source       string
+	ExternalID   string
 }
 
 func (s *Store) CreateReceipt(imagePath string) (Receipt, error) {
+	return s.createReceipt(imagePath, "", "")
+}
+
+func (s *Store) CreateSourcedReceipt(imagePath, source, externalID string) (Receipt, error) {
+	source = strings.TrimSpace(source)
+	externalID = strings.TrimSpace(externalID)
+	if source == "" || externalID == "" {
+		return Receipt{}, errors.New("source and id are required")
+	}
+	return s.createReceipt(imagePath, source, externalID)
+}
+
+func (s *Store) createReceipt(imagePath, source, externalID string) (Receipt, error) {
 	imagePath = strings.TrimSpace(imagePath)
 	if imagePath == "" {
 		return Receipt{}, errors.New("image is required")
 	}
 	id, err := s.q.InsertReceipt(ctx(), sqlc.InsertReceiptParams{
-		ImagePath: imagePath,
-		Status:    ReceiptPending,
-		CreatedAt: nowRFC3339(),
+		ImagePath:  imagePath,
+		Status:     ReceiptPending,
+		CreatedAt:  nowRFC3339(),
+		Source:     source,
+		ExternalID: externalID,
 	})
 	if err != nil {
+		if isUniqueErr(err) {
+			return Receipt{}, ErrDuplicate
+		}
 		return Receipt{}, err
 	}
 	return s.GetReceipt(id)
+}
+
+func (s *Store) ListReceiptExternalIDs(source string) ([]string, error) {
+	source = strings.TrimSpace(source)
+	if source == "" {
+		return nil, nil
+	}
+	return s.q.ListReceiptExternalIDs(ctx(), source)
+}
+
+func (s *Store) LatestSourcedBoughtOn(source string) (string, error) {
+	source = strings.TrimSpace(source)
+	if source == "" {
+		return "", nil
+	}
+	var boughtOn string
+	err := s.db.QueryRow(
+		`SELECT COALESCE(MAX(json_extract(raw_response, '$.bought_on')), '')
+		 FROM receipts
+		 WHERE source = ?
+		   AND json_valid(raw_response)
+		   AND json_extract(raw_response, '$.bought_on') != ''`,
+		source,
+	).Scan(&boughtOn)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(boughtOn), nil
 }
 
 func (s *Store) GetReceipt(id int64) (Receipt, error) {
