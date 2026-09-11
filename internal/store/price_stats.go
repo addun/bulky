@@ -27,6 +27,24 @@ func (q QuotedPrice) IsLast30Days() bool {
 	return q.Window == WindowLast30Days
 }
 
+type UnitQuote struct {
+	UnitName string
+	Price    decimal.Decimal
+}
+
+// UnitQuotes is the purchase-unit price first, then each extra as price/factor.
+func UnitQuotes(quote QuotedPrice, p Product) []UnitQuote {
+	out := make([]UnitQuote, 0, 1+len(p.Conversions))
+	out = append(out, UnitQuote{UnitName: p.UnitName, Price: quote.Price})
+	for _, c := range p.Conversions {
+		if c.Factor.IsZero() {
+			continue
+		}
+		out = append(out, UnitQuote{UnitName: c.UnitName, Price: quote.Price.Div(c.Factor)})
+	}
+	return out
+}
+
 func unitPriceOf(p Purchase) (decimal.Decimal, bool) {
 	if p.Quantity.IsZero() {
 		return decimal.Zero, false

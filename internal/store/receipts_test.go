@@ -372,9 +372,8 @@ func TestUpdateReceiptVisitOnSavedBill(t *testing.T) {
 	}
 }
 
-func TestSourcedReceiptUniquePerSource(t *testing.T) {
-	dir := t.TempDir()
-	s, err := Open(dir)
+func TestSourcedReceiptUniqueAndLatestDate(t *testing.T) {
+	s, err := Open(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -398,12 +397,15 @@ func TestSourcedReceiptUniquePerSource(t *testing.T) {
 	if _, err := s.CreateSourcedReceipt("cccccccccccccccccccccccccccccccc", "lidl", "tx-1", `{"id":"tx-1"}`); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := s.CreateSourcedReceipt("dddddddddddddddddddddddddddddddd", ReceiptSourceBiedronka, "tx-2", ""); err != nil {
+		t.Fatal(err)
+	}
 
 	ids, err := s.ListReceiptExternalIDs(ReceiptSourceBiedronka)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(ids) != 1 || ids[0] != "tx-1" {
+	if len(ids) != 2 {
 		t.Fatalf("biedronka ids: %v", ids)
 	}
 	lidlIDs, err := s.ListReceiptExternalIDs("lidl")
@@ -430,6 +432,10 @@ func TestSourcedReceiptUniquePerSource(t *testing.T) {
 	}
 	if got.SourcePayload != payload {
 		t.Fatalf("payload should stay: %s", got.SourcePayload)
+	}
+	latest, err := s.LatestSourcedBoughtOn(ReceiptSourceBiedronka)
+	if err != nil || latest != "2026-09-08" {
+		t.Fatalf("latest %q %v", latest, err)
 	}
 
 	if _, err := s.MigrateReceipt(r.ID, BillImport{

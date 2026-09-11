@@ -55,3 +55,8 @@ func PreviewJPEG(raw []byte) ([]byte, error) {
 		return nil, fmt.Errorf("file must be jpeg, png, webp, gif, or pdf")
 	}
 }
+
+// PreviewText draws a plain slip JPEG when there is no photo or PDF.
+func PreviewText(text string) ([]byte, error) {
+	return renderTextSlip(text)
+}

@@ -31,6 +31,10 @@ type Server struct {
 	cfg     Config
 	reader  *ocr.Agent
 	ocrJobs chan int64
+
+	biedronkaHTTP *http.Client
+	biedronkaAPI  string
+	biedronkaAuth string
 }
 
 type page struct {
@@ -65,7 +69,16 @@ func New(st *store.Store, cfg Config) (*Server, error) {
 	r.MaxMultipartMemory = 12 << 20
 	r.SetHTMLTemplate(tmpl)
 
-	s := &Server{store: st, engine: r, tmpl: tmpl, cfg: cfg, reader: ocr.New(cfg.OCR)}
+	s := &Server{
+		store:         st,
+		engine:        r,
+		tmpl:          tmpl,
+		cfg:           cfg,
+		reader:        ocr.New(cfg.OCR),
+		biedronkaHTTP: &http.Client{Timeout: 30 * time.Second},
+		biedronkaAPI:  biedronkaAPIBase,
+		biedronkaAuth: biedronkaTokenURL,
+	}
 	s.startOCRWorker()
 	s.routes()
 	return s, nil
@@ -84,8 +97,16 @@ func (s *Server) routes() {
 	s.engine.Static("/images", s.store.ImagesDir())
 
 	s.engine.GET("/", s.home)
-	s.engine.GET("/api/products/suggestions", s.productSuggestions)
+	s.engine.GET("/api/products/suggestions.json", s.productSuggestionsJSON)
+	s.engine.GET("/api/products/suggestions.html", s.productSuggestionsHTML)
 	s.engine.GET("/products/:id", s.showLookup)
+	s.engine.GET("/imports/biedronka", s.biedronka)
+	s.engine.GET("/api/biedronka/imported", s.biedronkaImported)
+	s.engine.POST("/api/biedronka/import", s.biedronkaImport)
+	s.engine.GET("/api/biedronka/transactions", s.biedronkaTransactions)
+	s.engine.GET("/api/biedronka/transactions/:id/e-receipt", s.biedronkaEReceipt)
+	s.engine.GET("/api/biedronka/transactions/:id", s.biedronkaTransaction)
+	s.engine.POST("/api/biedronka/token", s.biedronkaToken)
 	s.engine.Any("/mcp", gin.WrapH(mcpserver.Handler(s.store, mcpserver.Config{
 		Currency: s.cfg.Currency,
 	})))

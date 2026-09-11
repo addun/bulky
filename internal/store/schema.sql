@@ -103,7 +103,7 @@ CREATE UNIQUE INDEX idx_stories_external_id
 CREATE INDEX idx_receipts_status ON receipts(status);
 CREATE UNIQUE INDEX idx_receipts_source_external
   ON receipts(source, external_id)
-  WHERE external_id != '';
+  WHERE source != '' AND external_id != '';
 CREATE UNIQUE INDEX idx_product_aliases_shop
   ON product_aliases(story_id, alias COLLATE NOCASE)
   WHERE story_id IS NOT NULL;

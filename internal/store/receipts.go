@@ -82,6 +82,26 @@ func (s *Store) ListReceiptExternalIDs(source string) ([]string, error) {
 	return s.q.ListReceiptExternalIDs(ctx(), source)
 }
 
+func (s *Store) LatestSourcedBoughtOn(source string) (string, error) {
+	source = strings.ToLower(strings.TrimSpace(source))
+	if source == "" {
+		return "", nil
+	}
+	var boughtOn string
+	err := s.db.QueryRow(
+		`SELECT COALESCE(MAX(json_extract(raw_response, '$.bought_on')), '')
+		 FROM receipts
+		 WHERE source = ?
+		   AND json_valid(raw_response)
+		   AND json_extract(raw_response, '$.bought_on') != ''`,
+		source,
+	).Scan(&boughtOn)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(boughtOn), nil
+}
+
 func (s *Store) GetReceipt(id int64) (Receipt, error) {
 	return getReceipt(s.q, id)
 }

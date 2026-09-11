@@ -1,0 +1,80 @@
+{{template "header" .}}
+<h1>Biedronka</h1>
+<p class="lede">Sign in with Moja Biedronka, pull bills since a date, then import them as receipts to confirm. Already imported bills are skipped. Tokens stay in this page, not in the database.</p>
+<div id="biedronka-imported" hidden data-payload="{{.ImportedJSON}}"></div>
+
+<div id="biedronka-signed-out">
+  <div class="form-actions">
+    <button type="button" class="btn btn-tag" id="biedronka-signin">Sign in with Moja Biedronka</button>
+  </div>
+  <p class="hint" id="biedronka-auth-link" hidden><a id="biedronka-auth-href" target="_blank" rel="noopener">Open the Biedronka login</a> if the tab did not appear.</p>
+  <div id="biedronka-code-step" hidden>
+    <label>Redirect or code
+      <textarea id="biedronka-code" rows="3" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>
+      <span class="hint">After SMS, the login tries to open <code>app://cma20.biedronka.pl?code=…</code>. Paste that address, the browser error that contains it, or the code itself.</span>
+    </label>
+    <div class="form-actions">
+      <button type="button" class="btn btn-tag" id="biedronka-finish">Finish sign-in</button>
+    </div>
+  </div>
+  <details class="json-block" id="biedronka-advanced">
+    <summary>I already have tokens</summary>
+    <form class="stack" id="biedronka-token-form">
+      <label>Access token
+        <textarea id="biedronka-access" name="access_token" rows="3" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>
+      </label>
+      <label>Refresh token
+        <textarea id="biedronka-refresh" name="refresh_token" rows="3" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>
+        <span class="hint">Kept in this page until you close or refresh it. Fetching sends them through Bulkly to Biedronka.</span>
+      </label>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-plain">Use these tokens</button>
+      </div>
+    </form>
+  </details>
+</div>
+
+<form class="stack" id="biedronka-form" hidden>
+  <p class="meta" id="biedronka-session"></p>
+  <label>Since
+    <input id="biedronka-since" name="since" type="date" required>
+    <span class="hint">Bills on this day and after. Defaults to the newest imported Biedronka bill, or seven days ago. Same-day bills you already have are skipped by transaction id.</span>
+  </label>
+  <label class="check">
+    <input id="biedronka-receipts" type="checkbox" checked>
+    Also download e-receipt lines (or transaction details when there is no e-receipt)
+  </label>
+  <div class="form-actions">
+    <button type="submit" class="btn btn-tag" id="biedronka-fetch">Fetch bills</button>
+    <button type="button" class="btn btn-plain" id="biedronka-clear">Sign out</button>
+    <button type="button" class="btn btn-plain" id="biedronka-download" hidden>Download JSON</button>
+    <button type="button" class="btn btn-tag" id="biedronka-import" hidden>Import into receipts</button>
+  </div>
+</form>
+
+<p class="meta" id="biedronka-status"></p>
+
+<div id="biedronka-results" hidden>
+  <div class="table-wrap">
+    <table class="data-table" id="biedronka-table">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Store</th>
+          <th>Receipt</th>
+          <th>Total</th>
+          <th>Lines</th>
+          <th>Source</th>
+          <th>Bulkly</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+  <details class="json-block">
+    <summary>Raw JSON</summary>
+    <pre class="mcp-snippet" id="biedronka-json"></pre>
+  </details>
+</div>
+<script src="/static/biedronka.js"></script>
+{{template "footer" .}}

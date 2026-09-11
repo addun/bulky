@@ -7,6 +7,7 @@
 {{if not .Model}}
   <p class="banner">Set the AI model under <a href="/admin/settings">Settings</a> so the reader can run.</p>
 {{end}}
+<p class="hint"><a href="/imports/biedronka">Pull bills from Moja Biedronka</a> — they land here as receipts to confirm, with the e-paragon PDF as the image.</p>
 {{if and .Configured .Model}}
 <form class="stack scan-form" method="post" action="/admin/receipts" enctype="multipart/form-data" id="receipt-upload">
   <div class="scan-drop" id="scan-drop">

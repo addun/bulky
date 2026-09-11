@@ -14,6 +14,12 @@ PDFs are rasterized with `pdftoppm` (Poppler) and sent as page images to the sam
 
 Open **Receipts**, take a photo or choose a file (jpeg, png, webp, gif, or pdf, up to 10 MB), and choose **Read the bill**. Photos go to the model saved under **Admin** as one image (the whole receipt, not sliced). A PDF is rasterized (`pdftoppm`) and each page is sent as a full page image. Upload stores the file and returns you to the receipt while the reader runs in the background. Refresh that page (it also refreshes itself every few seconds) to see whether the scan is still reading, failed, or ready to confirm. That does not yet create purchases. The stored preview is a JPEG: photos as uploaded, PDFs as every page stacked (up to 40) when `pdftoppm` is available, otherwise a text slip.
 
+## Moja Biedronka
+
+Open `/imports/biedronka` (also linked from Receipts). Sign in with phone, captcha, and SMS, paste the `app://` redirect, fetch bills since a date, then **Import into receipts**. Each imported e-paragon lands as **To confirm** — the same confirm screen as a scanned bill. Lines come from the till JSON; the preview is the e-receipt PDF (or a text slip if the PDF is missing). Purchases are not created until you confirm.
+
+Bulkly stores the Biedronka transaction id on the receipt and skips ids it already has. **Since** defaults to the newest imported bill’s date so a later visit can pick up same-day shops. Loyalty tokens stay in the browser tab.
+
 The list shows each scan as reading, to confirm, failed, or saved. Open a scan to see its status. Failed scans can be sent back to the reader with **Read again**, or you can photograph or upload the bill again.
 
 The reader is for a receipt, invoice, or till bill. A photo that is not a bill, or one where no product lines can be read, is rejected. Cropped, blurry, or unreadable totals may still produce a list, with a warning on the confirm screen.

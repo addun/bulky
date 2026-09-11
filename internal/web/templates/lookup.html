@@ -1,8 +1,11 @@
 {{template "header" .}}
 <div class="lookup" data-product-search>
-  <label class="sr" for="q">Find a product</label>
-  <input id="q" name="q" type="search" placeholder="Find a product" autocomplete="off" autofocus>
-  <ul class="ledger lookup-results" data-suggest></ul>
-  <p class="empty lookup-empty" data-suggest-empty hidden>No product matches.</p>
+  <form method="get" action="/">
+    <label class="sr" for="q">Find a product</label>
+    <input id="q" name="q" type="search" value="{{.Page.Query}}" placeholder="Find a product" autocomplete="off" autofocus>
+  </form>
+  <div data-suggest>
+    {{template "lookup_suggestions.html" .}}
+  </div>
 </div>
 {{template "footer" .}}
