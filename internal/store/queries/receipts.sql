@@ -1,12 +1,16 @@
 -- name: InsertReceipt :one
-INSERT INTO receipts (image_path, raw_response, status, error_message, created_at)
-VALUES (?, '', ?, '', ?)
+INSERT INTO receipts (image_path, raw_response, status, error_message, created_at, source, external_id, source_payload)
+VALUES (?, '', ?, '', ?, ?, ?, ?)
 RETURNING id;
 
 -- name: GetReceipt :one
-SELECT id, image_path, raw_response, status, created_at, error_message
+SELECT id, image_path, raw_response, status, created_at, error_message, source, external_id, source_payload
 FROM receipts
 WHERE id = ?;
+
+-- name: ListReceiptExternalIDs :many
+SELECT external_id FROM receipts
+WHERE source = ? AND external_id != '';
 
 -- name: ListReceipts :many
 SELECT id, image_path, status, error_message, created_at

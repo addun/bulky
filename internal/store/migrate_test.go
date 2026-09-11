@@ -19,7 +19,7 @@ func TestOpenFreshSeedsAndVersions(t *testing.T) {
 	defer s.Close()
 
 	assertCurrentSchema(t, s.db)
-	assertGooseVersion(t, s.db, 17)
+	assertGooseVersion(t, s.db, 18)
 
 	units, err := s.ListUnits()
 	if err != nil {
@@ -54,7 +54,7 @@ func TestOpenSecondBootNoops(t *testing.T) {
 	defer s.Close()
 
 	assertCurrentSchema(t, s.db)
-	assertGooseVersion(t, s.db, 17)
+	assertGooseVersion(t, s.db, 18)
 
 	units, err := s.ListUnits()
 	if err != nil {
@@ -123,7 +123,7 @@ VALUES (1, '2024-01-02', '10', '20.50', '2024-01-02T00:00:00Z');
 	defer s.Close()
 
 	assertCurrentSchema(t, s.db)
-	assertGooseVersion(t, s.db, 17)
+	assertGooseVersion(t, s.db, 18)
 
 	var n int
 	if err := s.db.QueryRow(`SELECT COUNT(*) FROM purchases`).Scan(&n); err != nil {
@@ -155,6 +155,49 @@ VALUES (1, '2024-01-02', '10', '20.50', '2024-01-02T00:00:00Z');
 	}
 	if boughtOn != "2024-01-02 12:00" {
 		t.Fatalf("legacy bought_on: got %q want 2024-01-02 12:00", boughtOn)
+	}
+}
+
+func TestOpenBackfillsReceiptSourceOCR(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "bulkly.db")
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`
+CREATE TABLE receipts (
+  id INTEGER PRIMARY KEY,
+  image_path TEXT NOT NULL,
+  raw_response TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+INSERT INTO receipts (image_path, status, created_at)
+VALUES ('photo', 'pending', '2024-01-01T00:00:00Z');
+`); err != nil {
+		db.Close()
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	s, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	got, err := s.GetReceipt(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Source != ReceiptSourceOCR {
+		t.Fatalf("legacy source: got %q want %q", got.Source, ReceiptSourceOCR)
+	}
+	if got.ExternalID != "" || got.SourcePayload != "" {
+		t.Fatalf("legacy import fields: %#v", got)
 	}
 }
 
@@ -193,7 +236,7 @@ func TestOpenAddsKindWhenGooseAlreadyAtReceipts(t *testing.T) {
 	if !hasColumn(t, s.db, "purchases", "kind") {
 		t.Fatal("purchases missing kind after reopen")
 	}
-	assertGooseVersion(t, s.db, 17)
+	assertGooseVersion(t, s.db, 18)
 	if _, err := s.ListProducts(""); err != nil {
 		t.Fatalf("ListProducts: %v", err)
 	}
@@ -238,7 +281,7 @@ func TestOpenRenamesRecipesToReceipts(t *testing.T) {
 	defer s.Close()
 
 	assertCurrentSchema(t, s.db)
-	assertGooseVersion(t, s.db, 17)
+	assertGooseVersion(t, s.db, 18)
 }
 
 func TestPurchaseStoryOptional(t *testing.T) {
@@ -394,7 +437,7 @@ func assertCurrentSchema(t *testing.T, db *sql.DB) {
 	if tableExists(t, db, "ocr_scans") || tableExists(t, db, "ocr_scan_lines") || tableExists(t, db, "recipes") {
 		t.Fatal("ocr_scans and recipes tables should be gone")
 	}
-	for _, col := range []string{"image_path", "raw_response", "status", "error_message", "created_at"} {
+	for _, col := range []string{"image_path", "raw_response", "status", "error_message", "created_at", "source", "external_id", "source_payload"} {
 		if !hasColumn(t, db, "receipts", col) {
 			t.Fatalf("receipts missing %s", col)
 		}

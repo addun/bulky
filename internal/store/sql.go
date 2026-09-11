@@ -250,6 +250,7 @@ func mapReceipt(r sqlc.Receipt) Receipt {
 	return Receipt{
 		ID: r.ID, ImagePath: r.ImagePath, RawResponse: r.RawResponse, Status: r.Status,
 		ErrorMessage: r.ErrorMessage, CreatedAt: r.CreatedAt,
+		Source: r.Source, ExternalID: r.ExternalID, SourcePayload: r.SourcePayload,
 	}
 }
 

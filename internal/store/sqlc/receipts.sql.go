@@ -36,7 +36,7 @@ func (q *Queries) FailReceipt(ctx context.Context, arg FailReceiptParams) (int64
 }
 
 const getReceipt = `-- name: GetReceipt :one
-SELECT id, image_path, raw_response, status, created_at, error_message
+SELECT id, image_path, raw_response, status, created_at, error_message, source, external_id, source_payload
 FROM receipts
 WHERE id = ?
 `
@@ -51,24 +51,37 @@ func (q *Queries) GetReceipt(ctx context.Context, id int64) (Receipt, error) {
 		&i.Status,
 		&i.CreatedAt,
 		&i.ErrorMessage,
+		&i.Source,
+		&i.ExternalID,
+		&i.SourcePayload,
 	)
 	return i, err
 }
 
 const insertReceipt = `-- name: InsertReceipt :one
-INSERT INTO receipts (image_path, raw_response, status, error_message, created_at)
-VALUES (?, '', ?, '', ?)
+INSERT INTO receipts (image_path, raw_response, status, error_message, created_at, source, external_id, source_payload)
+VALUES (?, '', ?, '', ?, ?, ?, ?)
 RETURNING id
 `
 
 type InsertReceiptParams struct {
-	ImagePath string
-	Status    string
-	CreatedAt string
+	ImagePath     string
+	Status        string
+	CreatedAt     string
+	Source        string
+	ExternalID    string
+	SourcePayload string
 }
 
 func (q *Queries) InsertReceipt(ctx context.Context, arg InsertReceiptParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, insertReceipt, arg.ImagePath, arg.Status, arg.CreatedAt)
+	row := q.db.QueryRowContext(ctx, insertReceipt,
+		arg.ImagePath,
+		arg.Status,
+		arg.CreatedAt,
+		arg.Source,
+		arg.ExternalID,
+		arg.SourcePayload,
+	)
 	var id int64
 	err := row.Scan(&id)
 	return id, err
@@ -91,6 +104,34 @@ func (q *Queries) ListPendingReceiptIDs(ctx context.Context, status string) ([]i
 			return nil, err
 		}
 		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listReceiptExternalIDs = `-- name: ListReceiptExternalIDs :many
+SELECT external_id FROM receipts
+WHERE source = ? AND external_id != ''
+`
+
+func (q *Queries) ListReceiptExternalIDs(ctx context.Context, source string) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listReceiptExternalIDs, source)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var external_id string
+		if err := rows.Scan(&external_id); err != nil {
+			return nil, err
+		}
+		items = append(items, external_id)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err

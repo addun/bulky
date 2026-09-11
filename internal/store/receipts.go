@@ -13,6 +13,9 @@ const (
 	ReceiptReady    = "ready"
 	ReceiptFailed   = "failed"
 	ReceiptMigrated = "migrated"
+
+	ReceiptSourceOCR       = "ocr"
+	ReceiptSourceBiedronka = "biedronka"
 )
 
 var (
@@ -21,28 +24,62 @@ var (
 )
 
 type Receipt struct {
-	ID           int64
-	ImagePath    string
-	RawResponse  string
-	Status       string
-	ErrorMessage string
-	CreatedAt    string
+	ID            int64
+	ImagePath     string
+	RawResponse   string
+	Status        string
+	ErrorMessage  string
+	CreatedAt     string
+	Source        string
+	ExternalID    string
+	SourcePayload string
 }
 
 func (s *Store) CreateReceipt(imagePath string) (Receipt, error) {
+	return s.createReceipt(imagePath, ReceiptSourceOCR, "", "")
+}
+
+func (s *Store) CreateSourcedReceipt(imagePath, source, externalID, payload string) (Receipt, error) {
+	source = strings.ToLower(strings.TrimSpace(source))
+	externalID = strings.TrimSpace(externalID)
+	if source == "" || externalID == "" {
+		return Receipt{}, errors.New("source and id are required")
+	}
+	return s.createReceipt(imagePath, source, externalID, payload)
+}
+
+func (s *Store) createReceipt(imagePath, source, externalID, payload string) (Receipt, error) {
 	imagePath = strings.TrimSpace(imagePath)
+	source = strings.ToLower(strings.TrimSpace(source))
 	if imagePath == "" {
 		return Receipt{}, errors.New("image is required")
 	}
+	if source == "" {
+		return Receipt{}, errors.New("source is required")
+	}
 	id, err := s.q.InsertReceipt(ctx(), sqlc.InsertReceiptParams{
-		ImagePath: imagePath,
-		Status:    ReceiptPending,
-		CreatedAt: nowRFC3339(),
+		ImagePath:     imagePath,
+		Status:        ReceiptPending,
+		CreatedAt:     nowRFC3339(),
+		Source:        source,
+		ExternalID:    externalID,
+		SourcePayload: payload,
 	})
 	if err != nil {
+		if isUniqueErr(err) {
+			return Receipt{}, ErrDuplicate
+		}
 		return Receipt{}, err
 	}
 	return s.GetReceipt(id)
+}
+
+func (s *Store) ListReceiptExternalIDs(source string) ([]string, error) {
+	source = strings.ToLower(strings.TrimSpace(source))
+	if source == "" {
+		return nil, nil
+	}
+	return s.q.ListReceiptExternalIDs(ctx(), source)
 }
 
 func (s *Store) GetReceipt(id int64) (Receipt, error) {

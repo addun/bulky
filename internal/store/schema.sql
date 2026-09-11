@@ -39,7 +39,10 @@ CREATE TABLE receipts (
   raw_response TEXT NOT NULL DEFAULT '',
   status TEXT NOT NULL,
   created_at TEXT NOT NULL,
-  error_message TEXT NOT NULL DEFAULT ''
+  error_message TEXT NOT NULL DEFAULT '',
+  source TEXT NOT NULL,
+  external_id TEXT NOT NULL DEFAULT '',
+  source_payload TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE purchases (
@@ -98,6 +101,9 @@ CREATE UNIQUE INDEX idx_stories_external_id
   ON stories(external_id COLLATE NOCASE)
   WHERE external_id != '';
 CREATE INDEX idx_receipts_status ON receipts(status);
+CREATE UNIQUE INDEX idx_receipts_source_external
+  ON receipts(source, external_id)
+  WHERE external_id != '';
 CREATE UNIQUE INDEX idx_product_aliases_shop
   ON product_aliases(story_id, alias COLLATE NOCASE)
   WHERE story_id IS NOT NULL;
