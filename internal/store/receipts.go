@@ -14,6 +14,7 @@ const (
 	ReceiptFailed   = "failed"
 	ReceiptMigrated = "migrated"
 
+	ReceiptSourceOCR       = "ocr"
 	ReceiptSourceBiedronka = "biedronka"
 )
 
@@ -23,40 +24,46 @@ var (
 )
 
 type Receipt struct {
-	ID           int64
-	ImagePath    string
-	RawResponse  string
-	Status       string
-	ErrorMessage string
-	CreatedAt    string
-	Source       string
-	ExternalID   string
+	ID            int64
+	ImagePath     string
+	RawResponse   string
+	Status        string
+	ErrorMessage  string
+	CreatedAt     string
+	Source        string
+	ExternalID    string
+	SourcePayload string
 }
 
 func (s *Store) CreateReceipt(imagePath string) (Receipt, error) {
-	return s.createReceipt(imagePath, "", "")
+	return s.createReceipt(imagePath, ReceiptSourceOCR, "", "")
 }
 
-func (s *Store) CreateSourcedReceipt(imagePath, source, externalID string) (Receipt, error) {
-	source = strings.TrimSpace(source)
+func (s *Store) CreateSourcedReceipt(imagePath, source, externalID, payload string) (Receipt, error) {
+	source = strings.ToLower(strings.TrimSpace(source))
 	externalID = strings.TrimSpace(externalID)
 	if source == "" || externalID == "" {
 		return Receipt{}, errors.New("source and id are required")
 	}
-	return s.createReceipt(imagePath, source, externalID)
+	return s.createReceipt(imagePath, source, externalID, payload)
 }
 
-func (s *Store) createReceipt(imagePath, source, externalID string) (Receipt, error) {
+func (s *Store) createReceipt(imagePath, source, externalID, payload string) (Receipt, error) {
 	imagePath = strings.TrimSpace(imagePath)
+	source = strings.ToLower(strings.TrimSpace(source))
 	if imagePath == "" {
 		return Receipt{}, errors.New("image is required")
 	}
+	if source == "" {
+		return Receipt{}, errors.New("source is required")
+	}
 	id, err := s.q.InsertReceipt(ctx(), sqlc.InsertReceiptParams{
-		ImagePath:  imagePath,
-		Status:     ReceiptPending,
-		CreatedAt:  nowRFC3339(),
-		Source:     source,
-		ExternalID: externalID,
+		ImagePath:     imagePath,
+		Status:        ReceiptPending,
+		CreatedAt:     nowRFC3339(),
+		Source:        source,
+		ExternalID:    externalID,
+		SourcePayload: payload,
 	})
 	if err != nil {
 		if isUniqueErr(err) {
@@ -68,7 +75,7 @@ func (s *Store) createReceipt(imagePath, source, externalID string) (Receipt, er
 }
 
 func (s *Store) ListReceiptExternalIDs(source string) ([]string, error) {
-	source = strings.TrimSpace(source)
+	source = strings.ToLower(strings.TrimSpace(source))
 	if source == "" {
 		return nil, nil
 	}
@@ -76,7 +83,7 @@ func (s *Store) ListReceiptExternalIDs(source string) ([]string, error) {
 }
 
 func (s *Store) LatestSourcedBoughtOn(source string) (string, error) {
-	source = strings.TrimSpace(source)
+	source = strings.ToLower(strings.TrimSpace(source))
 	if source == "" {
 		return "", nil
 	}

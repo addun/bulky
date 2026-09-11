@@ -71,7 +71,7 @@ func (s *Server) biedronkaImport(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not store the bill"})
 		return
 	}
-	receipt, err := s.store.CreateSourcedReceipt(imagePath, store.ReceiptSourceBiedronka, id)
+	receipt, err := s.store.CreateSourcedReceipt(imagePath, store.ReceiptSourceBiedronka, id, string(receiptJSON))
 	if errors.Is(err, store.ErrDuplicate) {
 		s.deleteReceiptFiles(imagePath)
 		c.JSON(http.StatusOK, gin.H{"status": "skipped", "id": id})

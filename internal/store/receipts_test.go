@@ -30,6 +30,9 @@ func TestReceiptAIThenMigrate(t *testing.T) {
 	if r.Status != ReceiptPending || r.RawResponse != "" {
 		t.Fatalf("create: %#v", r)
 	}
+	if r.Source != ReceiptSourceOCR || r.ExternalID != "" || r.SourcePayload != "" {
+		t.Fatalf("ocr source: %#v", r)
+	}
 
 	raw, _ := json.Marshal(map[string]any{
 		"bought_on": "2026-08-20",
@@ -376,31 +379,81 @@ func TestSourcedReceiptUniqueAndLatestDate(t *testing.T) {
 	}
 	defer s.Close()
 
-	r, err := s.CreateSourcedReceipt("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", ReceiptSourceBiedronka, "tx-1")
+	payload := `{"id":"tx-1","lines":[]}`
+	r, err := s.CreateSourcedReceipt("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", ReceiptSourceBiedronka, "tx-1", payload)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.Source != ReceiptSourceBiedronka || r.ExternalID != "tx-1" {
-		t.Fatalf("got %#v", r)
+	if r.Source != ReceiptSourceBiedronka || r.ExternalID != "tx-1" || r.SourcePayload != payload {
+		t.Fatalf("sourced: %#v", r)
 	}
-	if err := s.SaveAIResponse(r.ID, `{"bought_on":"2026-09-08","lines":[]}`); err != nil {
+	if r.RawResponse != "" {
+		t.Fatalf("bill should start empty: %#v", r)
+	}
+
+	if _, err := s.CreateSourcedReceipt("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", ReceiptSourceBiedronka, "tx-1", payload); !errors.Is(err, ErrDuplicate) {
+		t.Fatalf("same source id: %v", err)
+	}
+	if _, err := s.CreateSourcedReceipt("cccccccccccccccccccccccccccccccc", "lidl", "tx-1", `{"id":"tx-1"}`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.CreateSourcedReceipt("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", ReceiptSourceBiedronka, "tx-1"); !errors.Is(err, ErrDuplicate) {
-		t.Fatalf("dup: %v", err)
-	}
-	if _, err := s.CreateSourcedReceipt("cccccccccccccccccccccccccccccccc", ReceiptSourceBiedronka, "tx-2"); err != nil {
+	if _, err := s.CreateSourcedReceipt("dddddddddddddddddddddddddddddddd", ReceiptSourceBiedronka, "tx-2", ""); err != nil {
 		t.Fatal(err)
 	}
+
 	ids, err := s.ListReceiptExternalIDs(ReceiptSourceBiedronka)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(ids) != 2 {
-		t.Fatalf("ids %#v", ids)
+		t.Fatalf("biedronka ids: %v", ids)
 	}
-	got, err := s.LatestSourcedBoughtOn(ReceiptSourceBiedronka)
-	if err != nil || got != "2026-09-08" {
-		t.Fatalf("latest %q %v", got, err)
+	lidlIDs, err := s.ListReceiptExternalIDs("lidl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(lidlIDs) != 1 || lidlIDs[0] != "tx-1" {
+		t.Fatalf("lidl ids: %v", lidlIDs)
+	}
+
+	units, err := s.ListUnits()
+	if err != nil || len(units) == 0 {
+		t.Fatalf("units: %v %#v", err, units)
+	}
+	if err := s.SaveAIResponse(r.ID, `{"bought_on":"2026-09-08","lines":[]}`); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.GetReceipt(r.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.RawResponse != `{"bought_on":"2026-09-08","lines":[]}` {
+		t.Fatalf("bill: %s", got.RawResponse)
+	}
+	if got.SourcePayload != payload {
+		t.Fatalf("payload should stay: %s", got.SourcePayload)
+	}
+	latest, err := s.LatestSourcedBoughtOn(ReceiptSourceBiedronka)
+	if err != nil || latest != "2026-09-08" {
+		t.Fatalf("latest %q %v", latest, err)
+	}
+
+	if _, err := s.MigrateReceipt(r.ID, BillImport{
+		BoughtOn: "2026-09-08",
+		Lines: []BillLineInput{
+			{ProductName: "Milk", UnitID: units[0].ID, Quantity: mustDec(t, "1"), Amount: mustDec(t, "3.29")},
+		},
+	}, `{"bought_on":"2026-09-08"}`); err != nil {
+		t.Fatal(err)
+	}
+	got, err = s.GetReceipt(r.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.SourcePayload != payload {
+		t.Fatalf("payload after save: %s", got.SourcePayload)
+	}
+	if got.RawResponse != `{"bought_on":"2026-09-08"}` {
+		t.Fatalf("confirmed bill: %s", got.RawResponse)
 	}
 }

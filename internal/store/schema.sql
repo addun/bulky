@@ -40,8 +40,9 @@ CREATE TABLE receipts (
   status TEXT NOT NULL,
   created_at TEXT NOT NULL,
   error_message TEXT NOT NULL DEFAULT '',
-  source TEXT NOT NULL DEFAULT '',
-  external_id TEXT NOT NULL DEFAULT ''
+  source TEXT NOT NULL,
+  external_id TEXT NOT NULL DEFAULT '',
+  source_payload TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE purchases (

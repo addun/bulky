@@ -55,14 +55,15 @@ type Purchase struct {
 }
 
 type Receipt struct {
-	ID           int64
-	ImagePath    string
-	RawResponse  string
-	Status       string
-	CreatedAt    string
-	ErrorMessage string
-	Source       string
-	ExternalID   string
+	ID            int64
+	ImagePath     string
+	RawResponse   string
+	Status        string
+	CreatedAt     string
+	ErrorMessage  string
+	Source        string
+	ExternalID    string
+	SourcePayload string
 }
 
 type RetailChain struct {

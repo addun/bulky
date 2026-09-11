@@ -403,6 +403,9 @@ func TestBiedronkaImportCreatesReadyReceipt(t *testing.T) {
 	if !strings.Contains(receipt.RawResponse, `"Mleko 1l"`) {
 		t.Fatalf("bill %s", receipt.RawResponse)
 	}
+	if !strings.Contains(receipt.SourcePayload, `"Mleko 1l"`) || strings.Contains(receipt.SourcePayload, `"receipt_name"`) {
+		t.Fatalf("origin %s", receipt.SourcePayload)
+	}
 
 	rec = httptest.NewRecorder()
 	req = httptest.NewRequest(http.MethodPost, "/api/biedronka/import", strings.NewReader(body))
