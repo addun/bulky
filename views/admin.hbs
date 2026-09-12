@@ -1,0 +1,48 @@
+{{> header}}
+<h1>Settings</h1>
+<form class="stack" method="post" action="/admin/settings">
+  <label>Model <input name="ocr_model" required value="{{OCRModel}}" autofocus></label>
+  <p class="hint"><a href="https://developers.openai.com/api/docs/models/all" target="_blank" rel="noopener">All models</a></p>
+
+  <fieldset class="form-group">
+    <legend>New product units</legend>
+    <p class="hint">On a bill, a quantity like 1 uses the piece unit and 1,450 uses the weight unit. <a href="/admin/units">Add units</a> first if the list is empty.</p>
+    <div class="form-row">
+      <label>
+        Piece unit
+        <select name="piece_unit_id">
+          <option value="">Select…</option>
+          {{#each Units}}
+          <option value="{{this.ID}}" {{#if (eq this.ID ../Defaults.PieceID)}}selected{{/if}}>{{this.Name}}</option>
+          {{/each}}
+        </select>
+      </label>
+      <label>
+        Weight unit
+        <select name="weight_unit_id">
+          <option value="">Select…</option>
+          {{#each Units}}
+          <option value="{{this.ID}}" {{#if (eq this.ID ../Defaults.WeightID)}}selected{{/if}}>{{this.Name}}</option>
+          {{/each}}
+        </select>
+      </label>
+    </div>
+  </fieldset>
+
+  <div class="form-actions">
+    <button type="submit" class="btn btn-tag">Save</button>
+  </div>
+</form>
+
+<section>
+  <h2>MCP</h2>
+  <p class="hint">Agents connect at <code>/mcp</code> on this host. No token.</p>
+  <pre class="mcp-snippet">{
+  "mcpServers": {
+    "bulkly": {
+      "url": "https://YOUR_HOST/mcp"
+    }
+  }
+}</pre>
+</section>
+{{> footer}}

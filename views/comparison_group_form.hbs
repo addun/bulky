@@ -1,0 +1,37 @@
+{{> header}}
+<h1>{{#if New}}Add comparison group{{else}}Edit comparison group{{/if}}</h1>
+<form class="stack" method="post" action="{{#if New}}/admin/comparison-groups{{else}}/admin/comparison-groups/{{Group.ID}}{{/if}}">
+  <fieldset class="form-group">
+    <legend>Group</legend>
+    <label>Name <input name="name" required value="{{Group.Name}}" autofocus></label>
+    <label>
+      Compare in
+      <select name="unit_id" required>
+        <option value="">Select…</option>
+        {{#each Units}}
+        <option value="{{this.ID}}" {{#if (eq this.ID ../Group.UnitID)}}selected{{/if}}>{{this.Name}}</option>
+        {{/each}}
+      </select>
+    </label>
+    <p class="hint">Members need this as their purchase unit, or a conversion to it. Rankings use the latest logged price per kg, litre, or whichever unit you pick.</p>
+  </fieldset>
+
+  <fieldset class="form-group">
+    <legend>Products</legend>
+    {{#unless Products}}
+      <p class="hint">No products yet. <a href="/admin/products/new">Add a product</a> first.</p>
+    {{else}}
+      <div class="checks">
+        {{#each Products}}
+        <label class="check"><input type="checkbox" name="product_id" value="{{this.ID}}" {{#if this.Selected}}checked{{/if}}> {{this.Name}} <span class="meta">{{this.UnitName}}</span></label>
+        {{/each}}
+      </div>
+    {{/unless}}
+  </fieldset>
+
+  <div class="form-actions">
+    <button type="submit" class="btn btn-tag">{{#if New}}Add group{{else}}Save group{{/if}}</button>
+    <a href="/admin/comparison-groups">Cancel</a>
+  </div>
+</form>
+{{> footer}}

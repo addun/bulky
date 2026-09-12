@@ -1,0 +1,78 @@
+{{> header}}
+<article class="product-head">
+  {{#if Product.ImagePath.Valid}}
+    <img class="hero" src="/images/{{Product.ImagePath.String}}" alt="">
+  {{else}}
+    <span class="hero hero-empty" aria-hidden="true"></span>
+  {{/if}}
+  <div>
+    <h1>{{Product.Name}}</h1>
+    <p class="product-actions">
+      <a class="btn btn-tag" href="/admin/products/{{Product.ID}}/purchases/new">Add</a>
+      <a href="/admin/products/{{Product.ID}}/edit">Edit</a>
+      <a href="/admin/aliases?product={{Product.ID}}">Aliases</a>
+    </p>
+  </div>
+</article>
+
+<section>
+  <h2>Comparison groups</h2>
+  {{#unless Groups}}
+    <p class="empty">Not in any comparison group. <a href="/admin/products/{{Product.ID}}/edit">Edit</a> to assign one.</p>
+  {{else}}
+    <ul class="units">
+      {{#each Groups}}
+      <li>
+        <span class="row-main">
+          <span class="unit-name">{{this.Name}}</span>
+          <span class="meta">{{this.UnitName}}</span>
+        </span>
+        <a href="/admin/comparison-groups/{{this.ID}}/edit">Edit</a>
+      </li>
+      {{/each}}
+    </ul>
+  {{/unless}}
+</section>
+
+<section>
+  <h2>History</h2>
+  {{#unless Purchases}}
+    <p class="empty">Nothing logged yet.</p>
+  {{else}}
+    <ul class="history">
+      {{#each Purchases}}
+      <li{{#if this.IsPrice}} class="price-row"{{/if}}>
+        <div class="history-head">
+          <span class="history-when">{{datetime this.BoughtOn}}{{#if this.IsPrice}} <span class="kind">price</span>{{/if}}</span>
+          <span class="history-amt">{{money this.Amount}}</span>
+        </div>
+        <p class="history-facts">
+          {{#if this.StoryID}}<span>{{at ../StoryByID this.StoryID "Name"}}</span>{{/if}}
+          <span>{{qty this.Quantity}} {{../Product.UnitName}}</span>
+          <span>{{unitPrice this.Amount this.Quantity}} / {{../Product.UnitName}}</span>
+        </p>
+        <p class="history-foot">
+          {{#if this.ReceiptID}}
+            <a class="history-slip" href="/admin/receipts/{{this.ReceiptID}}">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M7 3.5h10v17l-1.6-1.1-1.6 1.1-1.6-1.1-1.6 1.1-1.6-1.1-1.6 1.1zM9 8h6M9 12h6M9 16h3.5"/></svg>
+              Receipt {{this.ReceiptID}}
+            </a>
+          {{else}}
+            <span class="history-noslip">No receipt</span>
+          {{/if}}
+          <span class="tight">
+            <a href="/admin/purchases/{{this.ID}}/edit">Edit</a>
+            <a class="danger" href="/admin/purchases/{{this.ID}}/delete">Delete</a>
+          </span>
+        </p>
+      </li>
+      {{/each}}
+    </ul>
+  {{/unless}}
+</section>
+
+<p class="danger-zone">
+  <a class="danger" href="/admin/products/{{Product.ID}}/merge-with">Merge</a>
+  <a class="danger" href="/admin/products/{{Product.ID}}/delete">Delete product</a>
+</p>
+{{> footer}}

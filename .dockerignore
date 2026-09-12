@@ -2,7 +2,9 @@
 .github
 data
 doc
-bulkly
-*.db
 *.md
-**/*_test.go
+node_modules
+dist
+*.tsbuildinfo
+*.db
+.DS_Store

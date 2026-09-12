@@ -1,0 +1,52 @@
+{{> header}}
+<h1>{{#if New}}Add alias{{else}}Edit alias{{/if}}</h1>
+<form class="stack" method="post" action="{{#if New}}/admin/aliases{{else}}/admin/aliases/{{Alias.ID}}{{/if}}">
+  {{#if FromProduct}}<input type="hidden" name="from_product" value="{{FromProduct}}">{{/if}}
+  <fieldset class="form-group">
+    <legend>For</legend>
+    {{#if (and New LockedProduct)}}
+    <input type="hidden" name="product_id" value="{{Alias.ProductID}}">
+    <p class="meta">Product {{LockedProduct.Name}}</p>
+    {{else}}
+    <label>Product
+      <select name="product_id" required>
+        <option value="">Select…</option>
+        {{#each Products}}
+        <option value="{{this.ID}}" {{#if (eq this.ID ../Alias.ProductID)}}selected{{/if}}>{{this.Name}}</option>
+        {{/each}}
+      </select>
+    </label>
+    {{/if}}
+    <label>Scope
+      <select name="scope">
+        <option value="" {{#if (eq Alias.ScopeValue "")}}selected{{/if}}>Any shop</option>
+        {{#if Chains}}
+        <optgroup label="Retail chains">
+          {{#each Chains}}
+          <option value="chain:{{this.ID}}" {{#if (eq ../Alias.ScopeValue (print "chain:" this.ID))}}selected{{/if}}>{{this.Name}}</option>
+          {{/each}}
+        </optgroup>
+        {{/if}}
+        {{#if Stories}}
+        <optgroup label="Stores">
+          {{#each Stories}}
+          <option value="story:{{this.ID}}" {{#if (eq ../Alias.ScopeValue (print "story:" this.ID))}}selected{{/if}}>{{this.Label}}</option>
+          {{/each}}
+        </optgroup>
+        {{/if}}
+      </select>
+    </label>
+  </fieldset>
+  <fieldset class="form-group">
+    <legend>Name on the bill</legend>
+    <label>Alias <input name="alias" required value="{{Alias.Alias}}" autofocus></label>
+  </fieldset>
+  {{#unless Products}}
+    <p class="hint">No products yet. <a href="/admin/products/new">Add a product</a> first.</p>
+  {{/unless}}
+  <div class="form-actions">
+    <button type="submit" class="btn btn-tag">{{#if New}}Add alias{{else}}Save alias{{/if}}</button>
+    <a href="{{Cancel}}">Cancel</a>
+  </div>
+</form>
+{{> footer}}

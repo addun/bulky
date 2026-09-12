@@ -1,0 +1,33 @@
+{{> header}}
+<div class="page-head">
+  {{#if Filter}}
+  <div>
+    <h1>Aliases for {{Filter.Name}}</h1>
+    <p class="hint"><a href="/admin/aliases">All aliases</a></p>
+  </div>
+  <a class="btn btn-tag" href="/admin/aliases/new?product={{Filter.ID}}">Add alias</a>
+  {{else}}
+  <h1>Aliases</h1>
+  <a class="btn btn-tag" href="/admin/aliases/new">Add alias</a>
+  {{/if}}
+</div>
+
+{{#unless Aliases}}
+  <p class="empty">{{#if Filter}}No aliases for this product.{{else}}No aliases yet.{{/if}}</p>
+{{else}}
+  <ul class="units aliases">
+    {{#each Aliases}}
+    <li>
+      <span class="row-main">
+        <span class="unit-name">{{this.Alias}}</span>
+        <span class="meta">{{this.ProductName}} · {{this.ScopeLabel}}</span>
+      </span>
+      <span class="tight">
+        <a href="/admin/aliases/{{this.ID}}/edit{{../ProductQuery}}">Edit</a>
+        <a class="danger" href="/admin/aliases/{{this.ID}}/delete{{../ProductQuery}}">Delete</a>
+      </span>
+    </li>
+    {{/each}}
+  </ul>
+{{/unless}}
+{{> footer}}
