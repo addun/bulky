@@ -1,0 +1,34 @@
+{{> header}}
+<h1>Edit visit</h1>
+<p class="lede">Date and store for this bill.</p>
+<p class="hint">Saving applies these values to every product assigned to this receipt.</p>
+
+<form class="stack" method="post" action="/admin/receipts/{{Receipt.ID}}/edit">
+  <fieldset class="form-group">
+    <legend>When</legend>
+    <div class="form-row">
+      <label>Date <input type="date" name="bought_on" required value="{{dateValue BoughtOn}}"></label>
+      <label>Hour <input type="time" name="bought_at" value="{{timeValue BoughtOn}}"></label>
+    </div>
+  </fieldset>
+
+  <fieldset class="form-group">
+    <legend>Store</legend>
+    <label>
+      Store
+      <select name="story_id">
+        <option value="">None</option>
+        {{#each Stories}}
+        <option value="{{this.ID}}" {{#if (eq this.ID ../Story.ID)}}selected{{/if}}>{{this.Label}}</option>
+        {{/each}}
+      </select>
+    </label>
+    {{#unless Stories}}<p class="hint">No stores yet. You can still save, or <a href="/admin/stories/new">add a store</a> first.</p>{{/unless}}
+  </fieldset>
+
+  <div class="actions">
+    <button type="submit" class="btn btn-tag">Save visit</button>
+    <a href="/admin/receipts/{{Receipt.ID}}">Cancel</a>
+  </div>
+</form>
+{{> footer}}

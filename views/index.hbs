@@ -1,0 +1,42 @@
+{{> header}}
+{{#if (gt Imported 0)}}
+<p class="banner">Saved {{Imported}} purchase{{#if (ne Imported 1)}}s{{/if}} from the bill.</p>
+{{/if}}
+<div class="toolbar">
+  <form class="search" method="get" action="/admin">
+    <label class="sr" for="q">Search</label>
+    <input id="q" name="q" type="search" value="{{Page.Query}}" placeholder="Find a product" autocomplete="off">
+    <button type="submit" class="btn btn-tag">Search</button>
+  </form>
+</div>
+
+{{#unless Products}}
+  <div class="empty">
+    {{#if Page.Query}}
+      <p>No product matches “{{Page.Query}}”.</p>
+    {{else}}
+      <p>Nothing on the list yet.</p>
+      <p><a href="/admin/products/new">Add the first product you buy in bulk</a>, or <a href="/admin/receipts">scan a bill</a>.</p>
+    {{/if}}
+  </div>
+{{else}}
+  <ul class="ledger">
+    {{#each Products}}
+    <li>
+      <a class="row" href="/admin/products/{{this.ID}}">
+        {{#if this.ImagePath.Valid}}
+          <img class="thumb" src="/images/{{this.ImagePath.String}}" alt="">
+        {{else}}
+          <span class="thumb thumb-empty" aria-hidden="true"></span>
+        {{/if}}
+        <span class="row-main">
+          <strong>{{this.Name}}</strong>
+          <span class="meta">{{this.UnitName}}{{#if this.LastBought.Valid}} · last {{datetime this.LastBought.String}}{{/if}}</span>
+        </span>
+        <span class="row-amt">{{#if this.Quote}}{{money this.Quote.Price}} / {{this.UnitName}}{{else}}—{{/if}}</span>
+      </a>
+    </li>
+    {{/each}}
+  </ul>
+{{/unless}}
+{{> footer}}

@@ -1,0 +1,25 @@
+{{> header}}
+<div class="page-head">
+  <h1>Comparison groups</h1>
+  <a class="btn btn-tag" href="/admin/comparison-groups/new">Add group</a>
+</div>
+
+{{#unless Groups}}
+  <p class="empty">No comparison groups yet.</p>
+{{else}}
+  <ul class="units">
+    {{#each Groups}}
+    <li>
+      <span class="row-main">
+        <span class="unit-name">{{this.Name}}</span>
+        <span class="meta">{{this.UnitName}} · {{this.ProductCount}} product{{#if (ne this.ProductCount 1)}}s{{/if}}</span>
+      </span>
+      <span class="tight">
+        <a href="/admin/comparison-groups/{{this.ID}}/edit">Edit</a>
+        <a class="danger" href="/admin/comparison-groups/{{this.ID}}/delete">Delete</a>
+      </span>
+    </li>
+    {{/each}}
+  </ul>
+{{/unless}}
+{{> footer}}

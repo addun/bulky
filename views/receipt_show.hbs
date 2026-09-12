@@ -1,0 +1,59 @@
+{{> header}}
+<h1>Receipt</h1>
+
+{{#if (gt Imported 0)}}
+<p class="banner">Saved {{Imported}} purchase{{#if (ne Imported 1)}}s{{/if}} from the bill.</p>
+{{/if}}
+{{#if Notes}}<p class="banner">{{Notes}}</p>{{/if}}
+
+<div class="receipt-layout">
+  {{#if Receipt.ImagePath}}
+  <figure class="receipt-slip">
+    <img src="/admin/receipts/{{Receipt.ID}}/preview" alt="Uploaded bill">
+  </figure>
+  {{/if}}
+
+  <div>
+    <section>
+      <div class="page-head">
+        <h2>Visit</h2>
+        <a href="/admin/receipts/{{Receipt.ID}}/edit">Edit</a>
+      </div>
+      <p class="meta">
+        {{#if BoughtOn}}{{datetime BoughtOn}}{{else}}No date{{/if}}
+        {{#if Story.ID}} · {{Story.Name}}{{else}} · No store{{/if}}
+      </p>
+    </section>
+
+    <h2>Products</h2>
+    {{#unless Purchases}}
+      <p class="empty">No purchases left on this bill.</p>
+    {{else}}
+      <ul class="ledger">
+        {{#each Purchases}}
+        <li>
+          <a class="row" href="/admin/products/{{this.ProductID}}">
+            {{#if this.ImagePath.Valid}}
+              <img class="thumb" src="/images/{{this.ImagePath.String}}" alt="">
+            {{else}}
+              <span class="thumb thumb-empty" aria-hidden="true"></span>
+            {{/if}}
+            <span class="row-main">
+              <strong>{{this.ProductName}}</strong>
+              <span class="meta">{{qty this.Quantity}} {{this.UnitName}}</span>
+            </span>
+            <span class="row-amt">{{money this.Amount}}</span>
+          </a>
+          <p class="history-foot">
+            <span class="tight">
+              <a href="/admin/purchases/{{this.ID}}/edit">Edit</a>
+              <a class="danger" href="/admin/purchases/{{this.ID}}/delete">Delete</a>
+            </span>
+          </p>
+        </li>
+        {{/each}}
+      </ul>
+    {{/unless}}
+  </div>
+</div>
+{{> footer}}

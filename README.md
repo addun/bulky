@@ -8,7 +8,7 @@ A local log of products you buy in bulk: quantity, price in PLN, and a running h
 docker compose up --build
 ```
 
-The image includes Poppler so PDFs can be turned into page images for the vision model. For `go run` on a Mac, install the same with `brew install poppler`.
+The image includes Poppler so PDFs can be turned into page images for the vision model. Locally, install the same with `brew install poppler`.
 
 Published images from GitHub Releases go to the [GitHub Container Registry](https://ghcr.io) as `ghcr.io/<owner>/<repo>` (linux/amd64 and linux/arm64):
 
@@ -32,11 +32,15 @@ Data (SQLite + product photos) lives in the `bulkly-data` volume.
 
 ## Without Docker
 
-Needs Go 1.24+:
+Needs Node 22+:
 
 ```bash
-go run ./cmd/bulkly
+npm install --legacy-peer-deps
+npm run build
+npm start
 ```
+
+Or `npm run start:dev` while developing. Seed fake catalog data with `npm run seed` (see `src/seed/cli.ts` for flags such as `--clamp-prices`).
 
 Optional environment:
 

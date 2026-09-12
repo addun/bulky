@@ -8,7 +8,7 @@ The reader needs a vision model. Set `OCR_API_KEY` (or `OPENAI_API_KEY`) for Ope
 
 On the same page, pick a **piece unit** and a **weight unit** from your catalog. Confirming a bill uses those for new products. They can be any names (`szt`/`kg`, `ea`/`lb`, …). Leave either blank if you do not want that guess.
 
-PDFs are rasterized with `pdftoppm` (Poppler) and sent as page images to the same model as photos. Docker already has Poppler. For `go run` on a Mac, `brew install poppler`. There is no Tesseract step: extracted text glued columns together (for example `bananyC1.35x6.00`) and the model could not unstick them.
+PDFs are rasterized with `pdftoppm` (Poppler) and sent as page images to the same model as photos. Docker already has Poppler. Locally, `brew install poppler`. There is no Tesseract step: extracted text glued columns together (for example `bananyC1.35x6.00`) and the model could not unstick them.
 
 ## Upload
 

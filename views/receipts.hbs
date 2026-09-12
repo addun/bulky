@@ -1,0 +1,51 @@
+{{> header}}
+<h1>Receipts</h1>
+
+{{#unless Configured}}
+  <p class="banner">The reader is off until you set <code>OCR_API_KEY</code> (OpenAI) or <code>OCR_BASE_URL</code> (any OpenAI-compatible vision API, including a local server).</p>
+{{/unless}}
+{{#unless Model}}
+  <p class="banner">Set the AI model under <a href="/admin/settings">Settings</a> so the reader can run.</p>
+{{/unless}}
+{{#if (and Configured Model)}}
+<form class="stack scan-form" method="post" action="/admin/receipts" enctype="multipart/form-data" id="receipt-upload">
+  <div class="scan-drop" id="scan-drop">
+    <p class="scan-heading">Photo or PDF of the bill</p>
+    <p class="hint">Paste, drop, take a photo, or choose one · jpeg, png, webp, gif or pdf · up to 10 MB</p>
+    <div class="scan-picks">
+      <label class="btn btn-plain scan-pick">
+        Take photo
+        <input id="bill-camera" name="bill_camera" type="file" accept="image/*" capture="environment">
+      </label>
+      <label class="btn btn-plain scan-pick">
+        Choose file
+        <input id="bill" name="bill" type="file" accept="image/*,this.pdf,application/pdf">
+      </label>
+      <button type="button" class="btn btn-plain" id="paste-bill">Paste</button>
+    </div>
+    <p class="scan-ready" id="scan-ready" hidden></p>
+  </div>
+  <div class="actions">
+    <button type="submit" class="btn btn-tag" id="receipt-submit">Read the bill</button>
+  </div>
+</form>
+{{/if}}
+
+{{#unless Receipts}}
+  <p class="empty">No receipts yet.</p>
+{{else}}
+  <ul class="ledger">
+    {{#each Receipts}}
+    <li>
+      <a class="row" href="/admin/receipts/{{this.ID}}">
+        <span class="thumb thumb-empty" aria-hidden="true"></span>
+        <span class="row-main">
+          <strong>{{date this.CreatedAt}}</strong>
+          <span class="meta">{{this.StatusLabel}}</span>
+        </span>
+      </a>
+    </li>
+    {{/each}}
+  </ul>
+{{/unless}}
+{{> footer}}

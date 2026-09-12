@@ -1,0 +1,100 @@
+{{> header}}
+<h1>{{#if New}}Add product{{else}}Edit {{Product.Name}}{{/if}}</h1>
+<form class="stack" method="post" action="{{#if New}}/admin/products{{else}}/admin/products/{{Product.ID}}{{/if}}" enctype="multipart/form-data" id="product-form">
+  <label>
+    Name
+    <input name="name" required value="{{Product.Name}}" autofocus>
+  </label>
+  {{#if New}}
+  <label>
+    Base Unit
+    <select name="unit_id" required id="purchase-unit">
+      <option value="">Select…</option>
+      {{#each Units}}
+      <option value="{{this.ID}}" {{#if (eq this.ID ../Product.UnitID)}}selected{{/if}}>{{this.Name}}</option>
+      {{/each}}
+    </select>
+  </label>
+  {{#unless Units}}
+    <p class="hint">No units yet. <a href="/admin/units">Add a unit</a> first.</p>
+  {{/unless}}
+  {{else}}
+  <input type="hidden" name="unit_id" value="{{Product.UnitID}}">
+  <p>Purchase unit <strong data-locked-primary-unit>{{Product.UnitName}}</strong> · <a href="/admin/products/{{Product.ID}}/change-unit">Change unit</a></p>
+  {{/if}}
+
+  <fieldset class="form-group">
+    <legend>Conversions</legend>
+    <div id="extra-units" class="extra-units">
+      {{#each Product.Conversions}}
+      <div class="form-row extra-unit">
+        <div class="extra-eq">
+          <span class="extra-eq-lead">1 <span data-primary-unit>{{../Product.UnitName}}</span> equals</span>
+          <input name="extra_factor" inputmode="decimal" value="{{qty this.Factor}}" aria-label="Conversion amount">
+          <select name="extra_unit_id" data-extra-unit aria-label="Conversion unit">
+            <option value="">Select…</option>
+            {{#each ../Units}}
+            <option value="{{this.ID}}" {{#if (eq this.ID ../UnitID)}}selected{{/if}}>{{this.Name}}</option>
+            {{/each}}
+          </select>
+        </div>
+        <button type="button" class="btn btn-ghost" data-remove-extra>Remove</button>
+      </div>
+      {{/each}}
+    </div>
+    <p><button type="button" class="btn btn-ghost" id="add-extra-unit">Add conversion</button></p>
+  </fieldset>
+
+  {{#if Groups}}
+  <fieldset class="form-group">
+    <legend>Comparison groups</legend>
+    <p class="hint">Same brand, whole market, or any other set. Ranked by latest price per the group’s unit.</p>
+    <div class="checks">
+      {{#each Groups}}
+      <label class="check"><input type="checkbox" name="group_id" value="{{this.ID}}" {{#if this.Selected}}checked{{/if}}> {{this.Name}} <span class="meta">{{this.UnitName}}</span></label>
+      {{/each}}
+    </div>
+  </fieldset>
+  {{/if}}
+
+  <div class="photo-drop{{#if (and (not New) Product.ImagePath.Valid)}} has-file{{/if}}" id="photo-drop">
+    <div class="photo-picks">
+      <span class="photo-heading">Photo</span>
+      <div class="photo-actions">
+        <label class="btn btn-plain scan-pick">
+          Choose file
+          <input id="product-image" name="image" type="file" accept="image/*">
+        </label>
+        <button type="button" class="btn btn-plain" id="paste-photo">Paste</button>
+      </div>
+    </div>
+    <div class="preview" id="photo-preview">
+      <span class="photo-frame thumb-empty">
+        <img id="photo-preview-img" alt=""{{#if (and (not New) Product.ImagePath.Valid)}} src="/images/{{Product.ImagePath.String}}"{{/if}}>
+      </span>
+      {{#if (and (not New) Product.ImagePath.Valid)}}
+      <label class="check"><input type="checkbox" name="clear_image" value="1"> Remove photo</label>
+      {{/if}}
+    </div>
+  </div>
+  <div class="actions">
+    <button type="submit" class="btn btn-tag">{{#if New}}Save product{{else}}Save changes{{/if}}</button>
+    <a href="{{#if New}}/admin{{else}}/admin/products/{{Product.ID}}{{/if}}">Cancel</a>
+  </div>
+</form>
+<template id="extra-unit-template">
+  <div class="form-row extra-unit">
+    <div class="extra-eq">
+      <span class="extra-eq-lead">1 <span data-primary-unit>{{Product.UnitName}}</span> equals</span>
+      <input name="extra_factor" inputmode="decimal" aria-label="Conversion amount">
+      <select name="extra_unit_id" data-extra-unit aria-label="Conversion unit">
+        <option value="">Select…</option>
+        {{#each Units}}
+        <option value="{{this.ID}}">{{this.Name}}</option>
+        {{/each}}
+      </select>
+    </div>
+    <button type="button" class="btn btn-ghost" data-remove-extra>Remove</button>
+  </div>
+</template>
+{{> footer}}
