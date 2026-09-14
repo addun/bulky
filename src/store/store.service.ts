@@ -1,6 +1,22 @@
 import { Injectable } from '@nestjs/common';
+import { and, count, desc, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
+import { alias as tableAlias } from 'drizzle-orm/sqlite-core';
 import Decimal from 'decimal.js';
 import { DatabaseService } from '../db/database.service';
+import { changesOf, countOf, emptyStr, int0, lastId, nocaseEq, nocaseOrder } from '../db/query';
+import {
+  comparisonGroupProducts,
+  comparisonGroups,
+  productAliases,
+  productUnitConversions,
+  products,
+  purchases,
+  receipts,
+  retailChains,
+  settings,
+  stories,
+  units,
+} from '../db/schema';
 import {
   AliasScopeError,
   ComparisonGroupNameError,
@@ -35,7 +51,7 @@ import {
 } from '../domain/errors';
 import { search } from '../domain/match';
 import { normalizeBoughtOn } from '../domain/bought-on';
-import { bestRecentPrice, lastPricesByProduct, quotesByProduct } from '../domain/price-stats';
+import { lastPricesByProduct, quotesByProduct } from '../domain/price-stats';
 import {
   KIND_PRICE,
   KIND_PURCHASE,
@@ -53,7 +69,6 @@ import {
   type ComparisonGroup,
   type ComparisonOffer,
   type GroupComparison,
-  type ImagePath,
   type MergePlan,
   type Product,
   type ProductAlias,
@@ -73,11 +88,59 @@ import {
   imagePath,
 } from '../domain/types';
 
-type Stmt = ReturnType<DatabaseService['sqlite']['prepare']>;
+const unitUseCount = sql<number>`cast((
+  select count(*) from products p where p.unit_id = ${units.id}
+) + (
+  select count(*) from product_unit_conversions c where c.unit_id = ${units.id}
+) as integer)`.mapWith(Number);
+
+const chainStoryCount = sql<number>`cast((
+  select count(*) from stories s where s.retail_chain_id = ${retailChains.id}
+) as integer)`.mapWith(Number);
+
+const groupMemberCount = sql<number>`cast((
+  select count(*) from comparison_group_products m where m.group_id = ${comparisonGroups.id}
+) as integer)`.mapWith(Number);
+
+type ProductRow = {
+  ID: number;
+  Name: string;
+  UnitID: number;
+  UnitName: string;
+  image_path: string | null;
+  CreatedAt: string;
+};
+
+type PurchaseRow = {
+  ID: number;
+  ProductID: number;
+  StoryID: number | null;
+  Kind: string;
+  ReceiptID: number | null;
+  BoughtOn: string;
+  Quantity: string;
+  Amount: string;
+  CreatedAt: string;
+};
+
+type ComparisonMemberRow = {
+  GroupID: number;
+  GroupName: string;
+  GroupUnitID: number;
+  GroupUnitName: string;
+  ProductID: number;
+  ProductName: string;
+  ProductUnitID: number;
+  ConversionFactor: string | null;
+};
 
 @Injectable()
 export class StoreService {
   constructor(private readonly db: DatabaseService) {}
+
+  private get orm() {
+    return this.db.drizzle;
+  }
 
   dataDir(): string {
     return this.db.dataDirPath();
@@ -98,34 +161,29 @@ export class StoreService {
   // --- units ---
 
   listUnits(): Unit[] {
-    return this.all(
-      `SELECT u.id AS ID, u.name AS Name,
-        CAST((SELECT COUNT(*) FROM products p WHERE p.unit_id = u.id)
-          + (SELECT COUNT(*) FROM product_unit_conversions c WHERE c.unit_id = u.id) AS INTEGER) AS ProductCount
-       FROM units u ORDER BY u.name COLLATE NOCASE`,
-    );
+    return this.orm
+      .select({ ID: units.id, Name: units.name, ProductCount: unitUseCount })
+      .from(units)
+      .orderBy(nocaseOrder(units.name))
+      .all();
   }
 
   getUnit(id: number): Unit {
-    const row = this.get<Unit>(
-      `SELECT u.id AS ID, u.name AS Name,
-        CAST((SELECT COUNT(*) FROM products p WHERE p.unit_id = u.id)
-          + (SELECT COUNT(*) FROM product_unit_conversions c WHERE c.unit_id = u.id) AS INTEGER) AS ProductCount
-       FROM units u WHERE u.id = ?`,
-      id,
-    );
+    const row = this.orm
+      .select({ ID: units.id, Name: units.name, ProductCount: unitUseCount })
+      .from(units)
+      .where(eq(units.id, id))
+      .get();
     if (!row) throw new NotFoundError();
     return row;
   }
 
   findUnitByName(name: string): Unit {
-    const row = this.get<Unit>(
-      `SELECT u.id AS ID, u.name AS Name,
-        CAST((SELECT COUNT(*) FROM products p WHERE p.unit_id = u.id)
-          + (SELECT COUNT(*) FROM product_unit_conversions c WHERE c.unit_id = u.id) AS INTEGER) AS ProductCount
-       FROM units u WHERE u.name = ? COLLATE NOCASE`,
-      name,
-    );
+    const row = this.orm
+      .select({ ID: units.id, Name: units.name, ProductCount: unitUseCount })
+      .from(units)
+      .where(nocaseEq(units.name, name))
+      .get();
     if (!row) throw new NotFoundError();
     return row;
   }
@@ -134,7 +192,7 @@ export class StoreService {
     name = name.trim();
     if (name === '') throw new InvalidUnitError();
     try {
-      const id = this.insert(`INSERT INTO units (name) VALUES (?)`, name);
+      const id = lastId(this.orm.insert(units).values({ name }).run());
       return this.getUnit(id);
     } catch (err) {
       if (isUniqueErr(err)) throw new DuplicateError();
@@ -146,7 +204,7 @@ export class StoreService {
     name = name.trim();
     if (name === '') throw new InvalidUnitError();
     try {
-      const n = this.run(`UPDATE units SET name = ? WHERE id = ?`, name, id);
+      const n = changesOf(this.orm.update(units).set({ name }).where(eq(units.id, id)).run());
       if (n === 0) throw new NotFoundError();
     } catch (err) {
       if (err instanceof NotFoundError) throw err;
@@ -158,16 +216,20 @@ export class StoreService {
   deleteUnit(id: number): void {
     const u = this.getUnit(id);
     if (u.ProductCount > 0) throw new UnitInUseError();
-    const groups = this.get<{ n: number }>(`SELECT COUNT(*) AS n FROM comparison_groups WHERE unit_id = ?`, id);
-    if ((groups?.n ?? 0) > 0) throw new UnitInUseError();
-    const n = this.run(`DELETE FROM units WHERE id = ?`, id);
+    const groups = this.orm
+      .select({ n: count() })
+      .from(comparisonGroups)
+      .where(eq(comparisonGroups.unitId, id))
+      .get();
+    if (countOf(groups?.n) > 0) throw new UnitInUseError();
+    const n = changesOf(this.orm.delete(units).where(eq(units.id, id)).run());
     if (n === 0) throw new NotFoundError();
   }
 
   // --- settings ---
 
   getSetting(key: string): string {
-    const row = this.get<{ value: string }>(`SELECT value FROM settings WHERE key = ?`, key);
+    const row = this.orm.select({ value: settings.value }).from(settings).where(eq(settings.key, key)).get();
     return row?.value ?? '';
   }
 
@@ -175,11 +237,11 @@ export class StoreService {
     key = key.trim();
     value = value.trim();
     if (key === '' || value === '') throw new InvalidSettingError();
-    this.run(
-      `INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
-      key,
-      value,
-    );
+    this.orm
+      .insert(settings)
+      .values({ key, value })
+      .onConflictDoUpdate({ target: settings.key, set: { value } })
+      .run();
   }
 
   unitDefaults(): UnitDefaults {
@@ -211,7 +273,7 @@ export class StoreService {
 
   private setSettingUnitID(key: string, id: number): void {
     if (id === 0) {
-      this.run(`DELETE FROM settings WHERE key = ?`, key);
+      this.orm.delete(settings).where(eq(settings.key, key)).run();
       return;
     }
     try {
@@ -226,20 +288,31 @@ export class StoreService {
   // --- chains ---
 
   listRetailChains(): RetailChain[] {
-    return this.all(
-      `SELECT rc.id AS ID, rc.name AS Name, rc.legal_name AS LegalName, rc.tax_id AS TaxID,
-        CAST((SELECT COUNT(*) FROM stories s WHERE s.retail_chain_id = rc.id) AS INTEGER) AS StoryCount
-       FROM retail_chains rc ORDER BY rc.name COLLATE NOCASE, rc.id`,
-    );
+    return this.orm
+      .select({
+        ID: retailChains.id,
+        Name: retailChains.name,
+        LegalName: retailChains.legalName,
+        TaxID: retailChains.taxId,
+        StoryCount: chainStoryCount,
+      })
+      .from(retailChains)
+      .orderBy(nocaseOrder(retailChains.name), retailChains.id)
+      .all();
   }
 
   getRetailChain(id: number): RetailChain {
-    const row = this.get<RetailChain>(
-      `SELECT rc.id AS ID, rc.name AS Name, rc.legal_name AS LegalName, rc.tax_id AS TaxID,
-        CAST((SELECT COUNT(*) FROM stories s WHERE s.retail_chain_id = rc.id) AS INTEGER) AS StoryCount
-       FROM retail_chains rc WHERE rc.id = ?`,
-      id,
-    );
+    const row = this.orm
+      .select({
+        ID: retailChains.id,
+        Name: retailChains.name,
+        LegalName: retailChains.legalName,
+        TaxID: retailChains.taxId,
+        StoryCount: chainStoryCount,
+      })
+      .from(retailChains)
+      .where(eq(retailChains.id, id))
+      .get();
     if (!row) throw new NotFoundError();
     return row;
   }
@@ -247,11 +320,8 @@ export class StoreService {
   createRetailChain(name: string, legalName: string, taxID: string): RetailChain {
     const c = this.normalizeRetailChain(name, legalName, taxID);
     try {
-      const id = this.insert(
-        `INSERT INTO retail_chains (name, legal_name, tax_id) VALUES (?, ?, ?)`,
-        c.Name,
-        c.LegalName,
-        c.TaxID,
+      const id = lastId(
+        this.orm.insert(retailChains).values({ name: c.Name, legalName: c.LegalName, taxId: c.TaxID }).run(),
       );
       return this.getRetailChain(id);
     } catch (err) {
@@ -263,12 +333,12 @@ export class StoreService {
   updateRetailChain(id: number, name: string, legalName: string, taxID: string): void {
     const c = this.normalizeRetailChain(name, legalName, taxID);
     try {
-      const n = this.run(
-        `UPDATE retail_chains SET name = ?, legal_name = ?, tax_id = ? WHERE id = ?`,
-        c.Name,
-        c.LegalName,
-        c.TaxID,
-        id,
+      const n = changesOf(
+        this.orm
+          .update(retailChains)
+          .set({ name: c.Name, legalName: c.LegalName, taxId: c.TaxID })
+          .where(eq(retailChains.id, id))
+          .run(),
       );
       if (n === 0) throw new NotFoundError();
     } catch (err) {
@@ -281,7 +351,7 @@ export class StoreService {
   deleteRetailChain(id: number): void {
     const c = this.getRetailChain(id);
     if (c.StoryCount > 0) throw new RetailChainInUseError();
-    const n = this.run(`DELETE FROM retail_chains WHERE id = ?`, id);
+    const n = changesOf(this.orm.delete(retailChains).where(eq(retailChains.id, id)).run());
     if (n === 0) throw new NotFoundError();
   }
 
@@ -306,11 +376,11 @@ export class StoreService {
   // --- stories ---
 
   listStories(): Story[] {
-    return this.all(this.storySelect() + ` GROUP BY c.id ORDER BY c.name COLLATE NOCASE, c.id`);
+    return this.storyQuery().groupBy(stories.id).orderBy(nocaseOrder(stories.name), stories.id).all();
   }
 
   getStory(id: number): Story {
-    const row = this.get<Story>(this.storySelect() + ` WHERE c.id = ? GROUP BY c.id`, id);
+    const row = this.storyQuery().where(eq(stories.id, id)).groupBy(stories.id).get();
     if (!row) throw new NotFoundError();
     return row;
   }
@@ -344,17 +414,21 @@ export class StoreService {
     const c = this.normalizeStory(name, streetName, building, apartment, postalCode, city, externalID);
     const chain = this.optionalChain(retailChainID);
     try {
-      const n = this.run(
-        `UPDATE stories SET name = ?, street_name = ?, building_number = ?, apartment_number = ?, postal_code = ?, city = ?, external_id = ?, retail_chain_id = ? WHERE id = ?`,
-        c.Name,
-        c.StreetName,
-        c.BuildingNumber,
-        c.ApartmentNumber,
-        c.PostalCode,
-        c.City,
-        c.ExternalID,
-        chain,
-        id,
+      const n = changesOf(
+        this.orm
+          .update(stories)
+          .set({
+            name: c.Name,
+            streetName: c.StreetName,
+            buildingNumber: c.BuildingNumber,
+            apartmentNumber: c.ApartmentNumber,
+            postalCode: c.PostalCode,
+            city: c.City,
+            externalId: c.ExternalID,
+            retailChainId: chain,
+          })
+          .where(eq(stories.id, id))
+          .run(),
       );
       if (n === 0) throw new NotFoundError();
     } catch (err) {
@@ -367,35 +441,47 @@ export class StoreService {
   deleteStory(id: number): void {
     const c = this.getStory(id);
     if (c.PurchaseCount > 0) throw new StoryInUseError();
-    const n = this.run(`DELETE FROM stories WHERE id = ?`, id);
+    const n = changesOf(this.orm.delete(stories).where(eq(stories.id, id)).run());
     if (n === 0) throw new NotFoundError();
   }
 
-  private storySelect(): string {
-    return `SELECT c.id AS ID, c.name AS Name, c.street_name AS StreetName, c.building_number AS BuildingNumber,
-      c.apartment_number AS ApartmentNumber, c.postal_code AS PostalCode, c.city AS City, c.external_id AS ExternalID,
-      CAST(COALESCE(c.retail_chain_id, 0) AS INTEGER) AS RetailChainID,
-      COALESCE(rc.name, '') AS RetailChainName,
-      CAST(COUNT(p.id) AS INTEGER) AS PurchaseCount
-      FROM stories c
-      LEFT JOIN retail_chains rc ON rc.id = c.retail_chain_id
-      LEFT JOIN purchases p ON p.story_id = c.id`;
+  private storyQuery() {
+    return this.orm
+      .select({
+        ID: stories.id,
+        Name: stories.name,
+        StreetName: stories.streetName,
+        BuildingNumber: stories.buildingNumber,
+        ApartmentNumber: stories.apartmentNumber,
+        PostalCode: stories.postalCode,
+        City: stories.city,
+        ExternalID: stories.externalId,
+        RetailChainID: int0(stories.retailChainId),
+        RetailChainName: emptyStr(retailChains.name),
+        PurchaseCount: sql<number>`cast(count(${purchases.id}) as integer)`.mapWith(Number),
+      })
+      .from(stories)
+      .leftJoin(retailChains, eq(retailChains.id, stories.retailChainId))
+      .leftJoin(purchases, eq(purchases.storyId, stories.id));
   }
 
   private insertStory(c: Story, retailChainID: number): number {
     const chain = this.optionalChain(retailChainID);
     try {
-      return this.insert(
-        `INSERT INTO stories (name, street_name, building_number, apartment_number, postal_code, city, external_id, retail_chain_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        c.Name,
-        c.StreetName,
-        c.BuildingNumber,
-        c.ApartmentNumber,
-        c.PostalCode,
-        c.City,
-        c.ExternalID,
-        chain,
+      return lastId(
+        this.orm
+          .insert(stories)
+          .values({
+            name: c.Name,
+            streetName: c.StreetName,
+            buildingNumber: c.BuildingNumber,
+            apartmentNumber: c.ApartmentNumber,
+            postalCode: c.PostalCode,
+            city: c.City,
+            externalId: c.ExternalID,
+            retailChainId: chain,
+          })
+          .run(),
       );
     } catch (err) {
       if (isUniqueErr(err)) throw new DuplicateError();
@@ -435,15 +521,15 @@ export class StoreService {
 
   private optionalStory(id: number): number | null {
     if (id === 0) return null;
-    const n = this.get<{ n: number }>(`SELECT COUNT(*) AS n FROM stories WHERE id = ?`, id);
-    if (!n || n.n === 0) throw new InvalidStoryError();
+    const n = this.orm.select({ n: count() }).from(stories).where(eq(stories.id, id)).get();
+    if (countOf(n?.n) === 0) throw new InvalidStoryError();
     return id;
   }
 
   private optionalChain(id: number): number | null {
     if (id === 0) return null;
-    const n = this.get<{ n: number }>(`SELECT COUNT(*) AS n FROM retail_chains WHERE id = ?`, id);
-    if (!n || n.n === 0) throw new InvalidRetailChainError();
+    const n = this.orm.select({ n: count() }).from(retailChains).where(eq(retailChains.id, id)).get();
+    if (countOf(n?.n) === 0) throw new InvalidRetailChainError();
     return id;
   }
 
@@ -477,12 +563,11 @@ export class StoreService {
     }
     if (this.aliasExistsExcept(name, 0)) throw new DuplicateError();
     const id = this.immediate(() => {
-      const pid = this.insert(
-        `INSERT INTO products (name, unit_id, image_path, created_at) VALUES (?, ?, ?, ?)`,
-        name,
-        unitID,
-        image,
-        this.nowRFC3339(),
+      const pid = lastId(
+        this.orm
+          .insert(products)
+          .values({ name, unitId: unitID, imagePath: image, createdAt: this.nowRFC3339() })
+          .run(),
       );
       this.setProductConversions(pid, unitID, conversions);
       return pid;
@@ -514,7 +599,9 @@ export class StoreService {
     else if (imagePathVal !== null) path = imagePathVal;
     else path = cur.ImagePath.Valid ? cur.ImagePath.String : null;
     this.immediate(() => {
-      const n = this.run(`UPDATE products SET name = ?, unit_id = ?, image_path = ? WHERE id = ?`, name, unitID, path, id);
+      const n = changesOf(
+        this.orm.update(products).set({ name, unitId: unitID, imagePath: path }).where(eq(products.id, id)).run(),
+      );
       if (n === 0) throw new NotFoundError();
       if (conversions) this.setProductConversions(id, unitID, conversions);
     });
@@ -522,7 +609,7 @@ export class StoreService {
 
   deleteProduct(id: number): string {
     const p = this.getProduct(id);
-    this.run(`DELETE FROM products WHERE id = ?`, id);
+    this.orm.delete(products).where(eq(products.id, id)).run();
     return p.ImagePath.Valid ? p.ImagePath.String : '';
   }
 
@@ -533,10 +620,14 @@ export class StoreService {
     if (!conv) throw new InvalidConversionError();
     const factor = conv.Factor;
     this.immediate(() => {
-      this.run(`UPDATE products SET unit_id = ? WHERE id = ?`, newUnitID, productID);
+      this.orm.update(products).set({ unitId: newUnitID }).where(eq(products.id, productID)).run();
       const buys = this.listPurchasesAsc(productID);
       for (const buy of buys) {
-        this.run(`UPDATE purchases SET quantity = ? WHERE id = ?`, buy.Quantity.mul(factor).toString(), buy.ID);
+        this.orm
+          .update(purchases)
+          .set({ quantity: buy.Quantity.mul(factor).toString() })
+          .where(eq(purchases.id, buy.ID))
+          .run();
       }
       this.setProductConversions(productID, newUnitID, this.rebaseConversions(p.Conversions, p.UnitID, newUnitID, factor));
     });
@@ -569,35 +660,38 @@ export class StoreService {
       from.Conversions = this.listProductConversions(from.ID);
       if (into.UnitID !== from.UnitID) throw new UnitMismatchError();
       this.mergeConversions(into.ID, from.ID);
-      this.run(`UPDATE purchases SET product_id = ? WHERE product_id = ?`, into.ID, from.ID);
-      this.run(
-        `DELETE FROM product_aliases
-         WHERE product_aliases.product_id = ?
-           AND (
-             product_aliases.alias = ? COLLATE NOCASE
-             OR EXISTS (
-               SELECT 1 FROM product_aliases AS k
-               WHERE k.product_id = ?
-                 AND k.alias = product_aliases.alias COLLATE NOCASE
-                 AND (
-                   (k.story_id IS NULL AND product_aliases.story_id IS NULL)
-                   OR k.story_id = product_aliases.story_id
-                 )
-             )
-           )`,
-        from.ID,
-        into.Name,
-        into.ID,
-      );
-      this.run(`UPDATE product_aliases SET product_id = ? WHERE product_id = ?`, into.ID, from.ID);
-      this.run(
-        `INSERT OR IGNORE INTO comparison_group_products (group_id, product_id)
-         SELECT m.group_id, ? FROM comparison_group_products m WHERE m.product_id = ?`,
-        into.ID,
-        from.ID,
-      );
+      this.orm.update(purchases).set({ productId: into.ID }).where(eq(purchases.productId, from.ID)).run();
+      this.orm.run(sql`
+        DELETE FROM product_aliases
+        WHERE product_aliases.product_id = ${from.ID}
+          AND (
+            product_aliases.alias = ${into.Name} COLLATE NOCASE
+            OR EXISTS (
+              SELECT 1 FROM product_aliases AS k
+              WHERE k.product_id = ${into.ID}
+                AND k.alias = product_aliases.alias COLLATE NOCASE
+                AND (
+                  (k.story_id IS NULL AND product_aliases.story_id IS NULL)
+                  OR k.story_id = product_aliases.story_id
+                )
+            )
+          )
+      `);
+      this.orm.update(productAliases).set({ productId: into.ID }).where(eq(productAliases.productId, from.ID)).run();
+      const groupRows = this.orm
+        .select({ groupId: comparisonGroupProducts.groupId })
+        .from(comparisonGroupProducts)
+        .where(eq(comparisonGroupProducts.productId, from.ID))
+        .all();
+      for (const row of groupRows) {
+        this.orm
+          .insert(comparisonGroupProducts)
+          .values({ groupId: row.groupId, productId: into.ID })
+          .onConflictDoNothing()
+          .run();
+      }
       const dropImage = this.handOffImage(into, from);
-      this.run(`DELETE FROM products WHERE id = ?`, from.ID);
+      this.orm.delete(products).where(eq(products.id, from.ID)).run();
       this.maybeAliasDroppedName(into.ID, into.Name, from.Name);
       return { keeper: this.getProduct(into.ID), dropImage };
     });
@@ -609,8 +703,8 @@ export class StoreService {
       return '';
     }
     if (!from.ImagePath.Valid) return '';
-    this.run(`UPDATE products SET image_path = ? WHERE id = ?`, from.ImagePath.String, into.ID);
-    this.run(`UPDATE products SET image_path = NULL WHERE id = ?`, from.ID);
+    this.orm.update(products).set({ imagePath: from.ImagePath.String }).where(eq(products.id, into.ID)).run();
+    this.orm.update(products).set({ imagePath: null }).where(eq(products.id, from.ID)).run();
     return '';
   }
 
@@ -635,25 +729,9 @@ export class StoreService {
 
   private listProductsAt(q: string, now: Date, limit: number): ProductListItem[] {
     q = q.trim();
-    const rows = this.all<{
-      ID: number;
-      Name: string;
-      UnitID: number;
-      UnitName: string;
-      image_path: string | null;
-      CreatedAt: string;
-    }>(
-      `SELECT p.id AS ID, p.name AS Name, p.unit_id AS UnitID, u.name AS UnitName, p.image_path, p.created_at AS CreatedAt
-       FROM products p JOIN units u ON u.id = p.unit_id ORDER BY p.name COLLATE NOCASE`,
-    );
+    const rows = this.productQuery().orderBy(nocaseOrder(products.name)).all();
     const items: ProductListItem[] = rows.map((r) => ({
-      ID: r.ID,
-      Name: r.Name,
-      UnitID: r.UnitID,
-      UnitName: r.UnitName,
-      ImagePath: imagePath(r.image_path),
-      CreatedAt: r.CreatedAt,
-      Conversions: [],
+      ...this.mapProduct(r),
       LastBought: emptyImage(),
       LifetimeAmount: new Decimal(0),
       PurchaseCount: 0,
@@ -662,10 +740,11 @@ export class StoreService {
     const index = new Map<number, number>();
     items.forEach((it, i) => index.set(it.ID, i));
     if (items.length === 0) return items;
-    const prows = this.all<{ ProductID: number; BoughtOn: string; Amount: string }>(
-      `SELECT product_id AS ProductID, bought_on AS BoughtOn, amount AS Amount FROM purchases WHERE kind = ?`,
-      KIND_PURCHASE,
-    );
+    const prows = this.orm
+      .select({ ProductID: purchases.productId, BoughtOn: purchases.boughtOn, Amount: purchases.amount })
+      .from(purchases)
+      .where(eq(purchases.kind, KIND_PURCHASE))
+      .all();
     for (const pr of prows) {
       const i = index.get(pr.ProductID);
       if (i === undefined) continue;
@@ -705,10 +784,17 @@ export class StoreService {
   }
 
   private attachItemConversions(items: ProductListItem[]): void {
-    const rows = this.all<{ ProductID: number; UnitID: number; UnitName: string; Factor: string }>(
-      `SELECT c.product_id AS ProductID, c.unit_id AS UnitID, u.name AS UnitName, c.factor AS Factor
-       FROM product_unit_conversions c JOIN units u ON u.id = c.unit_id ORDER BY u.name COLLATE NOCASE`,
-    );
+    const rows = this.orm
+      .select({
+        ProductID: productUnitConversions.productId,
+        UnitID: productUnitConversions.unitId,
+        UnitName: units.name,
+        Factor: productUnitConversions.factor,
+      })
+      .from(productUnitConversions)
+      .innerJoin(units, eq(units.id, productUnitConversions.unitId))
+      .orderBy(nocaseOrder(units.name))
+      .all();
     const byID = new Map<number, ProductConversion[]>();
     for (const r of rows) {
       const list = byID.get(r.ProductID) ?? [];
@@ -728,20 +814,21 @@ export class StoreService {
     }
   }
 
-  private getProductRow(id: number): Product {
-    const row = this.get<{
-      ID: number;
-      Name: string;
-      UnitID: number;
-      UnitName: string;
-      image_path: string | null;
-      CreatedAt: string;
-    }>(
-      `SELECT p.id AS ID, p.name AS Name, p.unit_id AS UnitID, u.name AS UnitName, p.image_path, p.created_at AS CreatedAt
-       FROM products p JOIN units u ON u.id = p.unit_id WHERE p.id = ?`,
-      id,
-    );
-    if (!row) throw new NotFoundError();
+  private productQuery() {
+    return this.orm
+      .select({
+        ID: products.id,
+        Name: products.name,
+        UnitID: products.unitId,
+        UnitName: units.name,
+        image_path: products.imagePath,
+        CreatedAt: products.createdAt,
+      })
+      .from(products)
+      .innerJoin(units, eq(units.id, products.unitId));
+  }
+
+  private mapProduct(row: ProductRow): Product {
     return {
       ID: row.ID,
       Name: row.Name,
@@ -751,6 +838,12 @@ export class StoreService {
       CreatedAt: row.CreatedAt,
       Conversions: [],
     };
+  }
+
+  private getProductRow(id: number): Product {
+    const row = this.productQuery().where(eq(products.id, id)).get();
+    if (!row) throw new NotFoundError();
+    return this.mapProduct(row);
   }
 
   private asProduct(it: ProductListItem): Product {
@@ -766,12 +859,18 @@ export class StoreService {
   }
 
   listProductConversions(productID: number): ProductConversion[] {
-    return this.all<{ UnitID: number; UnitName: string; Factor: string }>(
-      `SELECT c.unit_id AS UnitID, u.name AS UnitName, c.factor AS Factor
-       FROM product_unit_conversions c JOIN units u ON u.id = c.unit_id
-       WHERE c.product_id = ? ORDER BY u.name COLLATE NOCASE`,
-      productID,
-    ).map((r) => ({ UnitID: r.UnitID, UnitName: r.UnitName, Factor: new Decimal(r.Factor) }));
+    return this.orm
+      .select({
+        UnitID: productUnitConversions.unitId,
+        UnitName: units.name,
+        Factor: productUnitConversions.factor,
+      })
+      .from(productUnitConversions)
+      .innerJoin(units, eq(units.id, productUnitConversions.unitId))
+      .where(eq(productUnitConversions.productId, productID))
+      .orderBy(nocaseOrder(units.name))
+      .all()
+      .map((r) => ({ UnitID: r.UnitID, UnitName: r.UnitName, Factor: new Decimal(r.Factor) }));
   }
 
   setProductConversionsPublic(productID: number, conversions: ProductConversion[]): void {
@@ -781,14 +880,12 @@ export class StoreService {
 
   private setProductConversions(productID: number, purchaseUnitID: number, conversions: ProductConversion[]): void {
     const normalized = this.normalizeConversions(purchaseUnitID, conversions);
-    this.run(`DELETE FROM product_unit_conversions WHERE product_id = ?`, productID);
+    this.orm.delete(productUnitConversions).where(eq(productUnitConversions.productId, productID)).run();
     for (const c of normalized) {
-      this.run(
-        `INSERT INTO product_unit_conversions (product_id, unit_id, factor) VALUES (?, ?, ?)`,
-        productID,
-        c.UnitID,
-        c.Factor.toString(),
-      );
+      this.orm
+        .insert(productUnitConversions)
+        .values({ productId: productID, unitId: c.UnitID, factor: c.Factor.toString() })
+        .run();
     }
   }
 
@@ -800,8 +897,8 @@ export class StoreService {
       if (c.UnitID === purchaseUnitID) throw new InvalidConversionError();
       if (seen.has(c.UnitID)) throw new InvalidConversionError();
       if (c.Factor.isNegative() || c.Factor.isZero()) throw new InvalidConversionError();
-      const n = this.get<{ n: number }>(`SELECT COUNT(*) AS n FROM units WHERE id = ?`, c.UnitID);
-      if (!n || n.n === 0) throw new InvalidUnitError();
+      const n = this.orm.select({ n: count() }).from(units).where(eq(units.id, c.UnitID)).get();
+      if (countOf(n?.n) === 0) throw new InvalidUnitError();
       seen.add(c.UnitID);
       out.push(c);
     }
@@ -830,12 +927,10 @@ export class StoreService {
     const intoByUnit = new Set(into.map((c) => c.UnitID));
     for (const c of from) {
       if (intoByUnit.has(c.UnitID)) continue;
-      this.run(
-        `INSERT INTO product_unit_conversions (product_id, unit_id, factor) VALUES (?, ?, ?)`,
-        intoID,
-        c.UnitID,
-        c.Factor.toString(),
-      );
+      this.orm
+        .insert(productUnitConversions)
+        .values({ productId: intoID, unitId: c.UnitID, factor: c.Factor.toString() })
+        .run();
     }
   }
 
@@ -851,36 +946,51 @@ export class StoreService {
 
   listPurchases(productID: number): Purchase[] {
     return this.mapPurchases(
-      this.all(this.purchaseSelect() + ` WHERE p.product_id = ? ORDER BY p.bought_on DESC, p.id DESC`, productID),
+      this.purchaseQuery()
+        .where(eq(purchases.productId, productID))
+        .orderBy(desc(purchases.boughtOn), desc(purchases.id))
+        .all(),
     );
   }
 
   private listPurchasesAsc(productID: number): Purchase[] {
-    return this.mapPurchases(this.all(this.purchaseSelect() + ` WHERE p.product_id = ? ORDER BY p.id`, productID));
+    return this.mapPurchases(
+      this.purchaseQuery().where(eq(purchases.productId, productID)).orderBy(purchases.id).all(),
+    );
   }
 
   listPurchasesByReceipt(receiptID: number): ReceiptPurchase[] {
-    const rows = this.all<Record<string, unknown>>(
-      `SELECT p.id AS ID, p.product_id AS ProductID, CAST(COALESCE(p.story_id, 0) AS INTEGER) AS StoryID,
-        p.kind AS Kind, CAST(COALESCE(p.receipt_id, 0) AS INTEGER) AS ReceiptID, p.bought_on AS BoughtOn,
-        p.quantity AS Quantity, p.amount AS Amount, p.created_at AS CreatedAt,
-        pr.name AS ProductName, u.name AS UnitName, pr.image_path
-       FROM purchases p
-       JOIN products pr ON pr.id = p.product_id
-       JOIN units u ON u.id = pr.unit_id
-       WHERE p.receipt_id = ? ORDER BY p.id`,
-      receiptID,
-    );
+    const rows = this.orm
+      .select({
+        ID: purchases.id,
+        ProductID: purchases.productId,
+        StoryID: purchases.storyId,
+        Kind: purchases.kind,
+        ReceiptID: purchases.receiptId,
+        BoughtOn: purchases.boughtOn,
+        Quantity: purchases.quantity,
+        Amount: purchases.amount,
+        CreatedAt: purchases.createdAt,
+        ProductName: products.name,
+        UnitName: units.name,
+        image_path: products.imagePath,
+      })
+      .from(purchases)
+      .innerJoin(products, eq(products.id, purchases.productId))
+      .innerJoin(units, eq(units.id, products.unitId))
+      .where(eq(purchases.receiptId, receiptID))
+      .orderBy(purchases.id)
+      .all();
     return rows.map((r) => ({
       ...this.mapPurchase(r),
-      ProductName: String(r.ProductName),
-      UnitName: String(r.UnitName),
-      ImagePath: imagePath(r.image_path as string | null),
+      ProductName: r.ProductName,
+      UnitName: r.UnitName,
+      ImagePath: imagePath(r.image_path),
     }));
   }
 
   getPurchase(id: number): Purchase {
-    const row = this.get<Record<string, unknown>>(this.purchaseSelect() + ` WHERE p.id = ?`, id);
+    const row = this.purchaseQuery().where(eq(purchases.id, id)).get();
     if (!row) throw new NotFoundError();
     return this.mapPurchase(row);
   }
@@ -898,16 +1008,20 @@ export class StoreService {
     const story = this.optionalStory(storyID);
     this.validQuantity(quantity);
     boughtOn = normalizeBoughtOn(boughtOn);
-    const id = this.insert(
-      `INSERT INTO purchases (product_id, story_id, kind, receipt_id, bought_on, quantity, amount, created_at)
-       VALUES (?, ?, ?, NULL, ?, ?, ?, ?)`,
-      productID,
-      story,
-      kind,
-      boughtOn,
-      quantity.toString(),
-      amount.toString(),
-      this.nowRFC3339(),
+    const id = lastId(
+      this.orm
+        .insert(purchases)
+        .values({
+          productId: productID,
+          storyId: story,
+          kind,
+          receiptId: null,
+          boughtOn,
+          quantity: quantity.toString(),
+          amount: amount.toString(),
+          createdAt: this.nowRFC3339(),
+        })
+        .run(),
     );
     return this.getPurchase(id);
   }
@@ -924,20 +1038,24 @@ export class StoreService {
     const story = this.optionalStory(storyID);
     this.validQuantity(quantity);
     boughtOn = normalizeBoughtOn(boughtOn);
-    const n = this.run(
-      `UPDATE purchases SET story_id = ?, kind = ?, bought_on = ?, quantity = ?, amount = ? WHERE id = ?`,
-      story,
-      kind,
-      boughtOn,
-      quantity.toString(),
-      amount.toString(),
-      id,
+    const n = changesOf(
+      this.orm
+        .update(purchases)
+        .set({
+          storyId: story,
+          kind,
+          boughtOn,
+          quantity: quantity.toString(),
+          amount: amount.toString(),
+        })
+        .where(eq(purchases.id, id))
+        .run(),
     );
     if (n === 0) throw new NotFoundError();
   }
 
   deletePurchase(id: number): void {
-    const n = this.run(`DELETE FROM purchases WHERE id = ?`, id);
+    const n = changesOf(this.orm.delete(purchases).where(eq(purchases.id, id)).run());
     if (n === 0) throw new NotFoundError();
   }
 
@@ -951,57 +1069,80 @@ export class StoreService {
     if (quantity.isZero() || quantity.isNegative()) throw new InvalidQuantityError();
   }
 
-  private purchaseSelect(): string {
-    return `SELECT p.id AS ID, p.product_id AS ProductID, CAST(COALESCE(p.story_id, 0) AS INTEGER) AS StoryID,
-      p.kind AS Kind, CAST(COALESCE(p.receipt_id, 0) AS INTEGER) AS ReceiptID, p.bought_on AS BoughtOn,
-      p.quantity AS Quantity, p.amount AS Amount, p.created_at AS CreatedAt FROM purchases p`;
+  private purchaseQuery() {
+    return this.orm
+      .select({
+        ID: purchases.id,
+        ProductID: purchases.productId,
+        StoryID: purchases.storyId,
+        Kind: purchases.kind,
+        ReceiptID: purchases.receiptId,
+        BoughtOn: purchases.boughtOn,
+        Quantity: purchases.quantity,
+        Amount: purchases.amount,
+        CreatedAt: purchases.createdAt,
+      })
+      .from(purchases);
   }
 
-  private mapPurchases(rows: Record<string, unknown>[]): Purchase[] {
+  private mapPurchases(rows: PurchaseRow[]): Purchase[] {
     return rows.map((r) => this.mapPurchase(r));
   }
 
-  private mapPurchase(r: Record<string, unknown>): Purchase {
+  private mapPurchase(r: PurchaseRow): Purchase {
     return {
-      ID: Number(r.ID),
-      ProductID: Number(r.ProductID),
-      StoryID: Number(r.StoryID),
+      ID: r.ID,
+      ProductID: r.ProductID,
+      StoryID: r.StoryID ?? 0,
       Kind: String(r.Kind) as PurchaseKind,
-      ReceiptID: Number(r.ReceiptID),
-      BoughtOn: String(r.BoughtOn),
+      ReceiptID: r.ReceiptID ?? 0,
+      BoughtOn: r.BoughtOn,
       Quantity: new Decimal(String(r.Quantity)),
       Amount: new Decimal(String(r.Amount)),
-      CreatedAt: String(r.CreatedAt),
+      CreatedAt: r.CreatedAt,
     };
   }
 
   listPurchasesForProductIDs(ids: number[]): Purchase[] {
     if (ids.length === 0) return [];
-    const ph = ids.map(() => '?').join(',');
     return this.mapPurchases(
-      this.all(
-        this.purchaseSelect() + ` WHERE p.product_id IN (${ph}) ORDER BY p.bought_on DESC, p.id DESC`,
-        ...ids,
-      ),
+      this.purchaseQuery()
+        .where(inArray(purchases.productId, ids))
+        .orderBy(desc(purchases.boughtOn), desc(purchases.id))
+        .all(),
     );
   }
 
   // --- aliases ---
 
   listAliases(): ProductAlias[] {
-    return this.all(this.aliasSelect() + ` ORDER BY p.name COLLATE NOCASE, c.name COLLATE NOCASE, rc.name COLLATE NOCASE, a.alias COLLATE NOCASE, a.id`);
+    return this.aliasQuery()
+      .orderBy(
+        nocaseOrder(products.name),
+        nocaseOrder(stories.name),
+        nocaseOrder(retailChains.name),
+        nocaseOrder(productAliases.alias),
+        productAliases.id,
+      )
+      .all();
   }
 
   listAliasesByProduct(productID: number): ProductAlias[] {
-    return this.all(
-      this.aliasSelect() +
-        ` WHERE a.product_id = ? ORDER BY a.story_id IS NOT NULL, a.retail_chain_id IS NOT NULL, c.name COLLATE NOCASE, rc.name COLLATE NOCASE, a.alias COLLATE NOCASE, a.id`,
-      productID,
-    );
+    return this.aliasQuery()
+      .where(eq(productAliases.productId, productID))
+      .orderBy(
+        sql`${productAliases.storyId} is not null`,
+        sql`${productAliases.retailChainId} is not null`,
+        nocaseOrder(stories.name),
+        nocaseOrder(retailChains.name),
+        nocaseOrder(productAliases.alias),
+        productAliases.id,
+      )
+      .all();
   }
 
   getAlias(id: number): ProductAlias {
-    const row = this.get<ProductAlias>(this.aliasSelect() + ` WHERE a.id = ?`, id);
+    const row = this.aliasQuery().where(eq(productAliases.id, id)).get();
     if (!row) throw new NotFoundError();
     return row;
   }
@@ -1009,12 +1150,16 @@ export class StoreService {
   createAlias(productID: number, storyID: number, chainID: number, alias: string): ProductAlias {
     const params = this.prepareAlias(productID, storyID, chainID, alias);
     try {
-      const id = this.insert(
-        `INSERT INTO product_aliases (product_id, story_id, retail_chain_id, alias) VALUES (?, ?, ?, ?)`,
-        params.productID,
-        params.storyID,
-        params.chainID,
-        params.alias,
+      const id = lastId(
+        this.orm
+          .insert(productAliases)
+          .values({
+            productId: params.productID,
+            storyId: params.storyID,
+            retailChainId: params.chainID,
+            alias: params.alias,
+          })
+          .run(),
       );
       return this.getAlias(id);
     } catch (err) {
@@ -1027,13 +1172,17 @@ export class StoreService {
     this.getAlias(id);
     const params = this.prepareAlias(productID, storyID, chainID, alias);
     try {
-      const n = this.run(
-        `UPDATE product_aliases SET product_id = ?, story_id = ?, retail_chain_id = ?, alias = ? WHERE id = ?`,
-        params.productID,
-        params.storyID,
-        params.chainID,
-        params.alias,
-        id,
+      const n = changesOf(
+        this.orm
+          .update(productAliases)
+          .set({
+            productId: params.productID,
+            storyId: params.storyID,
+            retailChainId: params.chainID,
+            alias: params.alias,
+          })
+          .where(eq(productAliases.id, id))
+          .run(),
       );
       if (n === 0) throw new NotFoundError();
     } catch (err) {
@@ -1044,45 +1193,52 @@ export class StoreService {
   }
 
   deleteAlias(id: number): void {
-    const n = this.run(`DELETE FROM product_aliases WHERE id = ?`, id);
+    const n = changesOf(this.orm.delete(productAliases).where(eq(productAliases.id, id)).run());
     if (n === 0) throw new NotFoundError();
   }
 
-  private aliasSelect(): string {
-    return `SELECT a.id AS ID, a.product_id AS ProductID, p.name AS ProductName,
-      CAST(COALESCE(a.story_id, 0) AS INTEGER) AS StoryID, COALESCE(c.name, '') AS StoryName,
-      CAST(COALESCE(a.retail_chain_id, 0) AS INTEGER) AS RetailChainID, COALESCE(rc.name, '') AS RetailChainName,
-      a.alias AS Alias
-      FROM product_aliases a
-      JOIN products p ON p.id = a.product_id
-      LEFT JOIN stories c ON c.id = a.story_id
-      LEFT JOIN retail_chains rc ON rc.id = a.retail_chain_id`;
+  private aliasQuery() {
+    return this.orm
+      .select({
+        ID: productAliases.id,
+        ProductID: productAliases.productId,
+        ProductName: products.name,
+        StoryID: int0(productAliases.storyId),
+        StoryName: emptyStr(stories.name),
+        RetailChainID: int0(productAliases.retailChainId),
+        RetailChainName: emptyStr(retailChains.name),
+        Alias: productAliases.alias,
+      })
+      .from(productAliases)
+      .innerJoin(products, eq(products.id, productAliases.productId))
+      .leftJoin(stories, eq(stories.id, productAliases.storyId))
+      .leftJoin(retailChains, eq(retailChains.id, productAliases.retailChainId));
   }
 
   private prepareAlias(productID: number, storyID: number, chainID: number, alias: string) {
     alias = alias.trim();
     if (alias === '') throw new InvalidAliasError();
     if (storyID !== 0 && chainID !== 0) throw new AliasScopeError();
-    const n = this.get<{ n: number }>(`SELECT COUNT(*) AS n FROM products WHERE id = ?`, productID);
-    if (!n || n.n === 0) throw new NotFoundError();
+    const n = this.orm.select({ n: count() }).from(products).where(eq(products.id, productID)).get();
+    if (countOf(n?.n) === 0) throw new NotFoundError();
     const story = this.optionalStory(storyID);
     const chain = this.optionalChain(chainID);
-    const clash = this.get<{ n: number }>(
-      `SELECT COUNT(*) AS n FROM products WHERE name = ? COLLATE NOCASE AND id != ?`,
-      alias,
-      productID,
-    );
-    if ((clash?.n ?? 0) > 0) throw new DuplicateError();
+    const clash = this.orm
+      .select({ n: count() })
+      .from(products)
+      .where(and(nocaseEq(products.name, alias), ne(products.id, productID)))
+      .get();
+    if (countOf(clash?.n) > 0) throw new DuplicateError();
     return { productID, storyID: story, chainID: chain, alias };
   }
 
   private aliasExistsExcept(alias: string, exceptProductID: number): boolean {
-    const row = this.get<{ n: number }>(
-      `SELECT COUNT(*) AS n FROM product_aliases WHERE alias = ? COLLATE NOCASE AND product_id != ?`,
-      alias.trim(),
-      exceptProductID,
-    );
-    return (row?.n ?? 0) > 0;
+    const row = this.orm
+      .select({ n: count() })
+      .from(productAliases)
+      .where(and(nocaseEq(productAliases.alias, alias.trim()), ne(productAliases.productId, exceptProductID)))
+      .get();
+    return countOf(row?.n) > 0;
   }
 
   findProductByName(name: string, storyID: number): Product {
@@ -1108,91 +1264,54 @@ export class StoreService {
     } catch (err) {
       if (!(err instanceof NotFoundError)) throw err;
     }
-    const row = this.get<{
-      ID: number;
-      Name: string;
-      UnitID: number;
-      UnitName: string;
-      image_path: string | null;
-      CreatedAt: string;
-    }>(
-      `SELECT p.id AS ID, p.name AS Name, p.unit_id AS UnitID, u.name AS UnitName, p.image_path, p.created_at AS CreatedAt
-       FROM products p JOIN units u ON u.id = p.unit_id WHERE p.name = ? COLLATE NOCASE ORDER BY p.id LIMIT 1`,
-      name,
-    );
+    const row = this.productQuery().where(nocaseEq(products.name, name)).orderBy(products.id).limit(1).get();
     if (!row) throw new NotFoundError();
-    return {
-      ID: row.ID,
-      Name: row.Name,
-      UnitID: row.UnitID,
-      UnitName: row.UnitName,
-      ImagePath: imagePath(row.image_path),
-      CreatedAt: row.CreatedAt,
-      Conversions: [],
-    };
+    return this.mapProduct(row);
   }
 
-  productByAlias(alias: string, storyID: number, chainID: number): Product {
-    alias = alias.trim();
-    if (alias === '') throw new NotFoundError();
-    let row: {
-      ID: number;
-      Name: string;
-      UnitID: number;
-      UnitName: string;
-      image_path: string | null;
-      CreatedAt: string;
-    } | undefined;
-    if (storyID > 0) {
-      row = this.get(
-        `SELECT p.id AS ID, p.name AS Name, p.unit_id AS UnitID, u.name AS UnitName, p.image_path, p.created_at AS CreatedAt
-         FROM product_aliases a JOIN products p ON p.id = a.product_id JOIN units u ON u.id = p.unit_id
-         WHERE a.alias = ? COLLATE NOCASE AND a.story_id = ? ORDER BY a.id LIMIT 1`,
-        alias,
-        storyID,
-      );
-    } else if (chainID > 0) {
-      row = this.get(
-        `SELECT p.id AS ID, p.name AS Name, p.unit_id AS UnitID, u.name AS UnitName, p.image_path, p.created_at AS CreatedAt
-         FROM product_aliases a JOIN products p ON p.id = a.product_id JOIN units u ON u.id = p.unit_id
-         WHERE a.alias = ? COLLATE NOCASE AND a.retail_chain_id = ? ORDER BY a.id LIMIT 1`,
-        alias,
-        chainID,
-      );
-    } else {
-      row = this.get(
-        `SELECT p.id AS ID, p.name AS Name, p.unit_id AS UnitID, u.name AS UnitName, p.image_path, p.created_at AS CreatedAt
-         FROM product_aliases a JOIN products p ON p.id = a.product_id JOIN units u ON u.id = p.unit_id
-         WHERE a.alias = ? COLLATE NOCASE AND a.story_id IS NULL AND a.retail_chain_id IS NULL ORDER BY a.id LIMIT 1`,
-        alias,
-      );
-    }
+  productByAlias(aliasName: string, storyID: number, chainID: number): Product {
+    aliasName = aliasName.trim();
+    if (aliasName === '') throw new NotFoundError();
+    const scope =
+      storyID > 0
+        ? and(nocaseEq(productAliases.alias, aliasName), eq(productAliases.storyId, storyID))
+        : chainID > 0
+          ? and(nocaseEq(productAliases.alias, aliasName), eq(productAliases.retailChainId, chainID))
+          : and(nocaseEq(productAliases.alias, aliasName), isNull(productAliases.storyId), isNull(productAliases.retailChainId));
+    const row = this.orm
+      .select({
+        ID: products.id,
+        Name: products.name,
+        UnitID: products.unitId,
+        UnitName: units.name,
+        image_path: products.imagePath,
+        CreatedAt: products.createdAt,
+      })
+      .from(productAliases)
+      .innerJoin(products, eq(products.id, productAliases.productId))
+      .innerJoin(units, eq(units.id, products.unitId))
+      .where(scope)
+      .orderBy(productAliases.id)
+      .limit(1)
+      .get();
     if (!row) throw new NotFoundError();
-    return {
-      ID: row.ID,
-      Name: row.Name,
-      UnitID: row.UnitID,
-      UnitName: row.UnitName,
-      ImagePath: imagePath(row.image_path),
-      CreatedAt: row.CreatedAt,
-      Conversions: [],
-    };
+    return this.mapProduct(row);
   }
 
   private storyChainID(storyID: number): number {
     if (storyID <= 0) return 0;
-    const row = this.get<{ retail_chain_id: number | null }>(`SELECT retail_chain_id FROM stories WHERE id = ?`, storyID);
-    return row?.retail_chain_id ?? 0;
+    const row = this.orm.select({ retailChainId: stories.retailChainId }).from(stories).where(eq(stories.id, storyID)).get();
+    return row?.retailChainId ?? 0;
   }
 
   // --- comparison groups ---
 
   listComparisonGroups(): ComparisonGroup[] {
-    return this.all(this.groupSelect() + ` ORDER BY g.name COLLATE NOCASE, g.id`);
+    return this.groupQuery().orderBy(nocaseOrder(comparisonGroups.name), comparisonGroups.id).all();
   }
 
   getComparisonGroup(id: number): ComparisonGroup {
-    const row = this.get<ComparisonGroup>(this.groupSelect() + ` WHERE g.id = ?`, id);
+    const row = this.groupQuery().where(eq(comparisonGroups.id, id)).get();
     if (!row) throw new NotFoundError();
     return row;
   }
@@ -1208,11 +1327,8 @@ export class StoreService {
     const id = this.immediate(() => {
       let gid: number;
       try {
-        gid = this.insert(
-          `INSERT INTO comparison_groups (name, unit_id, created_at) VALUES (?, ?, ?)`,
-          name,
-          unitID,
-          this.nowRFC3339(),
+        gid = lastId(
+          this.orm.insert(comparisonGroups).values({ name, unitId: unitID, createdAt: this.nowRFC3339() }).run(),
         );
       } catch (err) {
         if (isUniqueErr(err)) throw new DuplicateError();
@@ -1234,7 +1350,9 @@ export class StoreService {
     }
     this.immediate(() => {
       try {
-        const n = this.run(`UPDATE comparison_groups SET name = ?, unit_id = ? WHERE id = ?`, name, unitID, id);
+        const n = changesOf(
+          this.orm.update(comparisonGroups).set({ name, unitId: unitID }).where(eq(comparisonGroups.id, id)).run(),
+        );
         if (n === 0) throw new NotFoundError();
       } catch (err) {
         if (err instanceof NotFoundError) throw err;
@@ -1246,27 +1364,36 @@ export class StoreService {
   }
 
   deleteComparisonGroup(id: number): void {
-    const n = this.run(`DELETE FROM comparison_groups WHERE id = ?`, id);
+    const n = changesOf(this.orm.delete(comparisonGroups).where(eq(comparisonGroups.id, id)).run());
     if (n === 0) throw new NotFoundError();
   }
 
   listComparisonGroupProductIDs(groupID: number): number[] {
-    return this.all<{ product_id: number }>(
-      `SELECT product_id FROM comparison_group_products WHERE group_id = ? ORDER BY product_id`,
-      groupID,
-    ).map((r) => r.product_id);
+    return this.orm
+      .select({ productId: comparisonGroupProducts.productId })
+      .from(comparisonGroupProducts)
+      .where(eq(comparisonGroupProducts.groupId, groupID))
+      .orderBy(comparisonGroupProducts.productId)
+      .all()
+      .map((r) => r.productId);
   }
 
   listComparisonGroupsForProduct(productID: number): ComparisonGroup[] {
-    return this.all(
-      `SELECT g.id AS ID, g.name AS Name, g.unit_id AS UnitID, u.name AS UnitName, g.created_at AS CreatedAt,
-        CAST((SELECT COUNT(*) FROM comparison_group_products m WHERE m.group_id = g.id) AS INTEGER) AS ProductCount
-       FROM comparison_group_products mine
-       JOIN comparison_groups g ON g.id = mine.group_id
-       JOIN units u ON u.id = g.unit_id
-       WHERE mine.product_id = ? ORDER BY g.name COLLATE NOCASE, g.id`,
-      productID,
-    );
+    return this.orm
+      .select({
+        ID: comparisonGroups.id,
+        Name: comparisonGroups.name,
+        UnitID: comparisonGroups.unitId,
+        UnitName: units.name,
+        CreatedAt: comparisonGroups.createdAt,
+        ProductCount: groupMemberCount,
+      })
+      .from(comparisonGroupProducts)
+      .innerJoin(comparisonGroups, eq(comparisonGroups.id, comparisonGroupProducts.groupId))
+      .innerJoin(units, eq(units.id, comparisonGroups.unitId))
+      .where(eq(comparisonGroupProducts.productId, productID))
+      .orderBy(nocaseOrder(comparisonGroups.name), comparisonGroups.id)
+      .all();
   }
 
   setProductComparisonGroups(productID: number, groupIDs: number[]): void {
@@ -1274,36 +1401,36 @@ export class StoreService {
     this.immediate(() => {
       const ids = this.uniquePositiveIDs(groupIDs);
       for (const id of ids) {
-        const n = this.get<{ n: number }>(`SELECT COUNT(*) AS n FROM comparison_groups WHERE id = ?`, id);
-        if (!n || n.n === 0) throw new InvalidComparisonGroupError();
+        const n = this.orm.select({ n: count() }).from(comparisonGroups).where(eq(comparisonGroups.id, id)).get();
+        if (countOf(n?.n) === 0) throw new InvalidComparisonGroupError();
       }
-      this.run(`DELETE FROM comparison_group_products WHERE product_id = ?`, productID);
+      this.orm.delete(comparisonGroupProducts).where(eq(comparisonGroupProducts.productId, productID)).run();
       for (const id of ids) {
-        this.run(`INSERT INTO comparison_group_products (group_id, product_id) VALUES (?, ?)`, id, productID);
+        this.orm.insert(comparisonGroupProducts).values({ groupId: id, productId: productID }).run();
       }
     });
   }
 
   relatedGroupProducts(productID: number, now: Date): RelatedProduct[] {
     this.getProduct(productID);
-    const rows = this.all<{
-      ID: number;
-      Name: string;
-      UnitID: number;
-      UnitName: string;
-      image_path: string | null;
-      CreatedAt: string;
-    }>(
-      `SELECT DISTINCT p.id AS ID, p.name AS Name, p.unit_id AS UnitID, u.name AS UnitName, p.image_path, p.created_at AS CreatedAt
-       FROM comparison_group_products mine
-       JOIN comparison_group_products m ON m.group_id = mine.group_id
-       JOIN products p ON p.id = m.product_id
-       JOIN units u ON u.id = p.unit_id
-       WHERE mine.product_id = ? AND p.id != ?
-       ORDER BY p.name COLLATE NOCASE, p.id`,
-      productID,
-      productID,
-    );
+    const mine = tableAlias(comparisonGroupProducts, 'mine');
+    const member = tableAlias(comparisonGroupProducts, 'm');
+    const rows = this.orm
+      .selectDistinct({
+        ID: products.id,
+        Name: products.name,
+        UnitID: products.unitId,
+        UnitName: units.name,
+        image_path: products.imagePath,
+        CreatedAt: products.createdAt,
+      })
+      .from(mine)
+      .innerJoin(member, eq(member.groupId, mine.groupId))
+      .innerJoin(products, eq(products.id, member.productId))
+      .innerJoin(units, eq(units.id, products.unitId))
+      .where(and(eq(mine.productId, productID), ne(products.id, productID)))
+      .orderBy(nocaseOrder(products.name), products.id)
+      .all();
     if (rows.length === 0) return [];
     const buys = this.listPurchasesForProductIDs(rows.map((r) => r.ID));
     const quotes = quotesByProduct(buys, now);
@@ -1311,44 +1438,41 @@ export class StoreService {
     for (const r of rows) {
       const q = quotes.get(r.ID);
       if (!q) continue;
-      out.push({
-        ID: r.ID,
-        Name: r.Name,
-        UnitID: r.UnitID,
-        UnitName: r.UnitName,
-        ImagePath: imagePath(r.image_path),
-        CreatedAt: r.CreatedAt,
-        Conversions: [],
-        Quote: q,
-      });
+      out.push({ ...this.mapProduct(r), Quote: q });
     }
     return out;
   }
 
   comparisonLeaders(productID: number): GroupComparison[] {
     this.getProduct(productID);
-    const members = this.all<{
-      GroupID: number;
-      GroupName: string;
-      GroupUnitID: number;
-      GroupUnitName: string;
-      ProductID: number;
-      ProductName: string;
-      ProductUnitID: number;
-      ConversionFactor: string | null;
-    }>(
-      `SELECT g.id AS GroupID, g.name AS GroupName, g.unit_id AS GroupUnitID, u.name AS GroupUnitName,
-        p.id AS ProductID, p.name AS ProductName, p.unit_id AS ProductUnitID, c.factor AS ConversionFactor
-       FROM comparison_group_products mine
-       JOIN comparison_groups g ON g.id = mine.group_id
-       JOIN units u ON u.id = g.unit_id
-       JOIN comparison_group_products m ON m.group_id = g.id
-       JOIN products p ON p.id = m.product_id
-       LEFT JOIN product_unit_conversions c ON c.product_id = p.id AND c.unit_id = g.unit_id
-       WHERE mine.product_id = ?
-       ORDER BY g.name COLLATE NOCASE, g.id, p.name COLLATE NOCASE, p.id`,
-      productID,
-    );
+    const mine = tableAlias(comparisonGroupProducts, 'mine');
+    const member = tableAlias(comparisonGroupProducts, 'm');
+    const members = this.orm
+      .select({
+        GroupID: comparisonGroups.id,
+        GroupName: comparisonGroups.name,
+        GroupUnitID: comparisonGroups.unitId,
+        GroupUnitName: units.name,
+        ProductID: products.id,
+        ProductName: products.name,
+        ProductUnitID: products.unitId,
+        ConversionFactor: productUnitConversions.factor,
+      })
+      .from(mine)
+      .innerJoin(comparisonGroups, eq(comparisonGroups.id, mine.groupId))
+      .innerJoin(units, eq(units.id, comparisonGroups.unitId))
+      .innerJoin(member, eq(member.groupId, comparisonGroups.id))
+      .innerJoin(products, eq(products.id, member.productId))
+      .leftJoin(
+        productUnitConversions,
+        and(
+          eq(productUnitConversions.productId, products.id),
+          eq(productUnitConversions.unitId, comparisonGroups.unitId),
+        ),
+      )
+      .where(eq(mine.productId, productID))
+      .orderBy(nocaseOrder(comparisonGroups.name), comparisonGroups.id, nocaseOrder(products.name), products.id)
+      .all();
     if (members.length === 0) return [];
     const ids: number[] = [];
     const seen = new Set<number>();
@@ -1363,16 +1487,7 @@ export class StoreService {
 
   private pickGroupLeaders(
     selectedID: number,
-    members: {
-      GroupID: number;
-      GroupName: string;
-      GroupUnitID: number;
-      GroupUnitName: string;
-      ProductID: number;
-      ProductName: string;
-      ProductUnitID: number;
-      ConversionFactor: string | null;
-    }[],
+    members: ComparisonMemberRow[],
     last: Map<number, { BoughtOn: string; Price: Decimal }>,
   ): GroupComparison[] {
     const out: GroupComparison[] = [];
@@ -1445,10 +1560,18 @@ export class StoreService {
     return candidate.ProductID < current.ProductID;
   }
 
-  private groupSelect(): string {
-    return `SELECT g.id AS ID, g.name AS Name, g.unit_id AS UnitID, u.name AS UnitName, g.created_at AS CreatedAt,
-      CAST((SELECT COUNT(*) FROM comparison_group_products m WHERE m.group_id = g.id) AS INTEGER) AS ProductCount
-      FROM comparison_groups g JOIN units u ON u.id = g.unit_id`;
+  private groupQuery() {
+    return this.orm
+      .select({
+        ID: comparisonGroups.id,
+        Name: comparisonGroups.name,
+        UnitID: comparisonGroups.unitId,
+        UnitName: units.name,
+        CreatedAt: comparisonGroups.createdAt,
+        ProductCount: groupMemberCount,
+      })
+      .from(comparisonGroups)
+      .innerJoin(units, eq(units.id, comparisonGroups.unitId));
   }
 
   private normalizeGroupName(name: string): string {
@@ -1460,12 +1583,12 @@ export class StoreService {
   private setComparisonGroupProducts(groupID: number, productIDs: number[]): void {
     const ids = this.uniquePositiveIDs(productIDs);
     for (const id of ids) {
-      const n = this.get<{ n: number }>(`SELECT COUNT(*) AS n FROM products WHERE id = ?`, id);
-      if (!n || n.n === 0) throw new NotFoundError();
+      const n = this.orm.select({ n: count() }).from(products).where(eq(products.id, id)).get();
+      if (countOf(n?.n) === 0) throw new NotFoundError();
     }
-    this.run(`DELETE FROM comparison_group_products WHERE group_id = ?`, groupID);
+    this.orm.delete(comparisonGroupProducts).where(eq(comparisonGroupProducts.groupId, groupID)).run();
     for (const id of ids) {
-      this.run(`INSERT INTO comparison_group_products (group_id, product_id) VALUES (?, ?)`, groupID, id);
+      this.orm.insert(comparisonGroupProducts).values({ groupId: groupID, productId: id }).run();
     }
   }
 
@@ -1501,15 +1624,20 @@ export class StoreService {
     if (imagePathVal === '') throw new Error('image is required');
     if (source === '') throw new Error('source is required');
     try {
-      const id = this.insert(
-        `INSERT INTO receipts (image_path, raw_response, status, error_message, created_at, source, external_id, source_payload)
-         VALUES (?, '', ?, '', ?, ?, ?, ?)`,
-        imagePathVal,
-        RECEIPT_PENDING,
-        this.nowRFC3339(),
-        source,
-        externalID,
-        payload,
+      const id = lastId(
+        this.orm
+          .insert(receipts)
+          .values({
+            imagePath: imagePathVal,
+            rawResponse: '',
+            status: RECEIPT_PENDING,
+            errorMessage: '',
+            createdAt: this.nowRFC3339(),
+            source,
+            externalId: externalID,
+            sourcePayload: payload,
+          })
+          .run(),
       );
       return this.getReceipt(id);
     } catch (err) {
@@ -1521,71 +1649,95 @@ export class StoreService {
   listReceiptExternalIDs(source: string): string[] {
     source = source.trim().toLowerCase();
     if (source === '') return [];
-    return this.all<{ external_id: string }>(
-      `SELECT external_id FROM receipts WHERE source = ? AND external_id != ''`,
-      source,
-    ).map((r) => r.external_id);
+    return this.orm
+      .select({ externalId: receipts.externalId })
+      .from(receipts)
+      .where(and(eq(receipts.source, source), ne(receipts.externalId, '')))
+      .all()
+      .map((r) => r.externalId);
   }
 
   latestSourcedBoughtOn(source: string): string {
     source = source.trim().toLowerCase();
     if (source === '') return '';
-    const row = this.get<{ bought_on: string }>(
-      `SELECT COALESCE(MAX(json_extract(raw_response, '$.bought_on')), '') AS bought_on
-       FROM receipts WHERE source = ? AND json_valid(raw_response) AND json_extract(raw_response, '$.bought_on') != ''`,
-      source,
-    );
+    const row = this.orm
+      .select({
+        bought_on: sql<string>`coalesce(max(json_extract(${receipts.rawResponse}, '$.bought_on')), '')`,
+      })
+      .from(receipts)
+      .where(
+        and(
+          eq(receipts.source, source),
+          sql`json_valid(${receipts.rawResponse})`,
+          sql`json_extract(${receipts.rawResponse}, '$.bought_on') != ''`,
+        ),
+      )
+      .get();
     return (row?.bought_on ?? '').trim();
   }
 
   getReceipt(id: number): Receipt {
-    const row = this.get<Receipt>(
-      `SELECT id AS ID, image_path AS ImagePath, raw_response AS RawResponse, status AS Status,
-        created_at AS CreatedAt, error_message AS ErrorMessage, source AS Source, external_id AS ExternalID,
-        source_payload AS SourcePayload FROM receipts WHERE id = ?`,
-      id,
-    );
+    const row = this.orm
+      .select({
+        ID: receipts.id,
+        ImagePath: receipts.imagePath,
+        RawResponse: receipts.rawResponse,
+        Status: receipts.status,
+        CreatedAt: receipts.createdAt,
+        ErrorMessage: receipts.errorMessage,
+        Source: receipts.source,
+        ExternalID: receipts.externalId,
+        SourcePayload: receipts.sourcePayload,
+      })
+      .from(receipts)
+      .where(eq(receipts.id, id))
+      .get();
     if (!row) throw new NotFoundError();
     return row;
   }
 
   listReceipts(): Receipt[] {
-    return this.all<{
-      ID: number;
-      ImagePath: string;
-      Status: string;
-      ErrorMessage: string;
-      CreatedAt: string;
-    }>(
-      `SELECT id AS ID, image_path AS ImagePath, status AS Status, error_message AS ErrorMessage, created_at AS CreatedAt
-       FROM receipts ORDER BY id DESC`,
-    ).map((r) => ({
-      ID: r.ID,
-      ImagePath: r.ImagePath,
-      RawResponse: '',
-      Status: r.Status,
-      ErrorMessage: r.ErrorMessage,
-      CreatedAt: r.CreatedAt,
-      Source: '',
-      ExternalID: '',
-      SourcePayload: '',
-    }));
+    return this.orm
+      .select({
+        ID: receipts.id,
+        ImagePath: receipts.imagePath,
+        Status: receipts.status,
+        ErrorMessage: receipts.errorMessage,
+        CreatedAt: receipts.createdAt,
+      })
+      .from(receipts)
+      .orderBy(desc(receipts.id))
+      .all()
+      .map((r) => ({
+        ID: r.ID,
+        ImagePath: r.ImagePath,
+        RawResponse: '',
+        Status: r.Status,
+        ErrorMessage: r.ErrorMessage,
+        CreatedAt: r.CreatedAt,
+        Source: '',
+        ExternalID: '',
+        SourcePayload: '',
+      }));
   }
 
   listPendingReceiptIDs(): number[] {
-    return this.all<{ id: number }>(`SELECT id FROM receipts WHERE status = ? ORDER BY id`, RECEIPT_PENDING).map(
-      (r) => r.id,
-    );
+    return this.orm
+      .select({ id: receipts.id })
+      .from(receipts)
+      .where(eq(receipts.status, RECEIPT_PENDING))
+      .orderBy(receipts.id)
+      .all()
+      .map((r) => r.id);
   }
 
   saveAIResponse(id: number, rawJSON: string): void {
-    const n = this.run(
-      `UPDATE receipts SET raw_response = ?, status = ?, error_message = '' WHERE id = ? AND status IN (?, ?)`,
-      rawJSON,
-      RECEIPT_READY,
-      id,
-      RECEIPT_PENDING,
-      RECEIPT_FAILED,
+    const n = changesOf(
+      this.orm
+        .update(receipts)
+        .set({ rawResponse: rawJSON, status: RECEIPT_READY, errorMessage: '' })
+        .where(and(eq(receipts.id, id), inArray(receipts.status, [RECEIPT_PENDING, RECEIPT_FAILED])))
+        .run(),
     );
     if (n === 0) {
       const r = this.getReceipt(id);
@@ -1595,12 +1747,12 @@ export class StoreService {
   }
 
   failReceipt(id: number, msg: string): void {
-    const n = this.run(
-      `UPDATE receipts SET status = ?, error_message = ? WHERE id = ? AND status = ?`,
-      RECEIPT_FAILED,
-      msg.trim(),
-      id,
-      RECEIPT_PENDING,
+    const n = changesOf(
+      this.orm
+        .update(receipts)
+        .set({ status: RECEIPT_FAILED, errorMessage: msg.trim() })
+        .where(and(eq(receipts.id, id), eq(receipts.status, RECEIPT_PENDING)))
+        .run(),
     );
     if (n === 0) {
       this.getReceipt(id);
@@ -1609,11 +1761,12 @@ export class StoreService {
   }
 
   requeueReceipt(id: number): void {
-    const n = this.run(
-      `UPDATE receipts SET status = ?, error_message = '' WHERE id = ? AND status = ?`,
-      RECEIPT_PENDING,
-      id,
-      RECEIPT_FAILED,
+    const n = changesOf(
+      this.orm
+        .update(receipts)
+        .set({ status: RECEIPT_PENDING, errorMessage: '' })
+        .where(and(eq(receipts.id, id), eq(receipts.status, RECEIPT_FAILED)))
+        .run(),
     );
     if (n === 0) {
       const r = this.getReceipt(id);
@@ -1623,7 +1776,13 @@ export class StoreService {
   }
 
   updateReceiptJSON(id: number, rawJSON: string): void {
-    const n = this.run(`UPDATE receipts SET raw_response = ? WHERE id = ? AND status = ?`, rawJSON, id, RECEIPT_READY);
+    const n = changesOf(
+      this.orm
+        .update(receipts)
+        .set({ rawResponse: rawJSON })
+        .where(and(eq(receipts.id, id), eq(receipts.status, RECEIPT_READY)))
+        .run(),
+    );
     if (n === 0) {
       this.getReceipt(id);
       throw new ReceiptNotReadyError();
@@ -1637,7 +1796,7 @@ export class StoreService {
       if (r.Status !== RECEIPT_READY) throw new ReceiptNotReadyError();
       inn.ReceiptID = id;
       const res = this.importBill(inn);
-      this.run(`UPDATE receipts SET status = ?, raw_response = ? WHERE id = ?`, RECEIPT_MIGRATED, rawJSON, id);
+      this.orm.update(receipts).set({ status: RECEIPT_MIGRATED, rawResponse: rawJSON }).where(eq(receipts.id, id)).run();
       return res;
     });
   }
@@ -1651,9 +1810,9 @@ export class StoreService {
         if (r.Status === RECEIPT_READY) throw new ReceiptNotReadyError();
         throw new NotFoundError();
       }
-      this.run(`UPDATE purchases SET story_id = ?, bought_on = ? WHERE receipt_id = ?`, story, boughtOn, id);
+      this.orm.update(purchases).set({ storyId: story, boughtOn }).where(eq(purchases.receiptId, id)).run();
       const raw = this.patchBillVisitJSON(r.RawResponse, storyID, boughtOn);
-      this.run(`UPDATE receipts SET raw_response = ? WHERE id = ?`, raw, id);
+      this.orm.update(receipts).set({ rawResponse: raw }).where(eq(receipts.id, id)).run();
     });
   }
 
@@ -1725,18 +1884,19 @@ export class StoreService {
   private createProductInner(name: string, unitID: number): Product {
     name = name.trim();
     if (name === '') throw new Error('name is required');
-    const n = this.get<{ n: number }>(`SELECT COUNT(*) AS n FROM units WHERE id = ?`, unitID);
-    if (!n || n.n === 0) throw new InvalidUnitError();
-    const aliasCount = this.get<{ n: number }>(
-      `SELECT COUNT(*) AS n FROM product_aliases WHERE alias = ? COLLATE NOCASE`,
-      name,
-    );
-    if ((aliasCount?.n ?? 0) > 0) throw new DuplicateError();
-    const id = this.insert(
-      `INSERT INTO products (name, unit_id, image_path, created_at) VALUES (?, ?, NULL, ?)`,
-      name,
-      unitID,
-      this.nowRFC3339(),
+    const n = this.orm.select({ n: count() }).from(units).where(eq(units.id, unitID)).get();
+    if (countOf(n?.n) === 0) throw new InvalidUnitError();
+    const aliasCount = this.orm
+      .select({ n: count() })
+      .from(productAliases)
+      .where(nocaseEq(productAliases.alias, name))
+      .get();
+    if (countOf(aliasCount?.n) > 0) throw new DuplicateError();
+    const id = lastId(
+      this.orm
+        .insert(products)
+        .values({ name, unitId: unitID, imagePath: null, createdAt: this.nowRFC3339() })
+        .run(),
     );
     return this.getProductRow(id);
   }
@@ -1755,11 +1915,7 @@ export class StoreService {
     try {
       this.createAlias(productID, storyID, chainID, receiptName);
     } catch (err) {
-      if (
-        err instanceof DuplicateError ||
-        err instanceof InvalidAliasError ||
-        err instanceof AliasScopeError
-      ) {
+      if (err instanceof DuplicateError || err instanceof InvalidAliasError || err instanceof AliasScopeError) {
         return;
       }
       throw err;
@@ -1776,17 +1932,20 @@ export class StoreService {
   ): Purchase {
     this.validQuantity(quantity);
     boughtOn = normalizeBoughtOn(boughtOn);
-    const id = this.insert(
-      `INSERT INTO purchases (product_id, story_id, kind, receipt_id, bought_on, quantity, amount, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      productID,
-      storyID || null,
-      KIND_PURCHASE,
-      receiptID || null,
-      boughtOn,
-      quantity.toString(),
-      amount.toString(),
-      this.nowRFC3339(),
+    const id = lastId(
+      this.orm
+        .insert(purchases)
+        .values({
+          productId: productID,
+          storyId: storyID || null,
+          kind: KIND_PURCHASE,
+          receiptId: receiptID || null,
+          boughtOn,
+          quantity: quantity.toString(),
+          amount: amount.toString(),
+          createdAt: this.nowRFC3339(),
+        })
+        .run(),
     );
     return this.getPurchase(id);
   }
@@ -1801,22 +1960,6 @@ export class StoreService {
     if (storyID > 0) bill.company_id = storyID;
     else delete bill.company_id;
     return JSON.stringify(bill);
-  }
-
-  private all<T>(sql: string, ...params: unknown[]): T[] {
-    return this.db.sqlite.prepare(sql).all(...params) as T[];
-  }
-
-  private get<T>(sql: string, ...params: unknown[]): T | undefined {
-    return this.db.sqlite.prepare(sql).get(...params) as T | undefined;
-  }
-
-  private run(sql: string, ...params: unknown[]): number {
-    return this.db.sqlite.prepare(sql).run(...params).changes;
-  }
-
-  private insert(sql: string, ...params: unknown[]): number {
-    return Number(this.db.sqlite.prepare(sql).run(...params).lastInsertRowid);
   }
 }
 
