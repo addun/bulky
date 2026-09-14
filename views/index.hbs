@@ -1,19 +1,19 @@
 {{> header}}
-{{#if (gt Imported 0)}}
-<p class="banner">Saved {{Imported}} purchase{{#if (ne Imported 1)}}s{{/if}} from the bill.</p>
+{{#if (gt imported 0)}}
+<p class="banner">Saved {{imported}} purchase{{#if (ne imported 1)}}s{{/if}} from the bill.</p>
 {{/if}}
 <div class="toolbar">
   <form class="search" method="get" action="/admin">
     <label class="sr" for="q">Search</label>
-    <input id="q" name="q" type="search" value="{{Page.Query}}" placeholder="Find a product" autocomplete="off">
+    <input id="q" name="q" type="search" value="{{page.query}}" placeholder="Find a product" autocomplete="off">
     <button type="submit" class="btn btn-tag">Search</button>
   </form>
 </div>
 
-{{#unless Products}}
+{{#unless products}}
   <div class="empty">
-    {{#if Page.Query}}
-      <p>No product matches “{{Page.Query}}”.</p>
+    {{#if page.query}}
+      <p>No product matches “{{page.query}}”.</p>
     {{else}}
       <p>Nothing on the list yet.</p>
       <p><a href="/admin/products/new">Add the first product you buy in bulk</a>, or <a href="/admin/receipts">scan a bill</a>.</p>
@@ -21,19 +21,19 @@
   </div>
 {{else}}
   <ul class="ledger">
-    {{#each Products}}
+    {{#each products}}
     <li>
-      <a class="row" href="/admin/products/{{this.ID}}">
-        {{#if this.ImagePath.Valid}}
-          <img class="thumb" src="/images/{{this.ImagePath.String}}" alt="">
+      <a class="row" href="/admin/products/{{this.id}}">
+        {{#if this.imagePath}}
+          <img class="thumb" src="/images/{{this.imagePath}}" alt="">
         {{else}}
           <span class="thumb thumb-empty" aria-hidden="true"></span>
         {{/if}}
         <span class="row-main">
-          <strong>{{this.Name}}</strong>
-          <span class="meta">{{this.UnitName}}{{#if this.LastBought.Valid}} · last {{datetime this.LastBought.String}}{{/if}}</span>
+          <strong>{{this.name}}</strong>
+          <span class="meta">{{this.unitName}}{{#if this.lastBought}} · last {{datetime this.lastBought}}{{/if}}</span>
         </span>
-        <span class="row-amt">{{#if this.Quote}}{{money this.Quote.Price}} / {{this.UnitName}}{{else}}—{{/if}}</span>
+        <span class="row-amt">{{#if this.quote}}{{money this.quote.price}} / {{this.unitName}}{{else}}—{{/if}}</span>
       </a>
     </li>
     {{/each}}

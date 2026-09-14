@@ -1,36 +1,36 @@
 {{> header}}
-<h1>{{#if New}}Add alias{{else}}Edit alias{{/if}}</h1>
-<form class="stack" method="post" action="{{#if New}}/admin/aliases{{else}}/admin/aliases/{{Alias.ID}}{{/if}}">
-  {{#if FromProduct}}<input type="hidden" name="from_product" value="{{FromProduct}}">{{/if}}
+<h1>{{#if new}}Add alias{{else}}Edit alias{{/if}}</h1>
+<form class="stack" method="post" action="{{#if new}}/admin/aliases{{else}}/admin/aliases/{{alias.id}}{{/if}}">
+  {{#if fromProduct}}<input type="hidden" name="from_product" value="{{fromProduct}}">{{/if}}
   <fieldset class="form-group">
     <legend>For</legend>
-    {{#if (and New LockedProduct)}}
-    <input type="hidden" name="product_id" value="{{Alias.ProductID}}">
-    <p class="meta">Product {{LockedProduct.Name}}</p>
+    {{#if (and new lockedProduct)}}
+    <input type="hidden" name="product_id" value="{{alias.productId}}">
+    <p class="meta">Product {{lockedProduct.name}}</p>
     {{else}}
     <label>Product
       <select name="product_id" required>
         <option value="">Select…</option>
-        {{#each Products}}
-        <option value="{{this.ID}}" {{#if (eq this.ID ../Alias.ProductID)}}selected{{/if}}>{{this.Name}}</option>
+        {{#each products}}
+        <option value="{{this.id}}" {{#if (eq this.id ../alias.productId)}}selected{{/if}}>{{this.name}}</option>
         {{/each}}
       </select>
     </label>
     {{/if}}
     <label>Scope
       <select name="scope">
-        <option value="" {{#if (eq Alias.ScopeValue "")}}selected{{/if}}>Any shop</option>
-        {{#if Chains}}
+        <option value="" {{#if (eq alias.scopeValue "")}}selected{{/if}}>Any shop</option>
+        {{#if chains}}
         <optgroup label="Retail chains">
-          {{#each Chains}}
-          <option value="chain:{{this.ID}}" {{#if (eq ../Alias.ScopeValue (print "chain:" this.ID))}}selected{{/if}}>{{this.Name}}</option>
+          {{#each chains}}
+          <option value="chain:{{this.id}}" {{#if (eq ../alias.scopeValue (print "chain:" this.id))}}selected{{/if}}>{{this.name}}</option>
           {{/each}}
         </optgroup>
         {{/if}}
-        {{#if Stories}}
+        {{#if stories}}
         <optgroup label="Stores">
-          {{#each Stories}}
-          <option value="story:{{this.ID}}" {{#if (eq ../Alias.ScopeValue (print "story:" this.ID))}}selected{{/if}}>{{this.Label}}</option>
+          {{#each stories}}
+          <option value="story:{{this.id}}" {{#if (eq ../alias.scopeValue (print "story:" this.id))}}selected{{/if}}>{{this.label}}</option>
           {{/each}}
         </optgroup>
         {{/if}}
@@ -39,14 +39,14 @@
   </fieldset>
   <fieldset class="form-group">
     <legend>Name on the bill</legend>
-    <label>Alias <input name="alias" required value="{{Alias.Alias}}" autofocus></label>
+    <label>Alias <input name="alias" required value="{{alias.alias}}" autofocus></label>
   </fieldset>
-  {{#unless Products}}
+  {{#unless products}}
     <p class="hint">No products yet. <a href="/admin/products/new">Add a product</a> first.</p>
   {{/unless}}
   <div class="form-actions">
-    <button type="submit" class="btn btn-tag">{{#if New}}Add alias{{else}}Save alias{{/if}}</button>
-    <a href="{{Cancel}}">Cancel</a>
+    <button type="submit" class="btn btn-tag">{{#if new}}Add alias{{else}}Save alias{{/if}}</button>
+    <a href="{{cancel}}">Cancel</a>
   </div>
 </form>
 {{> footer}}

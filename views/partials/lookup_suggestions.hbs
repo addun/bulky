@@ -1,22 +1,22 @@
-{{#if Query}}
-{{#if Products}}
+{{#if query}}
+{{#if products}}
 <ul class="ledger lookup-results">
-  {{#each Products}}
+  {{#each products}}
   <li>
-    <a class="row" href="/products/{{this.Product.ID}}">
-      {{#if this.Product.ImagePath.Valid}}
-        <img class="thumb" src="/images/{{this.Product.ImagePath.String}}" alt="">
+    <a class="row" href="/products/{{this.product.id}}">
+      {{#if this.product.imagePath}}
+        <img class="thumb" src="/images/{{this.product.imagePath}}" alt="">
       {{else}}
         <span class="thumb thumb-empty" aria-hidden="true"></span>
       {{/if}}
       <span class="row-main">
-        <strong>{{this.Product.Name}}</strong>
-        {{#unless this.Quote}}
-        <span class="meta">{{this.Product.UnitName}}</span>
+        <strong>{{this.product.name}}</strong>
+        {{#unless this.quote}}
+        <span class="meta">{{this.product.unitName}}</span>
         {{/unless}}
       </span>
-      {{#if this.Quote}}
-      <span class="row-amt">{{money this.Quote.Price}} / {{this.Product.UnitName}}</span>
+      {{#if this.quote}}
+      <span class="row-amt">{{money this.quote.price}} / {{this.product.unitName}}</span>
       {{/if}}
     </a>
   </li>

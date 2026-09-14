@@ -39,8 +39,8 @@ export class BiedronkaController {
       raw = '{"ids":[],"since":""}';
     }
     this.views.html(res, 'biedronka', 200, {
-      Page: this.views.page('Biedronka', '', ''),
-      ImportedJSON: raw,
+      page: this.views.page('Biedronka', '', ''),
+      importedJSON: raw,
     });
   }
 
@@ -70,7 +70,7 @@ export class BiedronkaController {
       return;
     }
     const tx: Tx = {
-      ID: id,
+      id: id,
       Date: body.date,
       StoreName: body.store_name,
       ReceiptNum: body.receipt_num,
@@ -119,12 +119,12 @@ export class BiedronkaController {
       return;
     }
     try {
-      this.receipts.saveAIResponse(receipt.ID, rawJSON);
+      this.receipts.saveAIResponse(receipt.id, rawJSON);
     } catch {
       res.status(500).json({ error: 'could not save the bill' });
       return;
     }
-    res.status(200).json({ status: 'imported', id, receipt_id: receipt.ID });
+    res.status(200).json({ status: 'imported', id, receipt_id: receipt.id });
   }
 
   @Get('api/biedronka/transactions')

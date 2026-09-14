@@ -3,33 +3,33 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  {{#if (gt Page.RefreshSeconds 0)}}
-  <meta http-equiv="refresh" content="{{Page.RefreshSeconds}}">
+  {{#if (gt page.refreshSeconds 0)}}
+  <meta http-equiv="refresh" content="{{page.refreshSeconds}}">
   {{/if}}
-  <title>{{#if Page.Title}}{{Page.Title}} · {{/if}}Bulkly</title>
+  <title>{{#if page.title}}{{page.title}} · {{/if}}Bulkly</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/app.css">
 </head>
-<body{{#if Page.Admin}} class="is-admin"{{/if}}>
-  {{#if Page.Admin}}
+<body{{#if page.admin}} class="is-admin"{{/if}}>
+  {{#if page.admin}}
   <input class="nav-open" id="nav-open" type="checkbox">
   {{/if}}
   <header class="topbar">
     <div class="topbar-inner">
-      {{#if Page.Admin}}
+      {{#if page.admin}}
       <label class="nav-toggle" for="nav-open" aria-label="Open menu">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M4 7h16M4 12h16M4 17h16"/></svg>
       </label>
       {{/if}}
       <a class="wordmark" href="/">Bulkly</a>
-      {{#unless Page.Admin}}
+      {{#unless page.admin}}
       <a class="topbar-admin" href="/admin">Admin</a>
       {{/unless}}
     </div>
   </header>
-  {{#if Page.Admin}}
+  {{#if page.admin}}
   <label class="nav-backdrop" for="nav-open" aria-hidden="true"></label>
   <aside class="rail">
     <a class="wordmark" href="/">Bulkly</a>
@@ -70,4 +70,4 @@
   </aside>
   {{/if}}
   <main class="sheet">
-    {{#if Page.Error}}<p class="banner" role="alert">{{Page.Error}}</p>{{/if}}
+    {{#if page.error}}<p class="banner" role="alert">{{page.error}}</p>{{/if}}

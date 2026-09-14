@@ -1,7 +1,7 @@
 {{> header}}
 <h1>Settings</h1>
 <form class="stack" method="post" action="/admin/settings">
-  <label>Model <input name="ocr_model" required value="{{OCRModel}}" autofocus></label>
+  <label>Model <input name="ocr_model" required value="{{ocrModel}}" autofocus></label>
   <p class="hint"><a href="https://developers.openai.com/api/docs/models/all" target="_blank" rel="noopener">All models</a></p>
 
   <fieldset class="form-group">
@@ -12,8 +12,8 @@
         Piece unit
         <select name="piece_unit_id">
           <option value="">Select…</option>
-          {{#each Units}}
-          <option value="{{this.ID}}" {{#if (eq this.ID ../Defaults.PieceID)}}selected{{/if}}>{{this.Name}}</option>
+          {{#each units}}
+          <option value="{{this.id}}" {{#if (eq this.id ../defaults.pieceId)}}selected{{/if}}>{{this.name}}</option>
           {{/each}}
         </select>
       </label>
@@ -21,8 +21,8 @@
         Weight unit
         <select name="weight_unit_id">
           <option value="">Select…</option>
-          {{#each Units}}
-          <option value="{{this.ID}}" {{#if (eq this.ID ../Defaults.WeightID)}}selected{{/if}}>{{this.Name}}</option>
+          {{#each units}}
+          <option value="{{this.id}}" {{#if (eq this.id ../defaults.weightId)}}selected{{/if}}>{{this.name}}</option>
           {{/each}}
         </select>
       </label>

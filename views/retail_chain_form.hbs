@@ -1,14 +1,14 @@
 {{> header}}
-<h1>{{#if New}}Add retail chain{{else}}Edit retail chain{{/if}}</h1>
-<form class="stack" method="post" action="{{#if New}}/admin/retail-chains{{else}}/admin/retail-chains/{{RetailChain.ID}}{{/if}}">
+<h1>{{#if new}}Add retail chain{{else}}Edit retail chain{{/if}}</h1>
+<form class="stack" method="post" action="{{#if new}}/admin/retail-chains{{else}}/admin/retail-chains/{{retailChain.id}}{{/if}}">
   <fieldset class="form-group">
     <legend>Chain</legend>
-    <label>Name <input name="name" required value="{{RetailChain.Name}}" autofocus></label>
-    <label>Legal name <input name="legal_name" required value="{{RetailChain.LegalName}}"></label>
-    <label>Tax ID <input name="tax_id" required value="{{RetailChain.TaxID}}" inputmode="numeric" autocomplete="off"></label>
+    <label>Name <input name="name" required value="{{retailChain.name}}" autofocus></label>
+    <label>Legal name <input name="legal_name" required value="{{retailChain.legalName}}"></label>
+    <label>Tax ID <input name="tax_id" required value="{{retailChain.taxId}}" inputmode="numeric" autocomplete="off"></label>
   </fieldset>
   <div class="form-actions">
-    <button type="submit" class="btn btn-tag">{{#if New}}Add chain{{else}}Save chain{{/if}}</button>
+    <button type="submit" class="btn btn-tag">{{#if new}}Add chain{{else}}Save chain{{/if}}</button>
     <a href="/admin/retail-chains">Cancel</a>
   </div>
 </form>

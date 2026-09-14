@@ -13,7 +13,7 @@ import {
 import {
   conversionFor,
   packConversionsJSON,
-  unitIDsAttr,
+  unitIdsAttr,
   type Product,
   type ProductListItem,
 } from '@app/store/products';
@@ -22,14 +22,14 @@ import { KIND_PRICE, KIND_PURCHASE, type Purchase } from '@app/store/purchases';
 import { RECEIPT_PENDING, receiptStatusLabel, type Receipt } from '@app/store/receipts';
 
 export type Page = {
-  Title: string;
-  Query: string;
-  Error: string;
-  Symbol: string;
-  Currency: string;
-  Today: string;
-  Admin: boolean;
-  RefreshSeconds: number;
+  title: string;
+  query: string;
+  error: string;
+  symbol: string;
+  currency: string;
+  today: string;
+  admin: boolean;
+  refreshSeconds: number;
 };
 
 export function makePage(
@@ -44,62 +44,62 @@ export function makePage(
   const now = new Date();
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   return {
-    Title: title,
-    Query: query,
-    Error: errMsg,
-    Symbol: symbol,
-    Currency: currency,
-    Today: today,
-    Admin: admin,
-    RefreshSeconds: refreshSeconds,
+    title,
+    query,
+    error: errMsg,
+    symbol,
+    currency,
+    today,
+    admin,
+    refreshSeconds,
   };
 }
 
-export function presentProduct(p: Product): Product & { UnitIDsAttr: string; PackConversionsJSON: string } {
-  return { ...p, UnitIDsAttr: unitIDsAttr(p), PackConversionsJSON: packConversionsJSON(p) };
+export function presentProduct(p: Product): Product & { unitIdsAttr: string; packConversionsJSON: string } {
+  return { ...p, unitIdsAttr: unitIdsAttr(p), packConversionsJSON: packConversionsJSON(p) };
 }
 
-export function presentQuote(q: QuotedPrice | null): (QuotedPrice & { IsLast30Days: boolean }) | null {
+export function presentQuote(q: QuotedPrice | null): (QuotedPrice & { isLast30Days: boolean }) | null {
   if (!q) return null;
-  return { ...q, IsLast30Days: quoteIsLast30Days(q) };
+  return { ...q, isLast30Days: quoteIsLast30Days(q) };
 }
 
-export function presentPurchase(p: Purchase): Purchase & { IsPurchase: boolean; IsPrice: boolean } {
-  return { ...p, IsPurchase: p.Kind === KIND_PURCHASE, IsPrice: p.Kind === KIND_PRICE };
+export function presentPurchase(p: Purchase): Purchase & { isPurchase: boolean; isPrice: boolean } {
+  return { ...p, isPurchase: p.kind === KIND_PURCHASE, isPrice: p.kind === KIND_PRICE };
 }
 
-export function presentStory(s: Story): Story & { Label: string; StreetLine: string; AddressLine: string } {
+export function presentStory(s: Story): Story & { label: string; streetLine: string; addressLine: string } {
   return {
     ...s,
-    Label: storyLabel(s),
-    StreetLine: storyStreetLine(s),
-    AddressLine: storyAddressLine(s),
+    label: storyLabel(s),
+    streetLine: storyStreetLine(s),
+    addressLine: storyAddressLine(s),
   };
 }
 
-export function presentChain(c: RetailChain): RetailChain & { Label: string } {
-  return { ...c, Label: chainLabel(c) };
+export function presentChain(c: RetailChain): RetailChain & { label: string } {
+  return { ...c, label: chainLabel(c) };
 }
 
-export function presentAlias(a: ProductAlias): ProductAlias & { ScopeLabel: string; ScopeValue: string } {
-  return { ...a, ScopeLabel: aliasScopeLabel(a), ScopeValue: aliasScopeValue(a) };
+export function presentAlias(a: ProductAlias): ProductAlias & { scopeLabel: string; scopeValue: string } {
+  return { ...a, scopeLabel: aliasScopeLabel(a), scopeValue: aliasScopeValue(a) };
 }
 
-export function presentReceipt(r: Receipt): Receipt & { StatusLabel: string; Reading: boolean } {
-  return { ...r, StatusLabel: receiptStatusLabel(r), Reading: r.Status === RECEIPT_PENDING };
+export function presentReceipt(r: Receipt): Receipt & { statusLabel: string; reading: boolean } {
+  return { ...r, statusLabel: receiptStatusLabel(r), reading: r.status === RECEIPT_PENDING };
 }
 
-export function presentRelated(r: RelatedProduct): RelatedProduct & { Quote: ReturnType<typeof presentQuote> } {
-  return { ...r, Quote: presentQuote(r.Quote) };
+export function presentRelated(r: RelatedProduct): RelatedProduct & { quote: ReturnType<typeof presentQuote> } {
+  return { ...r, quote: presentQuote(r.quote) };
 }
 
-export function presentListItem(it: ProductListItem): ProductListItem & { Quote: ReturnType<typeof presentQuote> } {
-  return { ...it, Quote: presentQuote(it.Quote) };
+export function presentListItem(it: ProductListItem): ProductListItem & { quote: ReturnType<typeof presentQuote> } {
+  return { ...it, quote: presentQuote(it.quote) };
 }
 
 export function storiesByID(stories: Story[]): Record<string, ReturnType<typeof presentStory>> {
   const out: Record<string, ReturnType<typeof presentStory>> = {};
-  for (const s of stories) out[String(s.ID)] = presentStory(s);
+  for (const s of stories) out[String(s.id)] = presentStory(s);
   return out;
 }
 

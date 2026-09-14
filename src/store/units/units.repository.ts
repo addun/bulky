@@ -28,7 +28,7 @@ export class UnitsRepository {
 
   listUnits(): Unit[] {
     return this.orm
-      .select({ ID: units.id, Name: units.name, ProductCount: unitUseCount })
+      .select({ id: units.id, name: units.name, productCount: unitUseCount })
       .from(units)
       .orderBy(nocaseOrder(units.name))
       .all();
@@ -36,7 +36,7 @@ export class UnitsRepository {
 
   getUnit(id: number): Unit {
     const row = this.orm
-      .select({ ID: units.id, Name: units.name, ProductCount: unitUseCount })
+      .select({ id: units.id, name: units.name, productCount: unitUseCount })
       .from(units)
       .where(eq(units.id, id))
       .get();
@@ -46,7 +46,7 @@ export class UnitsRepository {
 
   findUnitByName(name: string): Unit {
     const row = this.orm
-      .select({ ID: units.id, Name: units.name, ProductCount: unitUseCount })
+      .select({ id: units.id, name: units.name, productCount: unitUseCount })
       .from(units)
       .where(nocaseEq(units.name, name))
       .get();
@@ -77,7 +77,7 @@ export class UnitsRepository {
 
   deleteUnit(id: number): void {
     const u = this.getUnit(id);
-    if (u.ProductCount > 0) throw new UnitInUseError();
+    if (u.productCount > 0) throw new UnitInUseError();
     const groups = this.orm
       .select({ n: count() })
       .from(comparisonGroups)
@@ -102,34 +102,34 @@ export class UnitsRepository {
   }
 
   unitDefaults(): UnitDefaults {
-    return { PieceID: this.settingUnitID(SETTING_PIECE_UNIT_ID), WeightID: this.settingUnitID(SETTING_WEIGHT_UNIT_ID) };
+    return { pieceId: this.settingUnitID(SETTING_PIECE_UNIT_ID), weightId: this.settingUnitID(SETTING_WEIGHT_UNIT_ID) };
   }
 
   setUnitDefaults(d: UnitDefaults): void {
-    this.setSettingUnitID(SETTING_PIECE_UNIT_ID, d.PieceID);
-    this.setSettingUnitID(SETTING_WEIGHT_UNIT_ID, d.WeightID);
+    this.setSettingUnitID(SETTING_PIECE_UNIT_ID, d.pieceId);
+    this.setSettingUnitID(SETTING_WEIGHT_UNIT_ID, d.weightId);
   }
 
   ocrModel(): string {
     return this.getSetting(SETTING_OCR_MODEL);
   }
 
-  private settingUnitID(key: string): number {
+  private settingUnitID(key: string): number | null {
     const raw = this.getSetting(key);
-    if (raw === '') return 0;
+    if (raw === '') return null;
     const id = Number.parseInt(raw, 10);
-    if (!Number.isFinite(id) || id <= 0) return 0;
+    if (!Number.isFinite(id) || id <= 0) return null;
     try {
       this.getUnit(id);
       return id;
     } catch (err) {
-      if (err instanceof NotFoundError) return 0;
+      if (err instanceof NotFoundError) return null;
       throw err;
     }
   }
 
-  private setSettingUnitID(key: string, id: number): void {
-    if (id === 0) {
+  private setSettingUnitID(key: string, id: number | null): void {
+    if (!id) {
       this.orm.delete(settings).where(eq(settings.key, key)).run();
       return;
     }

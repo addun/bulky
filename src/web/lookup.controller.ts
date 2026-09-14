@@ -27,11 +27,11 @@ export class LookupController {
     try {
       const items = this.loadSuggestions(q);
       this.views.html(res, 'lookup', 200, {
-        Page: this.views.page('Find a product', q, ''),
-        Query: q,
-        Products: items.map((it) => ({
-          Product: presentProduct(it.Product),
-          Quote: presentQuote(it.Quote),
+        page: this.views.page('Find a product', q, ''),
+        query: q,
+        products: items.map((it) => ({
+          product: presentProduct(it.product),
+          quote: presentQuote(it.quote),
         })),
       });
     } catch {
@@ -55,10 +55,10 @@ export class LookupController {
     try {
       const items = this.loadSuggestions(q);
       this.views.html(res, 'lookup_suggestions', 200, {
-        Query: q,
-        Products: items.map((it) => ({
-          Product: presentProduct(it.Product),
-          Quote: presentQuote(it.Quote),
+        query: q,
+        products: items.map((it) => ({
+          product: presentProduct(it.product),
+          quote: presentQuote(it.quote),
         })),
       });
     } catch {
@@ -76,17 +76,17 @@ export class LookupController {
       const from365 = new Date(today);
       from365.setDate(from365.getDate() - 365);
       const points = pricesBetween(purchases, from365, today);
-      const rows = points.map((pt) => ({ on: boughtOnDate(pt.BoughtOn), price: pt.Price.toString() }));
+      const rows = points.map((pt) => ({ on: boughtOnDate(pt.boughtOn), price: pt.price.toString() }));
       const related = this.groups.relatedGroupProducts(productId, now);
       this.views.html(res, 'lookup_show', 200, {
-        Page: this.views.page(p.Name, '', ''),
-        Product: presentProduct(p),
-        Quote: presentQuote(bestRecentPrice(purchases, now)),
-        ChartJSON: JSON.stringify(rows),
-        HasChart: points.length > 0,
-        ChartFrom: fmtDay(from365),
-        ChartTo: fmtDay(today),
-        Related: related.map(presentRelated),
+        page: this.views.page(p.name, '', ''),
+        product: presentProduct(p),
+        quote: presentQuote(bestRecentPrice(purchases, now)),
+        chartJSON: JSON.stringify(rows),
+        hasChart: points.length > 0,
+        chartFrom: fmtDay(from365),
+        chartTo: fmtDay(today),
+        related: related.map(presentRelated),
       });
     } catch (err) {
       if ((err as Error).name === 'NotFoundError') {
@@ -104,16 +104,16 @@ export class LookupController {
   private toSuggestItems(items: ReturnType<ProductsRepository['searchProductQuotes']>) {
     return items.map((it) => {
       const img =
-        it.Product.ImagePath.Valid && it.Product.ImagePath.String.trim() !== ''
-          ? `/images/${it.Product.ImagePath.String}`
+        it.product.imagePath && it.product.imagePath.trim() !== ''
+          ? `/images/${it.product.imagePath}`
           : '';
       return {
-        id: it.Product.ID,
-        name: it.Product.Name,
-        unit: it.Product.UnitName,
+        id: it.product.id,
+        name: it.product.name,
+        unit: it.product.unitName,
         image: img,
-        price: it.Quote
-          ? formatMoneyPerUnit(it.Quote.Price, this.views.symbol, it.Product.UnitName)
+        price: it.quote
+          ? formatMoneyPerUnit(it.quote.price, this.views.symbol, it.product.unitName)
           : undefined,
       };
     });

@@ -65,114 +65,114 @@ export function configured(c: Config): boolean {
 }
 
 export type Bill = {
-  BoughtOn: string;
-  BoughtAt: string;
-  Notes: string;
-  NotABill: boolean;
-  StoryID: number;
-  StoryName: string;
-  ExternalID: string;
-  StreetName: string;
-  BuildingNumber: string;
-  ApartmentNumber: string;
-  PostalCode: string;
-  City: string;
-  Lines: Line[];
+  boughtOn: string;
+  boughtAt: string;
+  notes: string;
+  notABill: boolean;
+  storyId: number;
+  storyName: string;
+  externalId: string;
+  streetName: string;
+  buildingNumber: string;
+  apartmentNumber: string;
+  postalCode: string;
+  city: string;
+  lines: Line[];
 };
 
 export type Line = {
-  ReceiptName: string;
-  ProductName: string;
-  ProductID: number;
-  UnitID: number;
-  UnitName: string;
-  VatType: string;
-  PackageCount: string;
-  PackageSize: string;
-  Quantity: string;
-  UnitPrice: string;
-  Discount: string;
-  Amount: string;
-  Skip: boolean;
-  SkipReason: string;
+  receiptName: string;
+  productName: string;
+  productId: number;
+  unitId: number;
+  unitName: string;
+  vatType: string;
+  packageCount: string;
+  packageSize: string;
+  quantity: string;
+  unitPrice: string;
+  discount: string;
+  amount: string;
+  skip: boolean;
+  skipReason: string;
 };
 
 export function emptyBill(): Bill {
   return {
-    BoughtOn: '',
-    BoughtAt: '',
-    Notes: '',
-    NotABill: false,
-    StoryID: 0,
-    StoryName: '',
-    ExternalID: '',
-    StreetName: '',
-    BuildingNumber: '',
-    ApartmentNumber: '',
-    PostalCode: '',
-    City: '',
-    Lines: [],
+    boughtOn: '',
+    boughtAt: '',
+    notes: '',
+    notABill: false,
+    storyId: 0,
+    storyName: '',
+    externalId: '',
+    streetName: '',
+    buildingNumber: '',
+    apartmentNumber: '',
+    postalCode: '',
+    city: '',
+    lines: [],
   };
 }
 
 export function emptyLine(): Line {
   return {
-    ReceiptName: '',
-    ProductName: '',
-    ProductID: 0,
-    UnitID: 0,
-    UnitName: '',
-    VatType: '',
-    PackageCount: '',
-    PackageSize: '',
-    Quantity: '',
-    UnitPrice: '',
-    Discount: '',
-    Amount: '',
-    Skip: false,
-    SkipReason: '',
+    receiptName: '',
+    productName: '',
+    productId: 0,
+    unitId: 0,
+    unitName: '',
+    vatType: '',
+    packageCount: '',
+    packageSize: '',
+    quantity: '',
+    unitPrice: '',
+    discount: '',
+    amount: '',
+    skip: false,
+    skipReason: '',
   };
 }
 
 export function productLines(bill: Bill): Line[] {
-  return bill.Lines.filter((line) => !line.Skip);
+  return bill.lines.filter((line) => !line.skip);
 }
 
 export function marshalBill(bill: Bill): string {
   const raw: Record<string, unknown> = {
-    bought_on: bill.BoughtOn,
-    notes: bill.Notes,
-    not_a_bill: bill.NotABill,
-    lines: bill.Lines.map(marshalLine),
+    bought_on: bill.boughtOn,
+    notes: bill.notes,
+    not_a_bill: bill.notABill,
+    lines: bill.lines.map(marshalLine),
   };
-  if (bill.BoughtAt !== '') raw.bought_at = bill.BoughtAt;
-  if (bill.StoryID !== 0) raw.company_id = bill.StoryID;
-  if (bill.StoryName !== '') raw.company_name = bill.StoryName;
-  if (bill.ExternalID !== '') raw.external_id = bill.ExternalID;
-  if (bill.StreetName !== '') raw.street_name = bill.StreetName;
-  if (bill.BuildingNumber !== '') raw.building_number = bill.BuildingNumber;
-  if (bill.ApartmentNumber !== '') raw.apartment_number = bill.ApartmentNumber;
-  if (bill.PostalCode !== '') raw.postal_code = bill.PostalCode;
-  if (bill.City !== '') raw.city = bill.City;
+  if (bill.boughtAt !== '') raw.bought_at = bill.boughtAt;
+  if (bill.storyId !== 0) raw.company_id = bill.storyId;
+  if (bill.storyName !== '') raw.company_name = bill.storyName;
+  if (bill.externalId !== '') raw.external_id = bill.externalId;
+  if (bill.streetName !== '') raw.street_name = bill.streetName;
+  if (bill.buildingNumber !== '') raw.building_number = bill.buildingNumber;
+  if (bill.apartmentNumber !== '') raw.apartment_number = bill.apartmentNumber;
+  if (bill.postalCode !== '') raw.postal_code = bill.postalCode;
+  if (bill.city !== '') raw.city = bill.city;
   return JSON.stringify(raw);
 }
 
 function marshalLine(line: Line): Record<string, unknown> {
   const raw: Record<string, unknown> = {
-    receipt_name: line.ReceiptName,
-    product_name: line.ProductName,
-    product_id: line.ProductID,
-    unit_id: line.UnitID,
-    unit_name: line.UnitName,
-    package_count: line.PackageCount,
-    package_size: line.PackageSize,
-    quantity: line.Quantity,
-    amount: line.Amount,
-    skip: line.Skip,
-    skip_reason: line.SkipReason,
+    receipt_name: line.receiptName,
+    product_name: line.productName,
+    product_id: line.productId,
+    unit_id: line.unitId,
+    unit_name: line.unitName,
+    package_count: line.packageCount,
+    package_size: line.packageSize,
+    quantity: line.quantity,
+    amount: line.amount,
+    skip: line.skip,
+    skip_reason: line.skipReason,
   };
-  if (line.VatType !== '') raw.vat_type = line.VatType;
-  if (line.UnitPrice !== '') raw.unit_price = line.UnitPrice;
-  if (line.Discount !== '') raw.discount = line.Discount;
+  if (line.vatType !== '') raw.vat_type = line.vatType;
+  if (line.unitPrice !== '') raw.unit_price = line.unitPrice;
+  if (line.discount !== '') raw.discount = line.discount;
   return raw;
 }

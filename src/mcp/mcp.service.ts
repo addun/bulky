@@ -113,11 +113,11 @@ export function bestPrice(products: ProductsRepository, query: string, now: Date
   const quotes = products.searchProductQuotes(query, now, matchLimit);
   const out: BestPriceOutput = { query, matches: [] };
   for (const q of quotes) {
-    const m: BestPriceMatch = { id: q.Product.ID, name: q.Product.Name, unit: q.Product.UnitName };
-    if (q.Quote) {
-      m.price = q.Quote.Price.toString();
-      m.bought_on = boughtOnDate(q.Quote.BoughtOn);
-      m.window = q.Quote.Window;
+    const m: BestPriceMatch = { id: q.product.id, name: q.product.name, unit: q.product.unitName };
+    if (q.quote) {
+      m.price = q.quote.price.toString();
+      m.bought_on = boughtOnDate(q.quote.boughtOn);
+      m.window = q.quote.window;
       m.currency = currency;
     }
     out.matches.push(m);

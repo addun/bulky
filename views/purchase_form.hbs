@@ -1,57 +1,57 @@
 {{> header}}
-<h1>{{#if New}}Add new purchase{{else if Purchase.IsPrice}}Edit price{{else}}Edit purchase{{/if}}</h1>
-<p class="lede">{{Product.Name}}</p>
-<form class="stack" method="post" action="{{#if New}}/admin/products/{{Product.ID}}/purchases{{else}}/admin/purchases/{{Purchase.ID}}{{/if}}" data-qty-form data-qty-unit="{{Product.UnitName}}" data-qty-symbol="{{Page.Symbol}}">
-  {{#if (and (not New) Purchase.ReceiptID)}}
-  <p class="meta">From <a href="/admin/receipts/{{Purchase.ReceiptID}}">receipt {{Purchase.ReceiptID}}</a></p>
+<h1>{{#if new}}Add new purchase{{else if purchase.isPrice}}Edit price{{else}}Edit purchase{{/if}}</h1>
+<p class="lede">{{product.name}}</p>
+<form class="stack" method="post" action="{{#if new}}/admin/products/{{product.id}}/purchases{{else}}/admin/purchases/{{purchase.id}}{{/if}}" data-qty-form data-qty-unit="{{product.unitName}}" data-qty-symbol="{{page.symbol}}">
+  {{#if (and (not new) purchase.receiptId)}}
+  <p class="meta">From <a href="/admin/receipts/{{purchase.receiptId}}">receipt {{purchase.receiptId}}</a></p>
   {{/if}}
 
   <fieldset class="form-group">
     <legend>When</legend>
     <div class="form-row">
-      <label>Date <input type="date" name="bought_on" required value="{{dateValue Purchase.BoughtOn}}"></label>
-      <label>Hour <input type="time" name="bought_at" value="{{timeValue Purchase.BoughtOn}}"></label>
+      <label>Date <input type="date" name="bought_on" required value="{{dateValue purchase.boughtOn}}"></label>
+      <label>Hour <input type="time" name="bought_at" value="{{timeValue purchase.boughtOn}}"></label>
     </div>
   </fieldset>
 
   <fieldset class="form-group">
     <legend>Quantity</legend>
-    <label>Quantity ({{Product.UnitName}}) <input name="quantity" required inputmode="decimal" value="{{#unless Purchase.Quantity.IsZero}}{{qty Purchase.Quantity}}{{/unless}}" data-qty></label>
+    <label>Quantity ({{product.unitName}}) <input name="quantity" required inputmode="decimal" value="{{#unless (isZero purchase.quantity)}}{{qty purchase.quantity}}{{/unless}}" data-qty></label>
     <p class="hint pack-total" data-qty-total hidden></p>
   </fieldset>
 
   <fieldset class="form-group">
     <legend>Paid</legend>
-    <label>Amount ({{Page.Currency}}) <input name="amount" required inputmode="decimal" value="{{#unless Purchase.Amount.IsZero}}{{Purchase.Amount}}{{/unless}}" data-qty-amount></label>
+    <label>Amount ({{page.currency}}) <input name="amount" required inputmode="decimal" value="{{#unless (isZero purchase.amount)}}{{purchase.amount}}{{/unless}}" data-qty-amount></label>
     <label>
       Store
       <select name="story_id">
         <option value="">None</option>
-        {{#each Stories}}
-        <option value="{{this.ID}}" {{#if (eq this.ID ../Purchase.StoryID)}}selected{{/if}}>{{this.Label}}</option>
+        {{#each stories}}
+        <option value="{{this.id}}" {{#if (eq this.id ../purchase.storyId)}}selected{{/if}}>{{this.label}}</option>
         {{/each}}
       </select>
     </label>
-    {{#unless Stories}}
+    {{#unless stories}}
       <p class="hint">No stores yet. You can still save, or <a href="/admin/stories/new">add a store</a> first.</p>
     {{/unless}}
   </fieldset>
 
-  {{#if New}}
+  {{#if new}}
   <div class="form-actions">
     <button type="submit" class="btn btn-tag" name="kind" value="purchase">Save purchase</button>
     <button type="submit" class="btn btn-plain" name="kind" value="price">Log price</button>
-    <a href="/admin/products/{{Product.ID}}">Cancel</a>
+    <a href="/admin/products/{{product.id}}">Cancel</a>
   </div>
   {{else}}
   <fieldset class="form-group">
     <legend>Kind</legend>
-    <label class="check"><input type="radio" name="kind" value="purchase" {{#if Purchase.IsPurchase}}checked{{/if}}> Purchase</label>
-    <label class="check"><input type="radio" name="kind" value="price" {{#if Purchase.IsPrice}}checked{{/if}}> Price only</label>
+    <label class="check"><input type="radio" name="kind" value="purchase" {{#if purchase.isPurchase}}checked{{/if}}> Purchase</label>
+    <label class="check"><input type="radio" name="kind" value="price" {{#if purchase.isPrice}}checked{{/if}}> Price only</label>
   </fieldset>
   <div class="form-actions">
     <button type="submit" class="btn btn-tag">Save</button>
-    <a href="/admin/products/{{Product.ID}}">Cancel</a>
+    <a href="/admin/products/{{product.id}}">Cancel</a>
   </div>
   {{/if}}
 </form>

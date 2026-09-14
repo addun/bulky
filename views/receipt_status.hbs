@@ -2,21 +2,21 @@
 <h1>Receipt</h1>
 
 <div class="receipt-layout">
-  {{#if Receipt.ImagePath}}
+  {{#if receipt.imagePath}}
   <figure class="receipt-slip">
-    <img src="/admin/receipts/{{Receipt.ID}}/preview" alt="Uploaded bill">
+    <img src="/admin/receipts/{{receipt.id}}/preview" alt="Uploaded bill">
   </figure>
   {{/if}}
 
   <div>
-    <p class="eyebrow">{{Receipt.StatusLabel}}</p>
-    {{#if Receipt.Reading}}
+    <p class="eyebrow">{{receipt.statusLabel}}</p>
+    {{#if receipt.reading}}
       <p class="lede">Reading the bill. This can take a minute.</p>
-      <p class="hint">This page refreshes on its own. You can also <a href="/admin/receipts/{{Receipt.ID}}">refresh it yourself</a>.</p>
+      <p class="hint">This page refreshes on its own. You can also <a href="/admin/receipts/{{receipt.id}}">refresh it yourself</a>.</p>
     {{else}}
-      {{#if Receipt.ErrorMessage}}<p class="banner" role="alert">{{Receipt.ErrorMessage}}</p>{{/if}}
+      {{#if receipt.errorMessage}}<p class="banner" role="alert">{{receipt.errorMessage}}</p>{{/if}}
       <p class="lede">This scan has no product list yet.</p>
-      <form method="post" action="/admin/receipts/{{Receipt.ID}}/retry">
+      <form method="post" action="/admin/receipts/{{receipt.id}}/retry">
         <div class="actions">
           <button type="submit" class="btn btn-tag">Read again</button>
         </div>

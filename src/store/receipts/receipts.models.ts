@@ -10,42 +10,42 @@ export const RECEIPT_SOURCE_OCR = 'ocr';
 export const RECEIPT_SOURCE_BIEDRONKA = 'biedronka';
 
 export type Receipt = {
-  ID: number;
-  ImagePath: string;
-  RawResponse: string;
-  Status: string;
-  ErrorMessage: string;
-  CreatedAt: string;
-  Source: string;
-  ExternalID: string;
-  SourcePayload: string;
+  id: number;
+  imagePath: string;
+  rawResponse: string;
+  status: string;
+  errorMessage: string;
+  createdAt: string;
+  source: string;
+  externalId: string;
+  sourcePayload: string;
 };
 
 export type BillLineInput = {
-  ProductID: number;
-  ProductName: string;
-  ReceiptName: string;
-  UnitID: number;
-  Quantity: Decimal;
-  Amount: Decimal;
+  productId: number;
+  productName: string;
+  receiptName: string;
+  unitId: number;
+  quantity: Decimal;
+  amount: Decimal;
 };
 
 export type BillImport = {
-  StoryID: number;
-  Story: Story | null;
-  ReceiptID: number;
-  BoughtOn: string;
-  Lines: BillLineInput[];
+  storyId: number | null;
+  story: Story | null;
+  receiptId: number | null;
+  boughtOn: string;
+  lines: BillLineInput[];
 };
 
 export type BillImportResult = {
-  StoryID: number;
-  ProductIDs: number[];
-  Purchases: number;
+  storyId: number | null;
+  productIds: number[];
+  purchases: number;
 };
 
 export function receiptStatusLabel(r: Receipt): string {
-  switch (r.Status) {
+  switch (r.status) {
     case RECEIPT_MIGRATED:
       return 'Saved';
     case RECEIPT_READY:

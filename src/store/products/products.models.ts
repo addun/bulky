@@ -1,64 +1,53 @@
 import Decimal from 'decimal.js';
 import type { QuotedPrice } from '../../domain/price-stats';
 
-export type ImagePath = { Valid: boolean; String: string };
-
 export type ProductConversion = {
-  UnitID: number;
-  UnitName: string;
-  Factor: Decimal;
+  unitId: number;
+  unitName: string;
+  factor: Decimal;
 };
 
 export type Product = {
-  ID: number;
-  Name: string;
-  UnitID: number;
-  UnitName: string;
-  ImagePath: ImagePath;
-  CreatedAt: string;
-  Conversions: ProductConversion[];
+  id: number;
+  name: string;
+  unitId: number;
+  unitName: string;
+  imagePath: string | null;
+  createdAt: string;
+  conversions: ProductConversion[];
 };
 
 export type ProductListItem = Product & {
-  LastBought: ImagePath;
-  LifetimeAmount: Decimal;
-  PurchaseCount: number;
-  Quote: QuotedPrice | null;
+  lastBought: string | null;
+  lifetimeAmount: Decimal;
+  purchaseCount: number;
+  quote: QuotedPrice | null;
 };
 
 export type ProductQuote = {
-  Product: Product;
-  Quote: QuotedPrice | null;
+  product: Product;
+  quote: QuotedPrice | null;
 };
 
 export type MergePlan = {
-  Into: Product;
-  From: Product;
-  History: number;
-  Aliases: number;
-  NameAsAlias: string;
-  TakePhoto: boolean;
+  into: Product;
+  from: Product;
+  history: number;
+  aliases: number;
+  nameAsAlias: string;
+  takePhoto: boolean;
 };
 
-export function emptyImage(): ImagePath {
-  return { Valid: false, String: '' };
+export function conversionFor(p: Product, unitId: number): ProductConversion | null {
+  return p.conversions.find((c) => c.unitId === unitId) ?? null;
 }
 
-export function imagePath(s: string | null | undefined): ImagePath {
-  if (!s) return emptyImage();
-  return { Valid: true, String: s };
-}
-
-export function conversionFor(p: Product, unitID: number): ProductConversion | null {
-  return p.Conversions.find((c) => c.UnitID === unitID) ?? null;
-}
-
-export function unitIDsAttr(p: Product): string {
-  return [p.UnitID, ...p.Conversions.map((c) => c.UnitID)].join(',');
+export function unitIdsAttr(p: Product): string {
+  return [p.unitId, ...p.conversions.map((c) => c.unitId)].join(',');
 }
 
 export function packConversionsJSON(p: Product): string {
   return JSON.stringify(
-    p.Conversions.map((c) => ({ name: c.UnitName, factor: c.Factor.toString() })),
+    p.conversions.map((c) => ({ name: c.unitName, factor: c.factor.toString() })),
   );
 }

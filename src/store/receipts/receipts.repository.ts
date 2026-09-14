@@ -47,8 +47,8 @@ export class ReceiptsRepository {
     return this.createSourcedReceiptInner(imagePathVal, RECEIPT_SOURCE_OCR, '', '');
   }
 
-  createSourcedReceipt(imagePathVal: string, source: string, externalID: string, payload: string): Receipt {
-    return this.createSourcedReceiptInner(imagePathVal, source, externalID, payload);
+  createSourcedReceipt(imagePathVal: string, source: string, externalId: string, payload: string): Receipt {
+    return this.createSourcedReceiptInner(imagePathVal, source, externalId, payload);
   }
 
   listReceiptExternalIDs(source: string): string[] {
@@ -67,7 +67,7 @@ export class ReceiptsRepository {
     if (source === '') return '';
     const row = this.orm
       .select({
-        bought_on: sql<string>`coalesce(max(json_extract(${receipts.rawResponse}, '$.bought_on')), '')`,
+        boughtOn: sql<string>`coalesce(max(json_extract(${receipts.rawResponse}, '$.bought_on')), '')`,
       })
       .from(receipts)
       .where(
@@ -78,25 +78,11 @@ export class ReceiptsRepository {
         ),
       )
       .get();
-    return (row?.bought_on ?? '').trim();
+    return (row?.boughtOn ?? '').trim();
   }
 
   getReceipt(id: number): Receipt {
-    const row = this.orm
-      .select({
-        ID: receipts.id,
-        ImagePath: receipts.imagePath,
-        RawResponse: receipts.rawResponse,
-        Status: receipts.status,
-        CreatedAt: receipts.createdAt,
-        ErrorMessage: receipts.errorMessage,
-        Source: receipts.source,
-        ExternalID: receipts.externalId,
-        SourcePayload: receipts.sourcePayload,
-      })
-      .from(receipts)
-      .where(eq(receipts.id, id))
-      .get();
+    const row = this.orm.select().from(receipts).where(eq(receipts.id, id)).get();
     if (!row) throw new NotFoundError();
     return row;
   }
@@ -104,25 +90,21 @@ export class ReceiptsRepository {
   listReceipts(): Receipt[] {
     return this.orm
       .select({
-        ID: receipts.id,
-        ImagePath: receipts.imagePath,
-        Status: receipts.status,
-        ErrorMessage: receipts.errorMessage,
-        CreatedAt: receipts.createdAt,
+        id: receipts.id,
+        imagePath: receipts.imagePath,
+        status: receipts.status,
+        errorMessage: receipts.errorMessage,
+        createdAt: receipts.createdAt,
       })
       .from(receipts)
       .orderBy(desc(receipts.id))
       .all()
       .map((r) => ({
-        ID: r.ID,
-        ImagePath: r.ImagePath,
-        RawResponse: '',
-        Status: r.Status,
-        ErrorMessage: r.ErrorMessage,
-        CreatedAt: r.CreatedAt,
-        Source: '',
-        ExternalID: '',
-        SourcePayload: '',
+        ...r,
+        rawResponse: '',
+        source: '',
+        externalId: '',
+        sourcePayload: '',
       }));
   }
 
@@ -146,7 +128,7 @@ export class ReceiptsRepository {
     );
     if (n === 0) {
       const r = this.getReceipt(id);
-      if (r.Status === RECEIPT_MIGRATED) throw new ReceiptMigratedError();
+      if (r.status === RECEIPT_MIGRATED) throw new ReceiptMigratedError();
       throw new NotFoundError();
     }
   }
@@ -175,7 +157,7 @@ export class ReceiptsRepository {
     );
     if (n === 0) {
       const r = this.getReceipt(id);
-      if (r.Status === RECEIPT_PENDING) return;
+      if (r.status === RECEIPT_PENDING) return;
       throw new ReceiptNotReadyError();
     }
   }
@@ -197,26 +179,26 @@ export class ReceiptsRepository {
   migrateReceipt(id: number, inn: BillImport, rawJSON: string): BillImportResult {
     return this.db.immediate(() => {
       const r = this.getReceipt(id);
-      if (r.Status === RECEIPT_MIGRATED) throw new ReceiptMigratedError();
-      if (r.Status !== RECEIPT_READY) throw new ReceiptNotReadyError();
-      inn.ReceiptID = id;
+      if (r.status === RECEIPT_MIGRATED) throw new ReceiptMigratedError();
+      if (r.status !== RECEIPT_READY) throw new ReceiptNotReadyError();
+      inn.receiptId = id;
       const res = this.applyBill(inn);
       this.orm.update(receipts).set({ status: RECEIPT_MIGRATED, rawResponse: rawJSON }).where(eq(receipts.id, id)).run();
       return res;
     });
   }
 
-  updateReceiptVisit(id: number, storyID: number, boughtOn: string): void {
-    const story = this.locations.optionalStory(storyID);
+  updateReceiptVisit(id: number, storyId: number | null, boughtOn: string): void {
+    const story = this.locations.optionalStory(storyId);
     boughtOn = normalizeBoughtOn(boughtOn);
     this.db.immediate(() => {
       const r = this.getReceipt(id);
-      if (r.Status !== RECEIPT_MIGRATED) {
-        if (r.Status === RECEIPT_READY) throw new ReceiptNotReadyError();
+      if (r.status !== RECEIPT_MIGRATED) {
+        if (r.status === RECEIPT_READY) throw new ReceiptNotReadyError();
         throw new NotFoundError();
       }
       this.purchases.updateReceiptVisit(id, story, boughtOn);
-      const raw = patchBillVisitJSON(r.RawResponse, storyID, boughtOn);
+      const raw = patchBillVisitJSON(r.rawResponse, storyId, boughtOn);
       this.orm.update(receipts).set({ rawResponse: raw }).where(eq(receipts.id, id)).run();
     });
   }
@@ -225,7 +207,7 @@ export class ReceiptsRepository {
     return this.db.immediate(() => this.applyBill(inn));
   }
 
-  private createSourcedReceiptInner(imagePathVal: string, source: string, externalID: string, payload: string): Receipt {
+  private createSourcedReceiptInner(imagePathVal: string, source: string, externalId: string, payload: string): Receipt {
     try {
       const id = lastId(
         this.orm
@@ -237,7 +219,7 @@ export class ReceiptsRepository {
             errorMessage: '',
             createdAt: nowRFC3339(),
             source: source.trim().toLowerCase(),
-            externalId: externalID.trim(),
+            externalId: externalId.trim(),
             sourcePayload: payload,
           })
           .run(),
@@ -250,28 +232,28 @@ export class ReceiptsRepository {
   }
 
   private applyBill(inn: BillImport): BillImportResult {
-    let storyID = inn.StoryID;
-    if (storyID > 0) this.locations.getStory(storyID);
-    else if (inn.Story) {
+    let storyId = inn.storyId;
+    if (storyId) this.locations.getStory(storyId);
+    else if (inn.story) {
       const c = this.locations.normalizeStory(
-        inn.Story.Name,
-        inn.Story.StreetName,
-        inn.Story.BuildingNumber,
-        inn.Story.ApartmentNumber,
-        inn.Story.PostalCode,
-        inn.Story.City,
-        inn.Story.ExternalID,
+        inn.story.name,
+        inn.story.streetName,
+        inn.story.buildingNumber,
+        inn.story.apartmentNumber,
+        inn.story.postalCode,
+        inn.story.city,
+        inn.story.externalId,
       );
-      storyID = this.locations.insertStory(c, inn.Story.RetailChainID);
+      storyId = this.locations.insertStory(c, inn.story.retailChainId);
     }
     const created = new Map<string, number>();
-    const newIDs = new Set<number>();
-    const result: BillImportResult = { StoryID: storyID, ProductIDs: [], Purchases: 0 };
-    for (const line of inn.Lines) {
-      const pid = this.resolveImportProduct(line, created, newIDs, storyID);
-      result.ProductIDs.push(pid);
-      this.purchases.insertImported(pid, storyID, inn.ReceiptID, inn.BoughtOn, line.Quantity, line.Amount);
-      result.Purchases++;
+    const newIds = new Set<number>();
+    const result: BillImportResult = { storyId, productIds: [], purchases: 0 };
+    for (const line of inn.lines) {
+      const pid = this.resolveImportProduct(line, created, newIds, storyId);
+      result.productIds.push(pid);
+      this.purchases.insertImported(pid, storyId, inn.receiptId, inn.boughtOn, line.quantity, line.amount);
+      result.purchases++;
     }
     return result;
   }
@@ -279,47 +261,47 @@ export class ReceiptsRepository {
   private resolveImportProduct(
     line: BillLineInput,
     created: Map<string, number>,
-    newIDs: Set<number>,
-    storyID: number,
+    newIds: Set<number>,
+    storyId: number | null,
   ): number {
-    if (line.ProductID > 0) {
-      const p = this.products.getProductRow(line.ProductID);
-      this.maybeAliasFromReceipt(p.ID, storyID, line.ReceiptName);
-      return p.ID;
+    if (line.productId > 0) {
+      const p = this.products.getProductRow(line.productId);
+      this.maybeAliasFromReceipt(p.id, storyId, line.receiptName);
+      return p.id;
     }
-    const key = line.ProductName.trim().toLowerCase();
+    const key = line.productName.trim().toLowerCase();
     const existingCreated = created.get(key);
     if (existingCreated !== undefined) {
-      if (newIDs.has(existingCreated)) this.maybeAliasFromReceipt(existingCreated, storyID, line.ReceiptName);
+      if (newIds.has(existingCreated)) this.maybeAliasFromReceipt(existingCreated, storyId, line.receiptName);
       return existingCreated;
     }
     try {
-      const existing = this.products.findProductByName(line.ProductName, storyID);
-      created.set(key, existing.ID);
-      return existing.ID;
+      const existing = this.products.findProductByName(line.productName, storyId);
+      created.set(key, existing.id);
+      return existing.id;
     } catch (err) {
       if (!(err instanceof NotFoundError)) throw err;
     }
-    const p = this.products.insertImported(line.ProductName, line.UnitID);
-    created.set(key, p.ID);
-    newIDs.add(p.ID);
-    this.maybeAliasFromReceipt(p.ID, storyID, line.ReceiptName);
-    return p.ID;
+    const p = this.products.insertImported(line.productName, line.unitId);
+    created.set(key, p.id);
+    newIds.add(p.id);
+    this.maybeAliasFromReceipt(p.id, storyId, line.receiptName);
+    return p.id;
   }
 
-  private maybeAliasFromReceipt(productID: number, storyID: number, receiptName: string): void {
+  private maybeAliasFromReceipt(productId: number, storyId: number | null, receiptName: string): void {
     receiptName = receiptName.trim();
     if (receiptName === '') return;
-    let chainID = 0;
-    if (storyID > 0) {
-      const st = this.locations.getStory(storyID);
-      if (st.RetailChainID > 0) {
-        chainID = st.RetailChainID;
-        storyID = 0;
+    let chainId: number | null = null;
+    if (storyId) {
+      const st = this.locations.getStory(storyId);
+      if (st.retailChainId) {
+        chainId = st.retailChainId;
+        storyId = null;
       }
     }
     try {
-      this.aliases.createAlias(productID, storyID, chainID, receiptName);
+      this.aliases.createAlias(productId, storyId, chainId, receiptName);
     } catch (err) {
       if (err instanceof DuplicateError || err instanceof AliasScopeError) {
         return;
@@ -329,14 +311,14 @@ export class ReceiptsRepository {
   }
 }
 
-function patchBillVisitJSON(raw: string, storyID: number, boughtOn: string): string {
+function patchBillVisitJSON(raw: string, storyId: number | null, boughtOn: string): string {
   raw = raw.trim() || '{}';
   const bill = JSON.parse(raw) as Record<string, unknown>;
   const { date, clock } = splitBoughtOnSafe(boughtOn);
   bill.bought_on = date;
   if (clock !== '') bill.bought_at = clock;
   else delete bill.bought_at;
-  if (storyID > 0) bill.company_id = storyID;
+  if (storyId) bill.company_id = storyId;
   else delete bill.company_id;
   return JSON.stringify(bill);
 }

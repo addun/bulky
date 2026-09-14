@@ -1,30 +1,30 @@
 {{> header}}
-<h1>Merge {{Plan.From.Name}}?</h1>
+<h1>Merge {{plan.from.name}}?</h1>
 <p class="lede">You are going to merge:</p>
 <ul class="merge-plan">
-  <li><strong>{{Plan.From.Name}}</strong> into <strong>{{Plan.Into.Name}}</strong></li>
-  <li>{{Plan.From.Name}} will be removed</li>
-  {{#if Plan.History}}
-  <li>{{Plan.History}} history row{{#if (ne Plan.History 1)}}s{{/if}} will move to {{Plan.Into.Name}}</li>
+  <li><strong>{{plan.from.name}}</strong> into <strong>{{plan.into.name}}</strong></li>
+  <li>{{plan.from.name}} will be removed</li>
+  {{#if plan.history}}
+  <li>{{plan.history}} history row{{#if (ne plan.history 1)}}s{{/if}} will move to {{plan.into.name}}</li>
   {{else}}
   <li>Nothing in the history to move</li>
   {{/if}}
-  {{#if Plan.Aliases}}
-  <li>{{Plan.Aliases}} alias{{#if (ne Plan.Aliases 1)}}es{{/if}} will move to {{Plan.Into.Name}}</li>
+  {{#if plan.aliases}}
+  <li>{{plan.aliases}} alias{{#if (ne plan.aliases 1)}}es{{/if}} will move to {{plan.into.name}}</li>
   {{else}}
   <li>No aliases to move</li>
   {{/if}}
-  {{#if Plan.NameAsAlias}}
-  <li>“{{Plan.NameAsAlias}}” stays as an alias on {{Plan.Into.Name}} so bills still match</li>
+  {{#if plan.nameAsAlias}}
+  <li>“{{plan.nameAsAlias}}” stays as an alias on {{plan.into.name}} so bills still match</li>
   {{/if}}
-  {{#if Plan.TakePhoto}}
-  <li>{{Plan.From.Name}}’s photo will be used ({{Plan.Into.Name}} has none)</li>
+  {{#if plan.takePhoto}}
+  <li>{{plan.from.name}}’s photo will be used ({{plan.into.name}} has none)</li>
   {{/if}}
 </ul>
-<form method="post" action="/admin/products/{{Plan.From.ID}}/merge-with/{{Plan.Into.ID}}/">
+<form method="post" action="/admin/products/{{plan.from.id}}/merge-with/{{plan.into.id}}/">
   <div class="actions">
     <button type="submit" class="btn btn-danger">Merge and delete this product</button>
-    <a href="/admin/products/{{Plan.From.ID}}/merge-with?into_id={{Plan.Into.ID}}">Back</a>
+    <a href="/admin/products/{{plan.from.id}}/merge-with?into_id={{plan.into.id}}">Back</a>
   </div>
 </form>
 {{> footer}}

@@ -7,28 +7,28 @@ export const WINDOW_LAST_30_DAYS = 'last_30_days';
 export const WINDOW_LAST_RECORD = 'last_record';
 
 export type PricePoint = {
-  BoughtOn: string;
-  Price: Decimal;
+  boughtOn: string;
+  price: Decimal;
 };
 
 export type QuotedPrice = PricePoint & {
-  Window: string;
+  window: string;
 };
 
 export function isLast30Days(q: QuotedPrice): boolean {
-  return q.Window === WINDOW_LAST_30_DAYS;
+  return q.window === WINDOW_LAST_30_DAYS;
 }
 
 export type UnitQuote = {
-  UnitName: string;
-  Price: Decimal;
+  unitName: string;
+  price: Decimal;
 };
 
 export function unitQuotes(quote: QuotedPrice, p: Product): UnitQuote[] {
-  const out: UnitQuote[] = [{ UnitName: p.UnitName, Price: quote.Price }];
-  for (const c of p.Conversions ?? []) {
-    if (c.Factor.isZero()) continue;
-    out.push({ UnitName: c.UnitName, Price: quote.Price.div(c.Factor) });
+  const out: UnitQuote[] = [{ unitName: p.unitName, price: quote.price }];
+  for (const c of p.conversions ?? []) {
+    if (c.factor.isZero()) continue;
+    out.push({ unitName: c.unitName, price: quote.price.div(c.factor) });
   }
   return out;
 }
@@ -40,12 +40,12 @@ export function extraQuotes(quote: QuotedPrice | null | undefined, p: Product): 
 }
 
 export function qtyIn(primaryQty: Decimal, conv: ProductConversion): Decimal {
-  return primaryQty.mul(conv.Factor);
+  return primaryQty.mul(conv.factor);
 }
 
 function unitPriceOf(p: Purchase): Decimal | null {
-  if (p.Quantity.isZero()) return null;
-  return p.Amount.div(p.Quantity);
+  if (p.quantity.isZero()) return null;
+  return p.amount.div(p.quantity);
 }
 
 function onOrAfter(boughtOn: string, day: string): boolean {
@@ -62,7 +62,7 @@ export function lastUnitPrice(purchases: Purchase[]): PricePoint | null {
   for (const p of purchases) {
     const price = unitPriceOf(p);
     if (!price) continue;
-    return { BoughtOn: p.BoughtOn, Price: price };
+    return { boughtOn: p.boughtOn, price };
   }
   return null;
 }
@@ -71,10 +71,10 @@ export function lowestSince(purchases: Purchase[], since: Date): PricePoint | nu
   const day = formatDay(since);
   let best: PricePoint | null = null;
   for (const p of purchases) {
-    if (!onOrAfter(p.BoughtOn, day)) continue;
+    if (!onOrAfter(p.boughtOn, day)) continue;
     const price = unitPriceOf(p);
     if (!price) continue;
-    if (!best || price.lt(best.Price)) best = { BoughtOn: p.BoughtOn, Price: price };
+    if (!best || price.lt(best.price)) best = { boughtOn: p.boughtOn, price };
   }
   return best;
 }
@@ -84,18 +84,18 @@ export function bestRecentPrice(purchases: Purchase[], now: Date): QuotedPrice |
   const from = new Date(today);
   from.setDate(from.getDate() - 30);
   const low = lowestSince(purchases, from);
-  if (low) return { ...low, Window: WINDOW_LAST_30_DAYS };
+  if (low) return { ...low, window: WINDOW_LAST_30_DAYS };
   const last = lastUnitPrice(purchases);
-  if (last) return { ...last, Window: WINDOW_LAST_RECORD };
+  if (last) return { ...last, window: WINDOW_LAST_RECORD };
   return null;
 }
 
 export function quotesByProduct(buys: Purchase[], now: Date): Map<number, QuotedPrice> {
   const byProduct = new Map<number, Purchase[]>();
   for (const p of buys) {
-    const list = byProduct.get(p.ProductID) ?? [];
+    const list = byProduct.get(p.productId) ?? [];
     list.push(p);
-    byProduct.set(p.ProductID, list);
+    byProduct.set(p.productId, list);
   }
   const out = new Map<number, QuotedPrice>();
   for (const [id, list] of byProduct) {
@@ -111,10 +111,10 @@ export function pricesBetween(purchases: Purchase[], from: Date, to: Date): Pric
   const out: PricePoint[] = [];
   for (let i = purchases.length - 1; i >= 0; i--) {
     const p = purchases[i]!;
-    if (!onOrAfter(p.BoughtOn, fromDay) || !onOrBefore(p.BoughtOn, toDay)) continue;
+    if (!onOrAfter(p.boughtOn, fromDay) || !onOrBefore(p.boughtOn, toDay)) continue;
     const price = unitPriceOf(p);
     if (!price) continue;
-    out.push({ BoughtOn: p.BoughtOn, Price: price });
+    out.push({ boughtOn: p.boughtOn, price });
   }
   return out;
 }
@@ -122,9 +122,9 @@ export function pricesBetween(purchases: Purchase[], from: Date, to: Date): Pric
 export function lastPricesByProduct(buys: Purchase[]): Map<number, PricePoint> {
   const byProduct = new Map<number, Purchase[]>();
   for (const p of buys) {
-    const list = byProduct.get(p.ProductID) ?? [];
+    const list = byProduct.get(p.productId) ?? [];
     list.push(p);
-    byProduct.set(p.ProductID, list);
+    byProduct.set(p.productId, list);
   }
   const out = new Map<number, PricePoint>();
   for (const [id, list] of byProduct) {
