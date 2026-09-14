@@ -19,32 +19,21 @@ import {
 } from '../db/schema';
 import {
   AliasScopeError,
-  ComparisonGroupNameError,
   ConversionConflictError,
   DuplicateError,
-  InvalidAliasError,
   InvalidComparisonGroupError,
   InvalidConversionError,
   InvalidKindError,
   InvalidQuantityError,
   InvalidRetailChainError,
-  InvalidSettingError,
   InvalidStoryError,
   InvalidUnitError,
   NotFoundError,
   ReceiptMigratedError,
   ReceiptNotReadyError,
   RetailChainInUseError,
-  RetailChainLegalNameError,
-  RetailChainNameError,
-  RetailChainTaxIDError,
   SameProductError,
-  StoryBuildingError,
-  StoryCityError,
   StoryInUseError,
-  StoryNameError,
-  StoryPostalError,
-  StoryStreetError,
   UnitInUseError,
   UnitMismatchError,
   isUniqueErr,
@@ -189,8 +178,6 @@ export class StoreService {
   }
 
   createUnit(name: string): Unit {
-    name = name.trim();
-    if (name === '') throw new InvalidUnitError();
     try {
       const id = lastId(this.orm.insert(units).values({ name }).run());
       return this.getUnit(id);
@@ -201,8 +188,6 @@ export class StoreService {
   }
 
   updateUnit(id: number, name: string): void {
-    name = name.trim();
-    if (name === '') throw new InvalidUnitError();
     try {
       const n = changesOf(this.orm.update(units).set({ name }).where(eq(units.id, id)).run());
       if (n === 0) throw new NotFoundError();
@@ -234,9 +219,6 @@ export class StoreService {
   }
 
   setSetting(key: string, value: string): void {
-    key = key.trim();
-    value = value.trim();
-    if (key === '' || value === '') throw new InvalidSettingError();
     this.orm
       .insert(settings)
       .values({ key, value })
@@ -356,17 +338,13 @@ export class StoreService {
   }
 
   private normalizeRetailChain(name: string, legalName: string, taxID: string): RetailChain {
-    const c: RetailChain = {
+    return {
       ID: 0,
-      Name: name.trim(),
-      LegalName: legalName.trim(),
+      Name: name,
+      LegalName: legalName,
       TaxID: this.normalizeTaxID(taxID),
       StoryCount: 0,
     };
-    if (c.Name === '') throw new RetailChainNameError();
-    if (c.LegalName === '') throw new RetailChainLegalNameError();
-    if (c.TaxID === '') throw new RetailChainTaxIDError();
-    return c;
   }
 
   private normalizeTaxID(s: string): string {
@@ -500,22 +478,17 @@ export class StoreService {
   ): Story {
     const c: Story = {
       ID: 0,
-      Name: name.trim(),
-      StreetName: streetName.trim(),
-      BuildingNumber: building.trim(),
-      ApartmentNumber: apartment.trim(),
-      PostalCode: postalCode.trim(),
-      City: city.trim(),
-      ExternalID: externalID.trim(),
+      Name: name,
+      StreetName: streetName,
+      BuildingNumber: building,
+      ApartmentNumber: apartment,
+      PostalCode: postalCode,
+      City: city,
+      ExternalID: externalID,
       RetailChainID: 0,
       RetailChainName: '',
       PurchaseCount: 0,
     };
-    if (c.Name === '') throw new StoryNameError();
-    if (c.StreetName === '') throw new StoryStreetError();
-    if (c.BuildingNumber === '') throw new StoryBuildingError();
-    if (c.PostalCode === '') throw new StoryPostalError();
-    if (c.City === '') throw new StoryCityError();
     return c;
   }
 
@@ -553,8 +526,6 @@ export class StoreService {
   }
 
   createProduct(name: string, unitID: number, image: string | null, conversions: ProductConversion[] = []): Product {
-    name = name.trim();
-    if (name === '') throw new Error('name is required');
     try {
       this.getUnit(unitID);
     } catch (err) {
@@ -583,8 +554,6 @@ export class StoreService {
     clearImage: boolean,
     conversions?: ProductConversion[],
   ): void {
-    name = name.trim();
-    if (name === '') throw new Error('name is required');
     try {
       this.getUnit(unitID);
     } catch (err) {
@@ -714,7 +683,7 @@ export class StoreService {
     try {
       this.createAlias(intoID, 0, 0, fromName);
     } catch (err) {
-      if (err instanceof DuplicateError || err instanceof InvalidAliasError) return;
+      if (err instanceof DuplicateError) return;
       throw err;
     }
   }
@@ -1216,8 +1185,6 @@ export class StoreService {
   }
 
   private prepareAlias(productID: number, storyID: number, chainID: number, alias: string) {
-    alias = alias.trim();
-    if (alias === '') throw new InvalidAliasError();
     if (storyID !== 0 && chainID !== 0) throw new AliasScopeError();
     const n = this.orm.select({ n: count() }).from(products).where(eq(products.id, productID)).get();
     if (countOf(n?.n) === 0) throw new NotFoundError();
@@ -1317,7 +1284,6 @@ export class StoreService {
   }
 
   createComparisonGroup(name: string, unitID: number, productIDs: number[]): ComparisonGroup {
-    name = this.normalizeGroupName(name);
     try {
       this.getUnit(unitID);
     } catch (err) {
@@ -1341,7 +1307,6 @@ export class StoreService {
   }
 
   updateComparisonGroup(id: number, name: string, unitID: number, productIDs: number[]): void {
-    name = this.normalizeGroupName(name);
     try {
       this.getUnit(unitID);
     } catch (err) {
@@ -1572,12 +1537,6 @@ export class StoreService {
       })
       .from(comparisonGroups)
       .innerJoin(units, eq(units.id, comparisonGroups.unitId));
-  }
-
-  private normalizeGroupName(name: string): string {
-    name = name.trim();
-    if (name === '') throw new ComparisonGroupNameError();
-    return name;
   }
 
   private setComparisonGroupProducts(groupID: number, productIDs: number[]): void {
@@ -1861,7 +1820,6 @@ export class StoreService {
       return p.ID;
     }
     const key = line.ProductName.trim().toLowerCase();
-    if (key === '') throw new Error('product name is required');
     const existingCreated = created.get(key);
     if (existingCreated !== undefined) {
       if (newIDs.has(existingCreated)) this.maybeAliasFromReceipt(existingCreated, storyID, line.ReceiptName);
@@ -1882,8 +1840,6 @@ export class StoreService {
   }
 
   private createProductInner(name: string, unitID: number): Product {
-    name = name.trim();
-    if (name === '') throw new Error('name is required');
     const n = this.orm.select({ n: count() }).from(units).where(eq(units.id, unitID)).get();
     if (countOf(n?.n) === 0) throw new InvalidUnitError();
     const aliasCount = this.orm
@@ -1915,7 +1871,7 @@ export class StoreService {
     try {
       this.createAlias(productID, storyID, chainID, receiptName);
     } catch (err) {
-      if (err instanceof DuplicateError || err instanceof InvalidAliasError || err instanceof AliasScopeError) {
+      if (err instanceof DuplicateError || err instanceof AliasScopeError) {
         return;
       }
       throw err;

@@ -401,9 +401,7 @@ export class ReceiptsController {
       else if (err instanceof InvalidUnitError) errMsg = 'Choose a unit for each new product.';
       else if (err instanceof NotFoundError) errMsg = 'A selected product is gone. Refresh and try again.';
       else if (err instanceof InvalidStoryError) errMsg = 'Choose a store.';
-      else if (err instanceof Error && (err.message === 'product name is required' || err.message === 'name is required')) {
-        errMsg = 'Name is required for each new product.';
-      } else if (err instanceof Error && err.message === 'no products to import') {
+      else if (err instanceof Error && err.message === 'no products to import') {
         errMsg = 'Tick at least one product.';
       }
       this.renderReceiptReview(res, 422, view, products, units, stories, errMsg);

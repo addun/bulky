@@ -5,10 +5,8 @@ import { memoryStorage } from 'multer';
 import Decimal from 'decimal.js';
 import {
   AliasScopeError,
-  ComparisonGroupNameError,
   ConversionConflictError,
   DuplicateError,
-  InvalidAliasError,
   InvalidConversionError,
   InvalidKindError,
   InvalidQuantityError,
@@ -17,16 +15,8 @@ import {
   InvalidUnitError,
   NotFoundError,
   RetailChainInUseError,
-  RetailChainLegalNameError,
-  RetailChainNameError,
-  RetailChainTaxIDError,
   SameProductError,
-  StoryBuildingError,
-  StoryCityError,
   StoryInUseError,
-  StoryNameError,
-  StoryPostalError,
-  StoryStreetError,
   UnitInUseError,
   UnitMismatchError,
 } from '../domain/errors';
@@ -169,10 +159,6 @@ export class CatalogController {
       this.store.createUnit(parsed.data.name);
       this.views.redirect(res, '/admin/units');
     } catch (err) {
-      if (err instanceof InvalidUnitError) {
-        this.views.redirect(res, '/admin/units?error=' + encodeURIComponent('Name is required.'));
-        return;
-      }
       if (err instanceof DuplicateError) {
         this.views.redirect(res, '/admin/units?error=' + encodeURIComponent('That unit already exists.'));
         return;
@@ -204,17 +190,10 @@ export class CatalogController {
       return;
     }
     try {
-      this.store.updateUnit(unitId, name);
+      this.store.updateUnit(unitId, parsed.data.name);
       this.views.redirect(res, '/admin/units');
     } catch (err) {
       if (err instanceof NotFoundError) return this.views.text(res, 404, 'not found');
-      if (err instanceof InvalidUnitError) {
-        this.views.html(res, 'unit_form', 422, {
-          Page: this.views.adminPage('Rename unit', '', 'Name is required.'),
-          Unit: { ID: unitId, Name: name, ProductCount: 0 },
-        });
-        return;
-      }
       if (err instanceof DuplicateError) {
         this.views.html(res, 'unit_form', 422, {
           Page: this.views.adminPage('Rename unit', '', 'That unit already exists.'),
@@ -1422,20 +1401,12 @@ export class CatalogController {
 }
 
 function retailChainFormError(err: unknown): string {
-  if (err instanceof RetailChainNameError) return 'Name is required.';
-  if (err instanceof RetailChainLegalNameError) return 'Legal name is required.';
-  if (err instanceof RetailChainTaxIDError) return 'Tax ID is required.';
   if (err instanceof DuplicateError) return 'A chain with that name or tax ID already exists.';
   if (err instanceof InvalidRetailChainError) return 'Choose a retail chain.';
   return '';
 }
 
 function storyFormError(err: unknown): string {
-  if (err instanceof StoryNameError) return 'Name is required.';
-  if (err instanceof StoryStreetError) return 'Street name is required.';
-  if (err instanceof StoryBuildingError) return 'Building number is required.';
-  if (err instanceof StoryPostalError) return 'Postal code is required.';
-  if (err instanceof StoryCityError) return 'City is required.';
   if (err instanceof InvalidStoryError) return 'Choose a store.';
   if (err instanceof InvalidRetailChainError) return 'Choose a retail chain.';
   if (err instanceof DuplicateError) return 'That store code is already used.';
@@ -1443,7 +1414,6 @@ function storyFormError(err: unknown): string {
 }
 
 function aliasFormError(err: unknown): string {
-  if (err instanceof InvalidAliasError) return 'Alias is required.';
   if (err instanceof NotFoundError) return 'Choose a product.';
   if (err instanceof InvalidStoryError) return 'Choose a store.';
   if (err instanceof InvalidRetailChainError) return 'Choose a retail chain.';
@@ -1453,7 +1423,6 @@ function aliasFormError(err: unknown): string {
 }
 
 function comparisonGroupFormError(err: unknown): string {
-  if (err instanceof ComparisonGroupNameError) return 'Name is required.';
   if (err instanceof InvalidUnitError) return 'Choose a comparison unit.';
   if (err instanceof DuplicateError) return 'A group with that name already exists.';
   if (err instanceof NotFoundError) return 'Choose products that still exist.';
