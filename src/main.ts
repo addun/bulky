@@ -1,20 +1,27 @@
 import 'reflect-metadata';
 import { join } from 'node:path';
 import { NestFactory } from '@nestjs/core';
-import { StandardSchemaValidationPipe } from '@nestjs/common';
+import { BadRequestException, StandardSchemaValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import hbs from 'hbs';
 import { json, urlencoded } from 'express';
 import { AppModule } from './app.module';
 import { parseListenAddr } from './config/env';
 import { registerHandlebarsHelpers, setCurrencySymbol } from './web/helpers';
+import { HtmlExceptionFilter } from './web/html-exception.filter';
 import { StoreService } from './store/store.service';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bodyParser: false });
   app.use(json({ limit: '12mb' }));
   app.use(urlencoded({ extended: true, limit: '12mb' }));
-  app.useGlobalPipes(new StandardSchemaValidationPipe());
+  app.useGlobalPipes(
+    new StandardSchemaValidationPipe({
+      exceptionFactory: (issues) =>
+        new BadRequestException({ error: issues[0]?.message ?? 'Invalid input.' }),
+    }),
+  );
+  app.useGlobalFilters(new HtmlExceptionFilter());
 
   const viewsDir = join(__dirname, '..', 'views');
   const publicDir = join(__dirname, '..', 'public');

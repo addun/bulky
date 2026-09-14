@@ -1,14 +1,16 @@
 import {
+  Body,
   Controller,
   Get,
+  Param,
   Post,
-  Req,
+  Query,
   Res,
   UploadedFiles,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
-import type { Request, Response } from 'express';
+import type { Response } from 'express';
 import { memoryStorage } from 'multer';
 import {
   InvalidStoryError,
@@ -37,6 +39,7 @@ import {
 } from './receipt-form';
 import { ReceiptImagesService } from './receipt-images';
 import { ViewsService } from './views.service';
+import { field, flashQuery, formBody, id, optInt, receiptShowQuery, receiptVisitForm } from './schema';
 
 @Controller('admin/receipts')
 export class ReceiptsController {
@@ -49,8 +52,8 @@ export class ReceiptsController {
   ) {}
 
   @Get()
-  receipts(@Req() req: Request, @Res() res: Response): void {
-    this.renderReceipts(res, 200, String(req.query.error ?? ''));
+  receipts(@Query({ schema: flashQuery }) query: { error: string }, @Res() res: Response): void {
+    this.renderReceipts(res, 200, query.error);
   }
 
   @Post()
@@ -64,7 +67,6 @@ export class ReceiptsController {
     ),
   )
   async scanReceipt(
-    @Req() req: Request,
     @Res() res: Response,
     @UploadedFiles() files: { bill?: Express.Multer.File[]; bill_camera?: Express.Multer.File[] },
   ): Promise<void> {
@@ -104,15 +106,10 @@ export class ReceiptsController {
   }
 
   @Get(':id/preview')
-  receiptPreview(@Req() req: Request, @Res() res: Response): void {
-    const id = this.views.paramID(req, 'id');
-    if (!id) {
-      res.status(404).end();
-      return;
-    }
+  receiptPreview(@Param('id', { schema: id }) receiptId: number, @Res() res: Response): void {
     let receipt: Receipt;
     try {
-      receipt = this.store.getReceipt(id);
+      receipt = this.store.getReceipt(receiptId);
     } catch {
       res.status(404).end();
       return;
@@ -127,15 +124,14 @@ export class ReceiptsController {
   }
 
   @Get(':id/edit')
-  editReceipt(@Req() req: Request, @Res() res: Response): void {
-    const id = this.views.paramID(req, 'id');
-    if (!id) {
-      this.views.text(res, 404, 'not found');
-      return;
-    }
+  editReceipt(
+    @Param('id', { schema: id }) receiptId: number,
+    @Query({ schema: flashQuery }) query: { error: string },
+    @Res() res: Response,
+  ): void {
     let receipt: Receipt;
     try {
-      receipt = this.store.getReceipt(id);
+      receipt = this.store.getReceipt(receiptId);
     } catch (err) {
       if (err instanceof NotFoundError) {
         this.views.text(res, 404, 'not found');
@@ -145,22 +141,21 @@ export class ReceiptsController {
       return;
     }
     if (receipt.Status !== RECEIPT_MIGRATED) {
-      this.views.redirect(res, '/admin/receipts/' + String(id));
+      this.views.redirect(res, '/admin/receipts/' + String(receiptId));
       return;
     }
-    this.renderReceiptEdit(res, 200, receipt, '', 0, String(req.query.error ?? ''));
+    this.renderReceiptEdit(res, 200, receipt, '', 0, query.error);
   }
 
   @Post(':id/edit')
-  updateReceiptVisit(@Req() req: Request, @Res() res: Response): void {
-    const id = this.views.paramID(req, 'id');
-    if (!id) {
-      this.views.text(res, 404, 'not found');
-      return;
-    }
+  updateReceiptVisit(
+    @Param('id', { schema: id }) receiptId: number,
+    @Body({ schema: receiptVisitForm }) body: { bought_on: string; bought_at: string; story_id: number },
+    @Res() res: Response,
+  ): void {
     let receipt: Receipt;
     try {
-      receipt = this.store.getReceipt(id);
+      receipt = this.store.getReceipt(receiptId);
     } catch (err) {
       if (err instanceof NotFoundError) {
         this.views.text(res, 404, 'not found');
@@ -170,11 +165,11 @@ export class ReceiptsController {
       return;
     }
     if (receipt.Status !== RECEIPT_MIGRATED) {
-      this.views.redirect(res, '/admin/receipts/' + String(id));
+      this.views.redirect(res, '/admin/receipts/' + String(receiptId));
       return;
     }
-    const joined = joinBoughtOn(this.views.field(req, 'bought_on'), this.views.field(req, 'bought_at'));
-    const { id: storyID, msg } = this.resolveStoryForm(req);
+    const joined = joinBoughtOn(body.bought_on, body.bought_at);
+    const { id: storyID, msg } = this.resolveStoryForm(body.story_id);
     let boughtOn: string;
     try {
       boughtOn = normalizeBoughtOn(joined);
@@ -187,29 +182,24 @@ export class ReceiptsController {
       return;
     }
     try {
-      this.store.updateReceiptVisit(id, storyID, boughtOn);
+      this.store.updateReceiptVisit(receiptId, storyID, boughtOn);
     } catch (err) {
       if (err instanceof ReceiptNotReadyError) {
-        this.views.redirect(res, '/admin/receipts/' + String(id));
+        this.views.redirect(res, '/admin/receipts/' + String(receiptId));
         return;
       }
       const errMsg = err instanceof InvalidStoryError ? 'Choose a store.' : 'Could not save the visit.';
       this.renderReceiptEdit(res, 422, receipt, boughtOn, storyID, errMsg);
       return;
     }
-    this.views.redirect(res, '/admin/receipts/' + String(id));
+    this.views.redirect(res, '/admin/receipts/' + String(receiptId));
   }
 
   @Post(':id/retry')
-  async retryReceipt(@Req() req: Request, @Res() res: Response): Promise<void> {
-    const id = this.views.paramID(req, 'id');
-    if (!id) {
-      this.views.text(res, 404, 'not found');
-      return;
-    }
+  async retryReceipt(@Param('id', { schema: id }) receiptId: number, @Res() res: Response): Promise<void> {
     let receipt: Receipt;
     try {
-      receipt = this.store.getReceipt(id);
+      receipt = this.store.getReceipt(receiptId);
     } catch (err) {
       if (err instanceof NotFoundError) {
         this.views.text(res, 404, 'not found');
@@ -219,7 +209,7 @@ export class ReceiptsController {
       return;
     }
     if (receipt.Status !== RECEIPT_FAILED && receipt.Status !== RECEIPT_PENDING) {
-      this.views.redirect(res, '/admin/receipts/' + String(id));
+      this.views.redirect(res, '/admin/receipts/' + String(receiptId));
       return;
     }
     if (receipt.Status === RECEIPT_FAILED) {
@@ -227,7 +217,7 @@ export class ReceiptsController {
         this.views.redirect(
           res,
           '/admin/receipts/' +
-            String(id) +
+            String(receiptId) +
             '?error=' +
             encodeURIComponent('Set OCR_API_KEY or OCR_BASE_URL so the reader can run.'),
         );
@@ -239,7 +229,7 @@ export class ReceiptsController {
       } catch {
         this.views.redirect(
           res,
-          '/admin/receipts/' + String(id) + '?error=' + encodeURIComponent('Could not load settings.'),
+          '/admin/receipts/' + String(receiptId) + '?error=' + encodeURIComponent('Could not load settings.'),
         );
         return;
       }
@@ -247,7 +237,7 @@ export class ReceiptsController {
         this.views.redirect(
           res,
           '/admin/receipts/' +
-            String(id) +
+            String(receiptId) +
             '?error=' +
             encodeURIComponent('Set the AI model under Admin so the reader can run.'),
         );
@@ -259,36 +249,35 @@ export class ReceiptsController {
         this.views.redirect(
           res,
           '/admin/receipts/' +
-            String(id) +
+            String(receiptId) +
             '?error=' +
             encodeURIComponent('This bill is no longer on disk. Upload it again from Receipts.'),
         );
         return;
       }
       try {
-        this.store.requeueReceipt(id);
+        this.store.requeueReceipt(receiptId);
       } catch {
         this.views.redirect(
           res,
-          '/admin/receipts/' + String(id) + '?error=' + encodeURIComponent('Could not start reading again.'),
+          '/admin/receipts/' + String(receiptId) + '?error=' + encodeURIComponent('Could not start reading again.'),
         );
         return;
       }
     }
-    this.queue.enqueueOCR(id);
-    this.views.redirect(res, '/admin/receipts/' + String(id));
+    this.queue.enqueueOCR(receiptId);
+    this.views.redirect(res, '/admin/receipts/' + String(receiptId));
   }
 
   @Get(':id')
-  showReceipt(@Req() req: Request, @Res() res: Response): void {
-    const id = this.views.paramID(req, 'id');
-    if (!id) {
-      this.views.text(res, 404, 'not found');
-      return;
-    }
+  showReceipt(
+    @Param('id', { schema: id }) receiptId: number,
+    @Query({ schema: receiptShowQuery }) query: { error: string; imported: number },
+    @Res() res: Response,
+  ): void {
     let receipt: Receipt;
     try {
-      receipt = this.store.getReceipt(id);
+      receipt = this.store.getReceipt(receiptId);
     } catch (err) {
       if (err instanceof NotFoundError) {
         this.views.text(res, 404, 'not found');
@@ -298,11 +287,11 @@ export class ReceiptsController {
       return;
     }
     if (receipt.Status === RECEIPT_PENDING || receipt.Status === RECEIPT_FAILED) {
-      this.renderReceiptStatus(res, 200, receipt, String(req.query.error ?? ''));
+      this.renderReceiptStatus(res, 200, receipt, query.error);
       return;
     }
     if (receipt.Status === RECEIPT_MIGRATED) {
-      this.renderReceiptShow(req, res, 200, receipt, String(req.query.error ?? ''));
+      this.renderReceiptShow(res, 200, receipt, query.error, query.imported);
       return;
     }
     let products: ProductListItem[];
@@ -335,19 +324,18 @@ export class ReceiptsController {
       this.renderReceipts(res, 500, 'Could not read the saved AI response.');
       return;
     }
-    this.renderReceiptReview(res, 200, view, products, units, stories, String(req.query.error ?? ''));
+    this.renderReceiptReview(res, 200, view, products, units, stories, query.error);
   }
 
   @Post(':id')
-  confirmReceipt(@Req() req: Request, @Res() res: Response): void {
-    const id = this.views.paramID(req, 'id');
-    if (!id) {
-      this.views.text(res, 404, 'not found');
-      return;
-    }
+  confirmReceipt(
+    @Param('id', { schema: id }) receiptId: number,
+    @Body({ schema: formBody }) body: Record<string, unknown>,
+    @Res() res: Response,
+  ): void {
     let receipt: Receipt;
     try {
-      receipt = this.store.getReceipt(id);
+      receipt = this.store.getReceipt(receiptId);
     } catch (err) {
       if (err instanceof NotFoundError) {
         this.views.text(res, 404, 'not found');
@@ -365,9 +353,9 @@ export class ReceiptsController {
       this.views.text(res, 500, 'could not load the catalog');
       return;
     }
-    const get = (name: string) => this.views.field(req, name);
+    const get = (name: string) => field.parse(body[name]);
     let { inn, view, msg } = parseReceiptForm(get, products);
-    view.ReceiptID = id;
+    view.ReceiptID = receiptId;
     view.ImagePath = receipt.ImagePath;
     view.Status = receipt.Status;
     view.StoryID = knownStoryID(view.StoryID, stories);
@@ -382,16 +370,16 @@ export class ReceiptsController {
     }
     if (jsonErr === null) {
       try {
-        this.store.updateReceiptJSON(id, rawJSON);
+        this.store.updateReceiptJSON(receiptId, rawJSON);
       } catch {
         /* ignore */
       }
     }
     if (receipt.Status === RECEIPT_MIGRATED) {
-      this.renderReceiptShow(req, res, 409, receipt, 'This bill is already saved as purchases.');
+      this.renderReceiptShow(res, 409, receipt, 'This bill is already saved as purchases.', 0);
       return;
     }
-    if (view.StoryID === 0 && formInt(get('story_id')) > 0) {
+    if (view.StoryID === 0 && optInt.parse(body.story_id) > 0) {
       this.renderReceiptReview(res, 422, view, products, units, stories, 'Choose a store.');
       return;
     }
@@ -404,8 +392,8 @@ export class ReceiptsController {
       return;
     }
     try {
-      const result = this.store.migrateReceipt(id, inn, rawJSON);
-      this.views.redirect(res, '/admin/receipts/' + String(id) + '?imported=' + String(result.Purchases));
+      const result = this.store.migrateReceipt(receiptId, inn, rawJSON);
+      this.views.redirect(res, '/admin/receipts/' + String(receiptId) + '?imported=' + String(result.Purchases));
     } catch (err) {
       let errMsg = 'Could not save the purchases.';
       if (err instanceof ReceiptMigratedError) errMsg = 'This bill is already saved as purchases.';
@@ -503,7 +491,7 @@ export class ReceiptsController {
     });
   }
 
-  private renderReceiptShow(req: Request, res: Response, status: number, receipt: Receipt, errMsg: string): void {
+  private renderReceiptShow(res: Response, status: number, receipt: Receipt, errMsg: string, imported: number): void {
     let buys;
     try {
       buys = this.store.listPurchasesByReceipt(receipt.ID);
@@ -521,7 +509,6 @@ export class ReceiptsController {
     let { boughtOn, boughtAt, notes, story } = receiptVisitFacts(receipt, buys, stories);
     if (boughtAt === '') boughtAt = boughtOnTime(boughtOn);
     boughtOn = joinBoughtOn(boughtOn, boughtAt);
-    const imported = this.views.queryInt(req, 'imported');
     this.views.html(res, 'receipt_show', status, {
       Page: this.views.adminPage('Receipt', '', errMsg),
       Receipt: presentReceipt(receipt),
@@ -585,12 +572,11 @@ export class ReceiptsController {
     };
   }
 
-  private resolveStoryForm(req: Request): { id: number; msg: string } {
-    const id = this.views.formInt(req, 'story_id');
-    if (id <= 0) return { id: 0, msg: '' };
+  private resolveStoryForm(storyId: number): { id: number; msg: string } {
+    if (storyId <= 0) return { id: 0, msg: '' };
     try {
-      this.store.getStory(id);
-      return { id, msg: '' };
+      this.store.getStory(storyId);
+      return { id: storyId, msg: '' };
     } catch (err) {
       if (err instanceof NotFoundError) return { id: 0, msg: 'Choose a store.' };
       return { id: 0, msg: 'Could not load the store.' };
@@ -610,11 +596,6 @@ function pickFormFile(
   return null;
 }
 
-function formInt(s: string): number {
-  const v = Number.parseInt(s.trim(), 10);
-  return Number.isFinite(v) ? v : 0;
-}
-
 function emptyReceipt(): Receipt {
   return {
     ID: 0,
@@ -628,3 +609,4 @@ function emptyReceipt(): Receipt {
     SourcePayload: '',
   };
 }
+
