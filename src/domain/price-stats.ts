@@ -1,6 +1,7 @@
 import Decimal from 'decimal.js';
 import { boughtOnDate } from './bought-on';
-import type { Product, ProductConversion, Purchase } from './types';
+import type { Product, ProductConversion } from '../store/products/products.models';
+import type { Purchase } from '../store/purchases/purchases.models';
 
 export const WINDOW_LAST_30_DAYS = 'last_30_days';
 export const WINDOW_LAST_RECORD = 'last_record';

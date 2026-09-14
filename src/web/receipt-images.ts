@@ -3,16 +3,16 @@ import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { Injectable } from '@nestjs/common';
-import { StoreService } from '../store/store.service';
+import { DatabaseService } from '../db/database.service';
 
 const receiptImageID = /^[a-f0-9]{32}$/;
 
 @Injectable()
 export class ReceiptImagesService {
-  constructor(private readonly store: StoreService) {}
+  constructor(private readonly db: DatabaseService) {}
 
   receiptImageDir(): string {
-    return join(this.store.dataDir(), 'ocr');
+    return join(this.db.dataDirPath(), 'ocr');
   }
 
   async saveReceiptFiles(raw: Buffer, jpeg: Buffer): Promise<string> {

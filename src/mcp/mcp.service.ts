@@ -5,7 +5,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { boughtOnDate } from '../domain/bought-on';
-import { StoreService } from '../store/store.service';
+import { ProductsRepository } from '@app/store/products';
 
 const matchLimit = 10;
 const noMatchHint =
@@ -35,7 +35,7 @@ export type BestPriceOutput = {
 @Injectable()
 export class McpService {
   constructor(
-    private readonly store: StoreService,
+    private readonly products: ProductsRepository,
     private readonly config: ConfigService,
   ) {}
 
@@ -45,7 +45,7 @@ export class McpService {
 
   createServer(): McpServer {
     const currency = this.currency();
-    const store = this.store;
+    const products = this.products;
     const server = new McpServer({ name: 'bulkly', version: '1.0.0' });
     server.registerTool(
       'best_price',
@@ -69,7 +69,7 @@ export class McpService {
         },
       },
       async ({ query }) => {
-        const out = bestPrice(store, query, new Date(), currency);
+        const out = bestPrice(products, query, new Date(), currency);
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(out) }],
           structuredContent: out,
@@ -106,11 +106,11 @@ export class McpService {
   }
 }
 
-export function bestPrice(store: StoreService, query: string, now: Date, currency: string): BestPriceOutput {
+export function bestPrice(products: ProductsRepository, query: string, now: Date, currency: string): BestPriceOutput {
   query = query.trim();
   if (query === '') throw new Error('query is required');
   if (currency === '') currency = 'PLN';
-  const quotes = store.searchProductQuotes(query, now, matchLimit);
+  const quotes = products.searchProductQuotes(query, now, matchLimit);
   const out: BestPriceOutput = { query, matches: [] };
   for (const q of quotes) {
     const m: BestPriceMatch = { id: q.Product.ID, name: q.Product.Name, unit: q.Product.UnitName };

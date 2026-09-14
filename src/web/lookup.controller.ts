@@ -1,6 +1,8 @@
 import { Controller, Get, Param, Query, Res } from '@nestjs/common';
 import type { Response } from 'express';
-import { StoreService } from '../store/store.service';
+import { ComparisonGroupsRepository } from '@app/store/comparison-groups';
+import { ProductsRepository } from '@app/store/products';
+import { PurchasesRepository } from '@app/store/purchases';
 import { formatMoneyPerUnit } from '../domain/format';
 import { bestRecentPrice, pricesBetween } from '../domain/price-stats';
 import { boughtOnDate } from '../domain/bought-on';
@@ -13,7 +15,9 @@ const SUGGEST_LIMIT = 10;
 @Controller()
 export class LookupController {
   constructor(
-    private readonly store: StoreService,
+    private readonly products: ProductsRepository,
+    private readonly purchases: PurchasesRepository,
+    private readonly groups: ComparisonGroupsRepository,
     private readonly views: ViewsService,
   ) {}
 
@@ -65,15 +69,15 @@ export class LookupController {
   @Get('/products/:id')
   showLookup(@Param('id', { schema: id }) productId: number, @Res() res: Response): void {
     try {
-      const p = this.store.getProduct(productId);
-      const purchases = this.store.listPurchases(productId);
+      const p = this.products.getProduct(productId);
+      const purchases = this.purchases.listPurchases(productId);
       const now = new Date();
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       const from365 = new Date(today);
       from365.setDate(from365.getDate() - 365);
       const points = pricesBetween(purchases, from365, today);
       const rows = points.map((pt) => ({ on: boughtOnDate(pt.BoughtOn), price: pt.Price.toString() }));
-      const related = this.store.relatedGroupProducts(productId, now);
+      const related = this.groups.relatedGroupProducts(productId, now);
       this.views.html(res, 'lookup_show', 200, {
         Page: this.views.page(p.Name, '', ''),
         Product: presentProduct(p),
@@ -94,10 +98,10 @@ export class LookupController {
   }
 
   private loadSuggestions(q: string) {
-    return this.store.searchProductQuotes(q, new Date(), SUGGEST_LIMIT);
+    return this.products.searchProductQuotes(q, new Date(), SUGGEST_LIMIT);
   }
 
-  private toSuggestItems(items: ReturnType<StoreService['searchProductQuotes']>) {
+  private toSuggestItems(items: ReturnType<ProductsRepository['searchProductQuotes']>) {
     return items.map((it) => {
       const img =
         it.Product.ImagePath.Valid && it.Product.ImagePath.String.trim() !== ''

@@ -1,8 +1,8 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { NoLinesError, NoPDFTextError, NotABillError } from '../ocr/types';
 import { OcrService } from '../ocr/ocr.service';
-import { RECEIPT_PENDING } from '../domain/types';
-import { StoreService } from '../store/store.service';
+import { RECEIPT_PENDING, ReceiptsRepository } from '@app/store/receipts';
+import { UnitsRepository } from '@app/store/units';
 import { ReceiptImagesService } from './receipt-images';
 
 const ocrJobBuffer = 32;
@@ -14,7 +14,8 @@ export class OcrQueueService implements OnModuleInit {
   private busy = false;
 
   constructor(
-    private readonly store: StoreService,
+    private readonly receipts: ReceiptsRepository,
+    private readonly units: UnitsRepository,
     private readonly ocr: OcrService,
     private readonly images: ReceiptImagesService,
   ) {}
@@ -26,7 +27,7 @@ export class OcrQueueService implements OnModuleInit {
   recoverOCR(): void {
     let ids: number[];
     try {
-      ids = this.store.listPendingReceiptIDs();
+      ids = this.receipts.listPendingReceiptIDs();
     } catch (err) {
       this.log.warn(`ocr recover: ${err instanceof Error ? err.message : String(err)}`);
       return;
@@ -63,7 +64,7 @@ export class OcrQueueService implements OnModuleInit {
   async processOCRJob(id: number): Promise<void> {
     let receipt;
     try {
-      receipt = this.store.getReceipt(id);
+      receipt = this.receipts.getReceipt(id);
     } catch {
       return;
     }
@@ -74,30 +75,30 @@ export class OcrQueueService implements OnModuleInit {
       raw = await this.images.loadReceiptSource(receipt.ImagePath);
     } catch {
       try {
-        this.store.failReceipt(id, 'Could not read the stored bill.');
+        this.receipts.failReceipt(id, 'Could not read the stored bill.');
       } catch {
         /* ignore */
       }
       return;
     }
     if (!this.ocr.configured()) return;
-    const model = this.store.ocrModel();
+    const model = this.units.ocrModel();
     if (model === '') return;
 
     try {
       const { rawJSON } = await this.ocr.withModel(model).extract(raw);
       try {
-        this.store.saveAIResponse(id, rawJSON.toString('utf8'));
+        this.receipts.saveAIResponse(id, rawJSON.toString('utf8'));
       } catch {
         try {
-          this.store.failReceipt(id, 'Could not save the AI response.');
+          this.receipts.failReceipt(id, 'Could not save the AI response.');
         } catch {
           /* ignore */
         }
       }
     } catch (err) {
       try {
-        this.store.failReceipt(id, ocrFailMessage(err));
+        this.receipts.failReceipt(id, ocrFailMessage(err));
       } catch {
         /* ignore */
       }
