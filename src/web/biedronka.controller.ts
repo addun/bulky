@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Req, Res } from '@nestjs/common';
+import { Controller, Get, Param, Post, Query, Req, Res } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { DuplicateError } from '../domain/errors';
 import { RECEIPT_SOURCE_BIEDRONKA } from '../domain/types';
@@ -8,6 +8,7 @@ import { marshalBill } from '../ocr/types';
 import { StoreService } from '../store/store.service';
 import { ReceiptImagesService } from './receipt-images';
 import { ViewsService } from './views.service';
+import { biedronkaFormatQuery, biedronkaImportBody, biedronkaPageQuery, biedronkaTokenBody, biedronkaTxId, formIssue } from './schema';
 
 const biedronkaAPIBase = 'https://api.prod.biedronka.cloud/api/v7';
 const biedronkaTokenURL = 'https://konto.biedronka.pl/realms/loyalty/protocol/openid-connect/token';
@@ -56,17 +57,14 @@ export class BiedronkaController {
       res.status(401).json({ error: 'missing token' });
       return;
     }
-    const body = req.body as BiedronkaImportReq | undefined;
-    if (!body || typeof body !== 'object') {
-      res.status(400).json({ error: 'invalid bill' });
+    const parsed = biedronkaImportBody.safeParse(req.body);
+    if (!parsed.success) {
+      const idIssue = parsed.error.issues.some((issue) => issue.path[0] === 'id');
+      res.status(400).json({ error: idIssue ? 'invalid id' : 'invalid bill' });
       return;
     }
-    const idCheck = biedronkaTxID(String(body.id ?? ''));
-    if (!idCheck) {
-      res.status(400).json({ error: 'invalid id' });
-      return;
-    }
-    const id = idCheck;
+    const body = parsed.data;
+    const id = body.id;
     const receiptJSON = receiptPayload(body.receipt);
     if (receiptJSON.length === 0 || receiptJSON.toString('utf8') === 'null') {
       res.status(400).json({ error: 'missing e-receipt' });
@@ -74,10 +72,10 @@ export class BiedronkaController {
     }
     const tx: Tx = {
       ID: id,
-      Date: String(body.date ?? ''),
-      StoreName: String(body.store_name ?? ''),
-      ReceiptNum: String(body.receipt_num ?? ''),
-      TotalPrice: typeof body.total_price === 'number' ? body.total_price : Number(body.total_price) || 0,
+      Date: body.date,
+      StoreName: body.store_name,
+      ReceiptNum: body.receipt_num,
+      TotalPrice: body.total_price,
     };
     let bill;
     try {
@@ -131,83 +129,61 @@ export class BiedronkaController {
   }
 
   @Get('api/biedronka/transactions')
-  async biedronkaTransactions(@Req() req: Request, @Res() res: Response): Promise<void> {
-    let page = String(req.query.page ?? '').trim();
-    if (page === '') page = '1';
-    const n = Number.parseInt(page, 10);
-    if (!Number.isFinite(n) || n < 1) {
-      res.status(400).json({ error: 'invalid page' });
-      return;
-    }
-    await this.proxyBiedronka(req, res, 'GET', this.biedronkaAPIURL('transactions/'), { page: String(n) }, null, null);
+  async biedronkaTransactions(
+    @Query({ schema: biedronkaPageQuery }) query: { page: number },
+    @Req() req: Request,
+    @Res() res: Response,
+  ): Promise<void> {
+    await this.proxyBiedronka(req, res, 'GET', this.biedronkaAPIURL('transactions/'), { page: String(query.page) }, null, null);
   }
 
   @Get('api/biedronka/transactions/:id/e-receipt')
-  async biedronkaEReceipt(@Req() req: Request, @Res() res: Response): Promise<void> {
-    const id = biedronkaTxID(String(req.params.id ?? ''));
-    if (!id) {
-      res.status(400).json({ error: 'invalid id' });
-      return;
-    }
-    const format = biedronkaOutputFormat(String(req.query.format ?? ''));
-    if (!format) {
-      res.status(400).json({ error: 'invalid format' });
-      return;
-    }
-    const extra: Record<string, string> = { 'output-format': format };
-    if (format === 'pdf') extra.Accept = 'application/pdf';
+  async biedronkaEReceipt(
+    @Param('id', { schema: biedronkaTxId }) id: string,
+    @Query({ schema: biedronkaFormatQuery }) query: { format: 'json' | 'pdf' },
+    @Req() req: Request,
+    @Res() res: Response,
+  ): Promise<void> {
+    const extra: Record<string, string> = { 'output-format': query.format };
+    if (query.format === 'pdf') extra.Accept = 'application/pdf';
     await this.proxyBiedronka(req, res, 'GET', this.biedronkaAPIURL('transactions/' + id + '/e-receipt/'), null, extra, null);
   }
 
   @Get('api/biedronka/transactions/:id')
-  async biedronkaTransaction(@Req() req: Request, @Res() res: Response): Promise<void> {
-    const id = biedronkaTxID(String(req.params.id ?? ''));
-    if (!id) {
-      res.status(400).json({ error: 'invalid id' });
-      return;
-    }
+  async biedronkaTransaction(
+    @Param('id', { schema: biedronkaTxId }) id: string,
+    @Req() req: Request,
+    @Res() res: Response,
+  ): Promise<void> {
     await this.proxyBiedronka(req, res, 'GET', this.biedronkaAPIURL('transactions/' + id + '/'), null, null, null);
   }
 
   @Post('api/biedronka/token')
   async biedronkaToken(@Req() req: Request, @Res() res: Response): Promise<void> {
-    let inn: BiedronkaTokenReq;
-    try {
-      inn = parseBiedronkaTokenReq(req);
-    } catch {
-      res.status(400).json({ error: 'invalid token request' });
+    const inn = biedronkaTokenBody.safeParse(req.body);
+    if (!inn.success) {
+      res.status(400).json({ error: formIssue(inn.error) });
       return;
     }
-    let grant = inn.GrantType.trim();
-    if (grant === '') grant = 'refresh_token';
+    const grant = inn.data.grant_type;
     const form = new URLSearchParams();
     form.set('client_id', biedronkaClientID);
     form.set('redirect_uri', biedronkaRedirect);
     switch (grant) {
       case 'refresh_token': {
-        const refresh = inn.RefreshToken.trim();
-        if (refresh === '') {
-          res.status(400).json({ error: 'refresh_token is required' });
-          return;
-        }
         form.set('grant_type', 'refresh_token');
-        form.set('refresh_token', refresh);
+        form.set('refresh_token', inn.data.refresh_token);
         break;
       }
       case 'authorization_code': {
-        const code = biedronkaAuthCode(inn.Code);
+        const code = biedronkaAuthCode(inn.data.code);
         if (!code) {
           res.status(400).json({ error: 'missing auth code' });
           return;
         }
-        const verifier = inn.CodeVerifier.trim();
-        if (verifier === '') {
-          res.status(400).json({ error: 'code_verifier is required' });
-          return;
-        }
         form.set('grant_type', 'authorization_code');
         form.set('code', code);
-        form.set('code_verifier', verifier);
+        form.set('code_verifier', inn.data.code_verifier);
         break;
       }
       default:
@@ -326,47 +302,11 @@ export class BiedronkaController {
   }
 }
 
-type BiedronkaImportReq = {
-  id?: string;
-  date?: string;
-  store_name?: string;
-  receipt_num?: string;
-  total_price?: number;
-  receipt?: unknown;
-};
-
-type BiedronkaTokenReq = {
-  GrantType: string;
-  RefreshToken: string;
-  Code: string;
-  CodeVerifier: string;
-};
-
 function receiptPayload(receipt: unknown): Buffer {
   if (receipt == null) return Buffer.from('null');
   if (typeof receipt === 'string') return Buffer.from(receipt.trim());
   if (Buffer.isBuffer(receipt)) return receipt;
   return Buffer.from(JSON.stringify(receipt));
-}
-
-function parseBiedronkaTokenReq(req: Request): BiedronkaTokenReq {
-  const ct = String(req.headers['content-type'] ?? '');
-  if (ct.includes('json')) {
-    const inBody = req.body as Record<string, unknown> | undefined;
-    if (!inBody || typeof inBody !== 'object') throw new Error('invalid token request');
-    return {
-      GrantType: String(inBody.grant_type ?? ''),
-      RefreshToken: String(inBody.refresh_token ?? ''),
-      Code: String(inBody.code ?? ''),
-      CodeVerifier: String(inBody.code_verifier ?? ''),
-    };
-  }
-  return {
-    GrantType: String((req.body as Record<string, unknown> | undefined)?.grant_type ?? ''),
-    RefreshToken: String((req.body as Record<string, unknown> | undefined)?.refresh_token ?? ''),
-    Code: String((req.body as Record<string, unknown> | undefined)?.code ?? ''),
-    CodeVerifier: String((req.body as Record<string, unknown> | undefined)?.code_verifier ?? ''),
-  };
 }
 
 function biedronkaAuthCode(value: string): string | null {
@@ -400,28 +340,6 @@ function biedronkaCodeFromRedirect(raw: string): string | null {
   }
 }
 
-function biedronkaOutputFormat(raw: string): string | null {
-  switch (raw.toLowerCase().trim()) {
-    case '':
-    case 'json':
-      return 'json';
-    case 'pdf':
-      return 'pdf';
-    default:
-      return null;
-  }
-}
-
-function biedronkaTxID(raw: string): string | null {
-  const id = raw.trim();
-  if (id === '' || id.length > 128) return null;
-  for (const r of id) {
-    if (/[\p{L}\p{N}]/u.test(r) || r === '-' || r === '_') continue;
-    return null;
-  }
-  return id;
-}
-
 async function biedronkaPreview(
   pdf: Buffer,
   bill: ReturnType<typeof billFromBiedronka>,
@@ -438,3 +356,4 @@ async function biedronkaPreview(
   const jpeg = await previewText(billSlipText(bill, tx));
   return { jpeg, src: jpeg };
 }
+
