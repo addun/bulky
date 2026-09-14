@@ -18,7 +18,18 @@
     "noImplicitAny": true,
     "strictBindCallApply": true,
     "noFallthroughCasesInSwitch": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "paths": {
+      "@app/store": ["./src/store"],
+      "@app/store/units": ["./src/store/units"],
+      "@app/store/locations": ["./src/store/locations"],
+      "@app/store/aliases": ["./src/store/aliases"],
+      "@app/store/purchases": ["./src/store/purchases"],
+      "@app/store/comparison-groups": ["./src/store/comparison-groups"],
+      "@app/store/products": ["./src/store/products"],
+      "@app/store/receipts": ["./src/store/receipts"],
+      "@app/store/*": ["./src/store/*"]
+    }
   },
   "include": ["src/**/*"]
 }

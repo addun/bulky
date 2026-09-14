@@ -1,29 +1,25 @@
 import { isLast30Days as quoteIsLast30Days } from '../domain/price-stats';
 import type { QuotedPrice } from '../domain/price-stats';
+import { aliasScopeLabel, aliasScopeValue, type ProductAlias } from '@app/store/aliases';
+import { type RelatedProduct } from '@app/store/comparison-groups';
 import {
-  aliasScopeLabel,
-  aliasScopeValue,
   chainLabel,
-  conversionFor,
-  packConversionsJSON,
-  receiptStatusLabel,
   storyAddressLine,
   storyLabel,
   storyStreetLine,
-  unitIDsAttr,
-  yearlySummaries,
-  KIND_PRICE,
-  KIND_PURCHASE,
-  RECEIPT_PENDING,
-  type Product,
-  type ProductAlias,
-  type ProductListItem,
-  type Purchase,
-  type Receipt,
-  type RelatedProduct,
   type RetailChain,
   type Story,
-} from '../domain/types';
+} from '@app/store/locations';
+import {
+  conversionFor,
+  packConversionsJSON,
+  unitIDsAttr,
+  type Product,
+  type ProductListItem,
+} from '@app/store/products';
+import { yearlySummaries } from '../domain/yearly-summaries';
+import { KIND_PRICE, KIND_PURCHASE, type Purchase } from '@app/store/purchases';
+import { RECEIPT_PENDING, receiptStatusLabel, type Receipt } from '@app/store/receipts';
 
 export type Page = {
   Title: string;

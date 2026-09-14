@@ -1,3 +1,4 @@
+import './paths';
 import 'reflect-metadata';
 import { join } from 'node:path';
 import { NestFactory } from '@nestjs/core';
@@ -9,7 +10,7 @@ import { AppModule } from './app.module';
 import { parseListenAddr } from './config/env';
 import { registerHandlebarsHelpers, setCurrencySymbol } from './web/helpers';
 import { HtmlExceptionFilter } from './web/html-exception.filter';
-import { StoreService } from './store/store.service';
+import { DatabaseService } from './db/database.service';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bodyParser: false });
@@ -40,8 +41,8 @@ async function bootstrap(): Promise<void> {
   setCurrencySymbol(process.env.CURRENCY_SYMBOL || 'zł');
 
   app.useStaticAssets(publicDir, { prefix: '/static/' });
-  const store = app.get(StoreService);
-  app.useStaticAssets(store.imagesDir(), { prefix: '/images/' });
+  const db = app.get(DatabaseService);
+  app.useStaticAssets(db.imagesDirPath(), { prefix: '/images/' });
 
   const addr = parseListenAddr(process.env.ADDR || ':8080');
   await app.listen(addr.port, addr.host);

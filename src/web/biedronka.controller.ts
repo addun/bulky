@@ -1,11 +1,10 @@
 import { Controller, Get, Param, Post, Query, Req, Res } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { DuplicateError } from '../domain/errors';
-import { RECEIPT_SOURCE_BIEDRONKA } from '../domain/types';
 import { billFromBiedronka, billSlipText, type Tx } from '../ocr/biedronka';
 import { previewJPEG, previewText } from '../ocr/format';
 import { marshalBill } from '../ocr/types';
-import { StoreService } from '../store/store.service';
+import { RECEIPT_SOURCE_BIEDRONKA, ReceiptsRepository } from '@app/store/receipts';
 import { ReceiptImagesService } from './receipt-images';
 import { ViewsService } from './views.service';
 import { biedronkaFormatQuery, biedronkaImportBody, biedronkaPageQuery, biedronkaTokenBody, biedronkaTxId, formIssue } from './schema';
@@ -25,7 +24,7 @@ export class BiedronkaController {
   private readonly biedronkaAuth = biedronkaTokenURL;
 
   constructor(
-    private readonly store: StoreService,
+    private readonly receipts: ReceiptsRepository,
     private readonly views: ViewsService,
     private readonly images: ReceiptImagesService,
   ) {}
@@ -109,7 +108,7 @@ export class BiedronkaController {
     }
     let receipt;
     try {
-      receipt = this.store.createSourcedReceipt(imagePath, RECEIPT_SOURCE_BIEDRONKA, id, receiptJSON.toString('utf8'));
+      receipt = this.receipts.createSourcedReceipt(imagePath, RECEIPT_SOURCE_BIEDRONKA, id, receiptJSON.toString('utf8'));
     } catch (err) {
       await this.images.deleteReceiptFiles(imagePath);
       if (err instanceof DuplicateError) {
@@ -120,7 +119,7 @@ export class BiedronkaController {
       return;
     }
     try {
-      this.store.saveAIResponse(receipt.ID, rawJSON);
+      this.receipts.saveAIResponse(receipt.ID, rawJSON);
     } catch {
       res.status(500).json({ error: 'could not save the bill' });
       return;
@@ -207,12 +206,12 @@ export class BiedronkaController {
   private biedronkaImportedState(): { ids: string[]; since: string } {
     let ids: string[];
     try {
-      ids = this.store.listReceiptExternalIDs(RECEIPT_SOURCE_BIEDRONKA);
+      ids = this.receipts.listReceiptExternalIDs(RECEIPT_SOURCE_BIEDRONKA);
     } catch {
       ids = [];
     }
     if (!ids) ids = [];
-    const since = this.store.latestSourcedBoughtOn(RECEIPT_SOURCE_BIEDRONKA);
+    const since = this.receipts.latestSourcedBoughtOn(RECEIPT_SOURCE_BIEDRONKA);
     return { ids, since };
   }
 

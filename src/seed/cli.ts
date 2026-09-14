@@ -1,39 +1,47 @@
+import '../paths';
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { faker } from '@faker-js/faker';
 import Decimal from 'decimal.js';
 import { AppModule } from '../app.module';
-import { KIND_PRICE, KIND_PURCHASE } from '../domain/types';
-import { StoreService } from '../store/store.service';
+import { DatabaseService } from '../db/database.service';
+import { LocationsRepository } from '@app/store/locations';
+import { ProductsRepository } from '@app/store/products';
+import { KIND_PRICE, KIND_PURCHASE, PurchasesRepository } from '@app/store/purchases';
+import { UnitsRepository } from '@app/store/units';
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   const app = await NestFactory.createApplicationContext(AppModule, { logger: ['error'] });
-  const store = app.get(StoreService);
+  const db = app.get(DatabaseService);
+  const unitsSvc = app.get(UnitsRepository);
+  const locations = app.get(LocationsRepository);
+  const productsSvc = app.get(ProductsRepository);
+  const purchasesSvc = app.get(PurchasesRepository);
   if (args.clamp) {
-    const n = clampExistingUnitPrices(store);
-    console.log(`clamped unit prices on ${n} purchases in ${store.dataDir()}`);
+    const n = clampExistingUnitPrices(db, productsSvc, purchasesSvc);
+    console.log(`clamped unit prices on ${n} purchases in ${db.dataDirPath()}`);
     await app.close();
     return;
   }
-  const units = store.listUnits();
+  const units = unitsSvc.listUnits();
   if (units.length === 0) throw new Error('no units in the database');
   if (args.seed) faker.seed(args.seed);
   else console.log('faker seed: (random)');
 
-  const chains: ReturnType<StoreService['createRetailChain']>[] = [];
+  const chains: ReturnType<LocationsRepository['createRetailChain']>[] = [];
   if (args.stories > 0) {
     for (let i = 0; i < 3; i++) {
       const name = `${faker.company.name()} ${i + 1}`;
-      chains.push(store.createRetailChain(name, `${name} Sp. z o.o.`, faker.string.numeric(10)));
+      chains.push(locations.createRetailChain(name, `${name} Sp. z o.o.`, faker.string.numeric(10)));
     }
   }
-  const stories: ReturnType<StoreService['createStory']>[] = [];
+  const stories: ReturnType<LocationsRepository['createStory']>[] = [];
   for (let i = 0; i < args.stories; i++) {
     const apt = Math.random() < 0.5 ? faker.string.numeric(2) : '';
     const chainID = chains.length && Math.random() < 0.8 ? chains[Math.floor(Math.random() * chains.length)]!.ID : 0;
     stories.push(
-      store.createStory(
+      locations.createStory(
         faker.company.name(),
         faker.location.street(),
         faker.location.buildingNumber(),
@@ -46,7 +54,7 @@ async function main(): Promise<void> {
     );
   }
   const seen = new Set<string>();
-  const products: ReturnType<StoreService['createProduct']>[] = [];
+  const products: ReturnType<ProductsRepository['createProduct']>[] = [];
   while (products.length < args.products) {
     let name = faker.commerce.productName();
     let key = name.toLowerCase();
@@ -57,14 +65,14 @@ async function main(): Promise<void> {
     }
     seen.add(key);
     const unit = units[Math.floor(Math.random() * units.length)]!;
-    products.push(store.createProduct(name, unit.ID, null));
+    products.push(productsSvc.createProduct(name, unit.ID, null));
   }
   const start = new Date();
   start.setFullYear(start.getFullYear() - 2);
   const end = new Date();
   const span = end.getTime() - start.getTime();
   let purchases = 0;
-  store.immediate(() => {
+  db.immediate(() => {
     for (const p of products) {
       let price = 1 + Math.random() * 99;
       for (let n = 0; n < args.history; n++) {
@@ -77,12 +85,12 @@ async function main(): Promise<void> {
         price = Math.min(100, Math.max(1, price * (0.93 + Math.random() * 0.15)));
         const qty = p.UnitName === 'kg' || p.UnitName === 'g' ? new Decimal((0.4 + Math.random() * 11.6).toFixed(3)) : new Decimal(1 + Math.floor(Math.random() * 8));
         const amount = qty.mul(price).toDecimalPlaces(2);
-        store.createPurchase(p.ID, storyID, boughtOn, qty, amount, kind);
+        purchasesSvc.createPurchase(p.ID, storyID, boughtOn, qty, amount, kind);
         purchases++;
       }
     }
   });
-  console.log(`inserted ${stories.length} stores, ${products.length} products, ${purchases} purchases into ${store.dataDir()}`);
+  console.log(`inserted ${stories.length} stores, ${products.length} products, ${purchases} purchases into ${db.dataDirPath()}`);
   await app.close();
 }
 
@@ -93,18 +101,18 @@ function pad(n: number): string {
 const MIN_UNIT_PRICE = 1;
 const MAX_UNIT_PRICE = 100;
 
-function clampExistingUnitPrices(store: StoreService): number {
-  const products = store.listProducts('');
-  return store.immediate(() => {
+function clampExistingUnitPrices(db: DatabaseService, productsSvc: ProductsRepository, purchasesSvc: PurchasesRepository): number {
+  const products = productsSvc.listProducts('');
+  return db.immediate(() => {
     let updated = 0;
     for (const p of products) {
-      updated += rescalePurchases(store, store.listPurchases(p.ID));
+      updated += rescalePurchases(purchasesSvc, purchasesSvc.listPurchases(p.ID));
     }
     return updated;
   });
 }
 
-function rescalePurchases(store: StoreService, rows: ReturnType<StoreService['listPurchases']>): number {
+function rescalePurchases(purchasesSvc: PurchasesRepository, rows: ReturnType<PurchasesRepository['listPurchases']>): number {
   const pts: { row: (typeof rows)[number]; price: Decimal }[] = [];
   let lo = new Decimal(0);
   let hi = new Decimal(0);
@@ -124,7 +132,7 @@ function rescalePurchases(store: StoreService, rows: ReturnType<StoreService['li
   for (const pt of pts) {
     const newPrice = span.isZero() ? mid : minP.add(pt.price.sub(lo).div(span).mul(maxP.sub(minP)));
     const amount = newPrice.mul(pt.row.Quantity).toDecimalPlaces(2);
-    store.updatePurchase(pt.row.ID, pt.row.StoryID, pt.row.BoughtOn, pt.row.Quantity, amount, pt.row.Kind);
+    purchasesSvc.updatePurchase(pt.row.ID, pt.row.StoryID, pt.row.BoughtOn, pt.row.Quantity, amount, pt.row.Kind);
     n++;
   }
   return n;

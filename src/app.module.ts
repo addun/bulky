@@ -1,8 +1,16 @@
 import { MiddlewareConsumer, Module, NestModule, RequestMethod } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { envSchema } from './config/env';
-import { DatabaseService } from './db/database.service';
-import { StoreService } from './store/store.service';
+import { DatabaseModule } from './db/database.module';
+import {
+  AliasesModule,
+  ComparisonGroupsModule,
+  LocationsModule,
+  ProductsModule,
+  PurchasesModule,
+  ReceiptsModule,
+  UnitsModule,
+} from '@app/store';
 import { OcrService } from './ocr/ocr.service';
 import { McpService } from './mcp/mcp.service';
 import { McpMiddleware } from './mcp/mcp.middleware';
@@ -21,11 +29,17 @@ import { BiedronkaController } from './web/biedronka.controller';
       isGlobal: true,
       validationSchema: envSchema,
     }),
+    DatabaseModule,
+    UnitsModule,
+    LocationsModule,
+    AliasesModule,
+    PurchasesModule,
+    ComparisonGroupsModule,
+    ProductsModule,
+    ReceiptsModule,
   ],
   controllers: [LookupController, CatalogController, ReceiptsController, BiedronkaController],
   providers: [
-    DatabaseService,
-    StoreService,
     OcrService,
     McpService,
     ViewsService,

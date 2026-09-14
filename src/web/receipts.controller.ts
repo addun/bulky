@@ -19,12 +19,22 @@ import {
   ReceiptMigratedError,
   ReceiptNotReadyError,
 } from '../domain/errors';
-import { RECEIPT_FAILED, RECEIPT_MIGRATED, RECEIPT_PENDING, type ProductListItem, type Receipt, type Story, type Unit } from '../domain/types';
 import { boughtOnTime, joinBoughtOn, normalizeBoughtOn } from '../domain/bought-on';
 import { MaxImageBytes } from '../ocr/types';
 import { previewJPEG } from '../ocr/format';
 import { OcrService } from '../ocr/ocr.service';
-import { StoreService } from '../store/store.service';
+import { AliasesRepository } from '@app/store/aliases';
+import { LocationsRepository, type Story } from '@app/store/locations';
+import { ProductsRepository, type ProductListItem } from '@app/store/products';
+import { PurchasesRepository } from '@app/store/purchases';
+import {
+  RECEIPT_FAILED,
+  RECEIPT_MIGRATED,
+  RECEIPT_PENDING,
+  ReceiptsRepository,
+  type Receipt,
+} from '@app/store/receipts';
+import { UnitsRepository, type Unit } from '@app/store/units';
 import { OcrQueueService } from './ocr-queue.service';
 import { presentReceipt, presentStory } from './present';
 import {
@@ -44,7 +54,12 @@ import { field, flashQuery, formBody, id, optInt, receiptShowQuery, receiptVisit
 @Controller('admin/receipts')
 export class ReceiptsController {
   constructor(
-    private readonly store: StoreService,
+    private readonly receiptsStore: ReceiptsRepository,
+    private readonly units: UnitsRepository,
+    private readonly locations: LocationsRepository,
+    private readonly products: ProductsRepository,
+    private readonly aliases: AliasesRepository,
+    private readonly purchases: PurchasesRepository,
     private readonly views: ViewsService,
     private readonly ocr: OcrService,
     private readonly queue: OcrQueueService,
@@ -79,7 +94,7 @@ export class ReceiptsController {
     }
     let model: string;
     try {
-      model = this.store.ocrModel();
+      model = this.units.ocrModel();
     } catch {
       this.renderReceipts(res, 500, 'Could not load settings.');
       return;
@@ -109,7 +124,7 @@ export class ReceiptsController {
   receiptPreview(@Param('id', { schema: id }) receiptId: number, @Res() res: Response): void {
     let receipt: Receipt;
     try {
-      receipt = this.store.getReceipt(receiptId);
+      receipt = this.receiptsStore.getReceipt(receiptId);
     } catch {
       res.status(404).end();
       return;
@@ -131,7 +146,7 @@ export class ReceiptsController {
   ): void {
     let receipt: Receipt;
     try {
-      receipt = this.store.getReceipt(receiptId);
+      receipt = this.receiptsStore.getReceipt(receiptId);
     } catch (err) {
       if (err instanceof NotFoundError) {
         this.views.text(res, 404, 'not found');
@@ -155,7 +170,7 @@ export class ReceiptsController {
   ): void {
     let receipt: Receipt;
     try {
-      receipt = this.store.getReceipt(receiptId);
+      receipt = this.receiptsStore.getReceipt(receiptId);
     } catch (err) {
       if (err instanceof NotFoundError) {
         this.views.text(res, 404, 'not found');
@@ -182,7 +197,7 @@ export class ReceiptsController {
       return;
     }
     try {
-      this.store.updateReceiptVisit(receiptId, storyID, boughtOn);
+      this.receiptsStore.updateReceiptVisit(receiptId, storyID, boughtOn);
     } catch (err) {
       if (err instanceof ReceiptNotReadyError) {
         this.views.redirect(res, '/admin/receipts/' + String(receiptId));
@@ -199,7 +214,7 @@ export class ReceiptsController {
   async retryReceipt(@Param('id', { schema: id }) receiptId: number, @Res() res: Response): Promise<void> {
     let receipt: Receipt;
     try {
-      receipt = this.store.getReceipt(receiptId);
+      receipt = this.receiptsStore.getReceipt(receiptId);
     } catch (err) {
       if (err instanceof NotFoundError) {
         this.views.text(res, 404, 'not found');
@@ -225,7 +240,7 @@ export class ReceiptsController {
       }
       let model: string;
       try {
-        model = this.store.ocrModel();
+        model = this.units.ocrModel();
       } catch {
         this.views.redirect(
           res,
@@ -256,7 +271,7 @@ export class ReceiptsController {
         return;
       }
       try {
-        this.store.requeueReceipt(receiptId);
+        this.receiptsStore.requeueReceipt(receiptId);
       } catch {
         this.views.redirect(
           res,
@@ -277,7 +292,7 @@ export class ReceiptsController {
   ): void {
     let receipt: Receipt;
     try {
-      receipt = this.store.getReceipt(receiptId);
+      receipt = this.receiptsStore.getReceipt(receiptId);
     } catch (err) {
       if (err instanceof NotFoundError) {
         this.views.text(res, 404, 'not found');
@@ -305,14 +320,14 @@ export class ReceiptsController {
     }
     let aliases;
     try {
-      aliases = this.store.listAliases();
+      aliases = this.aliases.listAliases();
     } catch {
       this.views.text(res, 500, 'could not load aliases');
       return;
     }
     let defaults;
     try {
-      defaults = this.store.unitDefaults();
+      defaults = this.units.unitDefaults();
     } catch {
       this.views.text(res, 500, 'could not load settings');
       return;
@@ -335,7 +350,7 @@ export class ReceiptsController {
   ): void {
     let receipt: Receipt;
     try {
-      receipt = this.store.getReceipt(receiptId);
+      receipt = this.receiptsStore.getReceipt(receiptId);
     } catch (err) {
       if (err instanceof NotFoundError) {
         this.views.text(res, 404, 'not found');
@@ -370,7 +385,7 @@ export class ReceiptsController {
     }
     if (jsonErr === null) {
       try {
-        this.store.updateReceiptJSON(receiptId, rawJSON);
+        this.receiptsStore.updateReceiptJSON(receiptId, rawJSON);
       } catch {
         /* ignore */
       }
@@ -392,7 +407,7 @@ export class ReceiptsController {
       return;
     }
     try {
-      const result = this.store.migrateReceipt(receiptId, inn, rawJSON);
+      const result = this.receiptsStore.migrateReceipt(receiptId, inn, rawJSON);
       this.views.redirect(res, '/admin/receipts/' + String(receiptId) + '?imported=' + String(result.Purchases));
     } catch (err) {
       let errMsg = 'Could not save the purchases.';
@@ -401,9 +416,6 @@ export class ReceiptsController {
       else if (err instanceof InvalidUnitError) errMsg = 'Choose a unit for each new product.';
       else if (err instanceof NotFoundError) errMsg = 'A selected product is gone. Refresh and try again.';
       else if (err instanceof InvalidStoryError) errMsg = 'Choose a store.';
-      else if (err instanceof Error && err.message === 'no products to import') {
-        errMsg = 'Tick at least one product.';
-      }
       this.renderReceiptReview(res, 422, view, products, units, stories, errMsg);
     }
   }
@@ -432,7 +444,7 @@ export class ReceiptsController {
       return { receipt: emptyReceipt(), msg: 'Could not store the bill.', status: 500 };
     }
     try {
-      const receipt = this.store.createReceipt(imagePath);
+      const receipt = this.receiptsStore.createReceipt(imagePath);
       return { receipt, msg: '', status: 0 };
     } catch {
       await this.images.deleteReceiptFiles(imagePath);
@@ -443,14 +455,14 @@ export class ReceiptsController {
   private renderReceipts(res: Response, status: number, errMsg: string): void {
     let list: Receipt[];
     try {
-      list = this.store.listReceipts();
+      list = this.receiptsStore.listReceipts();
     } catch {
       this.views.text(res, 500, 'could not load receipts');
       return;
     }
     let model: string;
     try {
-      model = this.store.ocrModel();
+      model = this.units.ocrModel();
     } catch {
       this.views.text(res, 500, 'could not load settings');
       return;
@@ -492,14 +504,14 @@ export class ReceiptsController {
   private renderReceiptShow(res: Response, status: number, receipt: Receipt, errMsg: string, imported: number): void {
     let buys;
     try {
-      buys = this.store.listPurchasesByReceipt(receipt.ID);
+      buys = this.purchases.listPurchasesByReceipt(receipt.ID);
     } catch {
       this.views.text(res, 500, 'could not load purchases');
       return;
     }
     let stories: Story[];
     try {
-      stories = this.store.listStories();
+      stories = this.locations.listStories();
     } catch {
       this.views.text(res, 500, 'could not load stores');
       return;
@@ -529,14 +541,14 @@ export class ReceiptsController {
   ): void {
     let buys;
     try {
-      buys = this.store.listPurchasesByReceipt(receipt.ID);
+      buys = this.purchases.listPurchasesByReceipt(receipt.ID);
     } catch {
       this.views.text(res, 500, 'could not load purchases');
       return;
     }
     let stories: Story[];
     try {
-      stories = this.store.listStories();
+      stories = this.locations.listStories();
     } catch {
       this.views.text(res, 500, 'could not load stores');
       return;
@@ -564,16 +576,16 @@ export class ReceiptsController {
 
   private receiptLookups(): { products: ProductListItem[]; units: Unit[]; stories: Story[] } {
     return {
-      products: this.store.listProducts(''),
-      units: this.store.listUnits(),
-      stories: this.store.listStories(),
+      products: this.products.listProducts(''),
+      units: this.units.listUnits(),
+      stories: this.locations.listStories(),
     };
   }
 
   private resolveStoryForm(storyId: number): { id: number; msg: string } {
     if (storyId <= 0) return { id: 0, msg: '' };
     try {
-      this.store.getStory(storyId);
+      this.locations.getStory(storyId);
       return { id: storyId, msg: '' };
     } catch (err) {
       if (err instanceof NotFoundError) return { id: 0, msg: 'Choose a store.' };

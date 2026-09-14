@@ -3,14 +3,14 @@ import { unlinkSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { Injectable } from '@nestjs/common';
 import sharp from 'sharp';
-import { StoreService } from '../store/store.service';
+import { DatabaseService } from '../db/database.service';
 
 const MAX_IMAGE_BYTES = 5 << 20;
 const IMAGE_EDGE = 240;
 
 @Injectable()
 export class ImagesService {
-  constructor(private readonly store: StoreService) {}
+  constructor(private readonly db: DatabaseService) {}
 
   async saveImage(file: Express.Multer.File | undefined): Promise<string> {
     if (!file || file.size === 0) return '';
@@ -26,7 +26,7 @@ export class ImagesService {
       .jpeg({ quality: 82 })
       .toBuffer();
     const name = randomBytes(16).toString('hex') + '.jpg';
-    const dest = join(this.store.imagesDir(), name);
+    const dest = join(this.db.imagesDirPath(), name);
     await sharp(buf).toFile(dest);
     return name;
   }
@@ -35,7 +35,7 @@ export class ImagesService {
     const base = basename(name.trim());
     if (base === '' || base === '.' || base === '/') return;
     try {
-      unlinkSync(join(this.store.imagesDir(), base));
+      unlinkSync(join(this.db.imagesDirPath(), base));
     } catch {
       /* ignore */
     }

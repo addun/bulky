@@ -3,7 +3,7 @@ import hbs from 'hbs';
 import { extraQuotes } from '../domain/price-stats';
 import { formatBoughtOn, boughtOnDate, boughtOnTime } from '../domain/bought-on';
 import { formatMoney, formatQuantity } from '../domain/format';
-import type { Product, ProductConversion } from '../domain/types';
+import type { Product, ProductConversion } from '@app/store/products';
 import type { QuotedPrice } from '../domain/price-stats';
 
 let currencySymbol = 'zł';
