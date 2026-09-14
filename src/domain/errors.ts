@@ -41,36 +41,6 @@ export class InvalidStoryError extends AppError {
   }
 }
 
-export class StoryNameError extends AppError {
-  constructor() {
-    super('story name required');
-  }
-}
-
-export class StoryStreetError extends AppError {
-  constructor() {
-    super('story street name required');
-  }
-}
-
-export class StoryBuildingError extends AppError {
-  constructor() {
-    super('story building number required');
-  }
-}
-
-export class StoryPostalError extends AppError {
-  constructor() {
-    super('story postal code required');
-  }
-}
-
-export class StoryCityError extends AppError {
-  constructor() {
-    super('story city required');
-  }
-}
-
 export class InvalidKindError extends AppError {
   constructor() {
     super('invalid purchase kind');
@@ -83,21 +53,9 @@ export class InvalidQuantityError extends AppError {
   }
 }
 
-export class InvalidAliasError extends AppError {
-  constructor() {
-    super('alias is required');
-  }
-}
-
 export class AliasScopeError extends AppError {
   constructor() {
     super('alias cannot be both story and chain');
-  }
-}
-
-export class InvalidSettingError extends AppError {
-  constructor() {
-    super('invalid setting');
   }
 }
 
@@ -135,12 +93,6 @@ export class ConversionConflictError extends ConversionMismatchError {
   }
 }
 
-export class ComparisonGroupNameError extends AppError {
-  constructor() {
-    super('comparison group name required');
-  }
-}
-
 export class InvalidComparisonGroupError extends AppError {
   constructor() {
     super('invalid comparison group');
@@ -156,24 +108,6 @@ export class RetailChainInUseError extends AppError {
 export class InvalidRetailChainError extends AppError {
   constructor() {
     super('invalid retail chain');
-  }
-}
-
-export class RetailChainNameError extends AppError {
-  constructor() {
-    super('retail chain name required');
-  }
-}
-
-export class RetailChainLegalNameError extends AppError {
-  constructor() {
-    super('retail chain legal name required');
-  }
-}
-
-export class RetailChainTaxIDError extends AppError {
-  constructor() {
-    super('retail chain tax id required');
   }
 }
 

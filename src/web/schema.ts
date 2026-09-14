@@ -105,7 +105,9 @@ export const retailChainFields = z.object({
 export const retailChainForm = z.object({
   name: field.pipe(z.string().min(1, 'Name is required.')),
   legal_name: field.pipe(z.string().min(1, 'Legal name is required.')),
-  tax_id: field.pipe(z.string().min(1, 'Tax ID is required.')),
+  tax_id: field.pipe(
+    z.string().min(1, 'Tax ID is required.').refine((s) => /[\p{L}\p{N}]/u.test(s), 'Tax ID is required.'),
+  ),
 });
 
 export const storyFields = z.object({
