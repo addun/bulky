@@ -1,9 +1,11 @@
-import { mkdirSync, readFileSync } from 'node:fs';
+import { mkdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Database from 'better-sqlite3';
 import { drizzle, BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
+import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
+import { readMigrationFiles } from 'drizzle-orm/migrator';
 import * as schema from '../db/schema';
 
 @Injectable()
@@ -25,9 +27,10 @@ export class DatabaseService implements OnModuleDestroy {
     this.sqlite.pragma('foreign_keys = ON');
     this.sqlite.pragma('busy_timeout = 5000');
     this.sqlite.pragma('journal_mode = WAL');
-    this.ensureSchema();
-    this.ensureCompatibleColumns();
     this.drizzle = drizzle(this.sqlite, { schema });
+    this.applyMigrations();
+    this.ensureCompatibleColumns();
+    this.sqlite.exec(`INSERT OR IGNORE INTO units (name) VALUES ('kg'), ('g')`);
   }
 
   imagesDirPath(): string {
@@ -47,15 +50,46 @@ export class DatabaseService implements OnModuleDestroy {
     this.sqlite.close();
   }
 
-  private ensureSchema(): void {
-    const row = this.sqlite.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='units'`).get() as
-      | { name: string }
+  private applyMigrations(): void {
+    const migrationsFolder = join(__dirname, 'migrations');
+    this.stampLegacySchema(migrationsFolder);
+    this.sqlite.pragma('foreign_keys = OFF');
+    try {
+      migrate(this.drizzle, { migrationsFolder });
+    } finally {
+      this.sqlite.pragma('foreign_keys = ON');
+    }
+  }
+
+  /** Existing DBs already have tables; record the baseline as applied so later migrations still run. */
+  private stampLegacySchema(migrationsFolder: string): void {
+    if (!this.tableExists('units')) return;
+    if (this.migrationCount() > 0) return;
+    const first = readMigrationFiles({ migrationsFolder })[0];
+    if (!first) return;
+    this.sqlite.exec(
+      `CREATE TABLE IF NOT EXISTS "__drizzle_migrations" (
+        id SERIAL PRIMARY KEY,
+        hash text NOT NULL,
+        created_at numeric
+      )`,
+    );
+    this.sqlite
+      .prepare(`INSERT INTO "__drizzle_migrations" ("hash", "created_at") VALUES (?, ?)`)
+      .run(first.hash, first.folderMillis);
+  }
+
+  private tableExists(name: string): boolean {
+    const row = this.sqlite.prepare(`SELECT 1 AS ok FROM sqlite_master WHERE type='table' AND name=?`).get(name) as
+      | { ok: number }
       | undefined;
-    if (row) return;
-    const sqlPath = join(__dirname, 'schema.sql');
-    const sql = readFileSync(sqlPath, 'utf8');
-    this.sqlite.exec(sql);
-    this.sqlite.exec(`INSERT OR IGNORE INTO units (name) VALUES ('kg'), ('g')`);
+    return Boolean(row);
+  }
+
+  private migrationCount(): number {
+    if (!this.tableExists('__drizzle_migrations')) return 0;
+    const row = this.sqlite.prepare(`SELECT COUNT(*) AS n FROM "__drizzle_migrations"`).get() as { n: number };
+    return Number(row.n);
   }
 
   /** Additive columns for DBs created before later Go migrations. Does not replay goose. */
