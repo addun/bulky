@@ -6,21 +6,20 @@ import { changesOf, countOf, lastId } from '../../db/query';
 import { products, purchases, units } from '../../db/schema';
 import { InvalidKindError, InvalidQuantityError, NotFoundError } from '../../domain/errors';
 import { normalizeBoughtOn } from '../../domain/bought-on';
-import { imagePath } from '../products/products.models';
 import { KIND_PRICE, KIND_PURCHASE, type Purchase, type PurchaseKind, type ReceiptPurchase } from './purchases.models';
 import { LocationsRepository } from '@app/store/locations';
 import { nowRFC3339 } from '@app/store/now';
 
 type PurchaseRow = {
-  ID: number;
-  ProductID: number;
-  StoryID: number | null;
-  Kind: string;
-  ReceiptID: number | null;
-  BoughtOn: string;
-  Quantity: string;
-  Amount: string;
-  CreatedAt: string;
+  id: number;
+  productId: number;
+  storyId: number | null;
+  kind: string;
+  receiptId: number | null;
+  boughtOn: string;
+  quantity: string;
+  amount: string;
+  createdAt: string;
 };
 
 @Injectable()
@@ -34,48 +33,48 @@ export class PurchasesRepository {
     return this.db.drizzle;
   }
 
-  listPurchases(productID: number): Purchase[] {
+  listPurchases(productId: number): Purchase[] {
     return this.mapPurchases(
       this.purchaseQuery()
-        .where(eq(purchases.productId, productID))
+        .where(eq(purchases.productId, productId))
         .orderBy(desc(purchases.boughtOn), desc(purchases.id))
         .all(),
     );
   }
 
-  listPurchasesAsc(productID: number): Purchase[] {
+  listPurchasesAsc(productId: number): Purchase[] {
     return this.mapPurchases(
-      this.purchaseQuery().where(eq(purchases.productId, productID)).orderBy(purchases.id).all(),
+      this.purchaseQuery().where(eq(purchases.productId, productId)).orderBy(purchases.id).all(),
     );
   }
 
-  listPurchasesByReceipt(receiptID: number): ReceiptPurchase[] {
+  listPurchasesByReceipt(receiptId: number): ReceiptPurchase[] {
     const rows = this.orm
       .select({
-        ID: purchases.id,
-        ProductID: purchases.productId,
-        StoryID: purchases.storyId,
-        Kind: purchases.kind,
-        ReceiptID: purchases.receiptId,
-        BoughtOn: purchases.boughtOn,
-        Quantity: purchases.quantity,
-        Amount: purchases.amount,
-        CreatedAt: purchases.createdAt,
-        ProductName: products.name,
-        UnitName: units.name,
-        image_path: products.imagePath,
+        id: purchases.id,
+        productId: purchases.productId,
+        storyId: purchases.storyId,
+        kind: purchases.kind,
+        receiptId: purchases.receiptId,
+        boughtOn: purchases.boughtOn,
+        quantity: purchases.quantity,
+        amount: purchases.amount,
+        createdAt: purchases.createdAt,
+        productName: products.name,
+        unitName: units.name,
+        imagePath: products.imagePath,
       })
       .from(purchases)
       .innerJoin(products, eq(products.id, purchases.productId))
       .innerJoin(units, eq(units.id, products.unitId))
-      .where(eq(purchases.receiptId, receiptID))
+      .where(eq(purchases.receiptId, receiptId))
       .orderBy(purchases.id)
       .all();
     return rows.map((r) => ({
       ...this.mapPurchase(r),
-      ProductName: r.ProductName,
-      UnitName: r.UnitName,
-      ImagePath: imagePath(r.image_path),
+      productName: r.productName,
+      unitName: r.unitName,
+      imagePath: r.imagePath,
     }));
   }
 
@@ -86,23 +85,23 @@ export class PurchasesRepository {
   }
 
   createPurchase(
-    productID: number,
-    storyID: number,
+    productId: number,
+    storyId: number | null,
     boughtOn: string,
     quantity: Decimal,
     amount: Decimal,
     kind: PurchaseKind,
   ): Purchase {
-    this.requireProduct(productID);
+    this.requireProduct(productId);
     this.parsePurchaseKind(kind);
-    const story = this.locations.optionalStory(storyID);
+    const story = this.locations.optionalStory(storyId);
     this.validQuantity(quantity);
     boughtOn = normalizeBoughtOn(boughtOn);
     const id = lastId(
       this.orm
         .insert(purchases)
         .values({
-          productId: productID,
+          productId,
           storyId: story,
           kind,
           receiptId: null,
@@ -118,14 +117,14 @@ export class PurchasesRepository {
 
   updatePurchase(
     id: number,
-    storyID: number,
+    storyId: number | null,
     boughtOn: string,
     quantity: Decimal,
     amount: Decimal,
     kind: PurchaseKind,
   ): void {
     this.parsePurchaseKind(kind);
-    const story = this.locations.optionalStory(storyID);
+    const story = this.locations.optionalStory(storyId);
     this.validQuantity(quantity);
     boughtOn = normalizeBoughtOn(boughtOn);
     const n = changesOf(
@@ -165,14 +164,14 @@ export class PurchasesRepository {
     );
   }
 
-  reassignProduct(fromID: number, intoID: number): void {
-    this.orm.update(purchases).set({ productId: intoID }).where(eq(purchases.productId, fromID)).run();
+  reassignProduct(fromId: number, intoId: number): void {
+    this.orm.update(purchases).set({ productId: intoId }).where(eq(purchases.productId, fromId)).run();
   }
 
   insertImported(
-    productID: number,
-    storyID: number,
-    receiptID: number,
+    productId: number,
+    storyId: number | null,
+    receiptId: number | null,
     boughtOn: string,
     quantity: Decimal,
     amount: Decimal,
@@ -183,10 +182,10 @@ export class PurchasesRepository {
       this.orm
         .insert(purchases)
         .values({
-          productId: productID,
-          storyId: storyID || null,
+          productId,
+          storyId,
           kind: KIND_PURCHASE,
-          receiptId: receiptID || null,
+          receiptId,
           boughtOn,
           quantity: quantity.toString(),
           amount: amount.toString(),
@@ -197,8 +196,8 @@ export class PurchasesRepository {
     return this.getPurchase(id);
   }
 
-  updateReceiptVisit(receiptID: number, storyID: number | null, boughtOn: string): void {
-    this.orm.update(purchases).set({ storyId: storyID, boughtOn }).where(eq(purchases.receiptId, receiptID)).run();
+  updateReceiptVisit(receiptId: number, storyId: number | null, boughtOn: string): void {
+    this.orm.update(purchases).set({ storyId, boughtOn }).where(eq(purchases.receiptId, receiptId)).run();
   }
 
   private validQuantity(quantity: Decimal): void {
@@ -211,19 +210,7 @@ export class PurchasesRepository {
   }
 
   private purchaseQuery() {
-    return this.orm
-      .select({
-        ID: purchases.id,
-        ProductID: purchases.productId,
-        StoryID: purchases.storyId,
-        Kind: purchases.kind,
-        ReceiptID: purchases.receiptId,
-        BoughtOn: purchases.boughtOn,
-        Quantity: purchases.quantity,
-        Amount: purchases.amount,
-        CreatedAt: purchases.createdAt,
-      })
-      .from(purchases);
+    return this.orm.select().from(purchases);
   }
 
   private mapPurchases(rows: PurchaseRow[]): Purchase[] {
@@ -232,15 +219,10 @@ export class PurchasesRepository {
 
   private mapPurchase(r: PurchaseRow): Purchase {
     return {
-      ID: r.ID,
-      ProductID: r.ProductID,
-      StoryID: r.StoryID ?? 0,
-      Kind: String(r.Kind) as PurchaseKind,
-      ReceiptID: r.ReceiptID ?? 0,
-      BoughtOn: r.BoughtOn,
-      Quantity: new Decimal(String(r.Quantity)),
-      Amount: new Decimal(String(r.Amount)),
-      CreatedAt: r.CreatedAt,
+      ...r,
+      kind: r.kind as PurchaseKind,
+      quantity: new Decimal(r.quantity),
+      amount: new Decimal(r.amount),
     };
   }
 }

@@ -3,7 +3,7 @@ import { parseBill } from './parse';
 import { emptyBill, NoLinesError, productLines, type Bill, type Line } from './types';
 
 export type Tx = {
-  ID: string;
+  id: string;
   Date: string;
   StoreName: string;
   ReceiptNum: string;
@@ -17,13 +17,13 @@ export function billFromBiedronka(raw: Buffer | string, tx: Tx): Bill {
   if (lines.length === 0) throw new NoLinesError();
   const scale = moneyScale(lines, tx.TotalPrice);
   const bill = emptyBill();
-  bill.BoughtOn = tx.Date.trim();
-  bill.StoryName = tx.StoreName.trim();
-  if (bill.StoryName === '') bill.StoryName = 'Biedronka';
-  const n = shopNumber.exec(bill.StoryName);
-  if (n) bill.ExternalID = n[0]!;
+  bill.boughtOn = tx.Date.trim();
+  bill.storyName = tx.StoreName.trim();
+  if (bill.storyName === '') bill.storyName = 'Biedronka';
+  const n = shopNumber.exec(bill.storyName);
+  if (n) bill.externalId = n[0]!;
   const num = tx.ReceiptNum.trim();
-  if (num !== '') bill.Notes = 'Receipt ' + num;
+  if (num !== '') bill.notes = 'Receipt ' + num;
   let current = -1;
   for (const item of lines) {
     const sell = asObject(item.sellLine);
@@ -33,24 +33,24 @@ export function billFromBiedronka(raw: Buffer | string, tx: Tx): Bill {
         continue;
       }
       const line: Line = {
-        ReceiptName: asString(sell.name).trim(),
-        ProductName: '',
-        ProductID: 0,
-        UnitID: 0,
-        UnitName: '',
-        VatType: asString(sell.vatId),
-        PackageCount: '',
-        PackageSize: '',
-        Quantity: formatQty(asFloat(sell.quantity)),
-        UnitPrice: formatMoney(asFloat(sell.price) / scale),
-        Discount: '',
-        Amount: formatMoney(asFloat(sell.total) / scale),
-        Skip: false,
-        SkipReason: '',
+        receiptName: asString(sell.name).trim(),
+        productName: '',
+        productId: 0,
+        unitId: 0,
+        unitName: '',
+        vatType: asString(sell.vatId),
+        packageCount: '',
+        packageSize: '',
+        quantity: formatQty(asFloat(sell.quantity)),
+        unitPrice: formatMoney(asFloat(sell.price) / scale),
+        discount: '',
+        amount: formatMoney(asFloat(sell.total) / scale),
+        skip: false,
+        skipReason: '',
       };
-      if (line.ReceiptName === '') continue;
-      bill.Lines.push(line);
-      current = bill.Lines.length - 1;
+      if (line.receiptName === '') continue;
+      bill.lines.push(line);
+      current = bill.lines.length - 1;
       continue;
     }
     const disc = asObject(item.discountLine);
@@ -58,8 +58,8 @@ export function billFromBiedronka(raw: Buffer | string, tx: Tx): Bill {
       if (current < 0 || truthy(disc.isPercent) || truthy(disc.isStorno)) continue;
       const add = asFloat(disc.value) / scale;
       if (add === 0) continue;
-      const sum = asFloat(bill.Lines[current]!.Discount) + Math.abs(add);
-      bill.Lines[current]!.Discount = formatMoney(sum);
+      const sum = asFloat(bill.lines[current]!.discount) + Math.abs(add);
+      bill.lines[current]!.discount = formatMoney(sum);
     }
   }
   if (productLines(bill).length === 0) throw new NoLinesError();
@@ -68,33 +68,33 @@ export function billFromBiedronka(raw: Buffer | string, tx: Tx): Bill {
 
 function toLooseJSON(bill: Bill): unknown {
   return {
-    bought_on: bill.BoughtOn,
-    bought_at: bill.BoughtAt,
-    notes: bill.Notes,
-    not_a_bill: bill.NotABill,
-    company_id: bill.StoryID,
-    company_name: bill.StoryName,
-    external_id: bill.ExternalID,
-    street_name: bill.StreetName,
-    building_number: bill.BuildingNumber,
-    apartment_number: bill.ApartmentNumber,
-    postal_code: bill.PostalCode,
-    city: bill.City,
-    lines: bill.Lines.map((line) => ({
-      receipt_name: line.ReceiptName,
-      product_name: line.ProductName,
-      product_id: line.ProductID,
-      unit_id: line.UnitID,
-      unit_name: line.UnitName,
-      vat_type: line.VatType,
-      package_count: line.PackageCount,
-      package_size: line.PackageSize,
-      quantity: line.Quantity,
-      unit_price: line.UnitPrice,
-      discount: line.Discount,
-      amount: line.Amount,
-      skip: line.Skip,
-      skip_reason: line.SkipReason,
+    bought_on: bill.boughtOn,
+    bought_at: bill.boughtAt,
+    notes: bill.notes,
+    not_a_bill: bill.notABill,
+    company_id: bill.storyId,
+    company_name: bill.storyName,
+    external_id: bill.externalId,
+    street_name: bill.streetName,
+    building_number: bill.buildingNumber,
+    apartment_number: bill.apartmentNumber,
+    postal_code: bill.postalCode,
+    city: bill.city,
+    lines: bill.lines.map((line) => ({
+      receipt_name: line.receiptName,
+      product_name: line.productName,
+      product_id: line.productId,
+      unit_id: line.unitId,
+      unit_name: line.unitName,
+      vat_type: line.vatType,
+      package_count: line.packageCount,
+      package_size: line.packageSize,
+      quantity: line.quantity,
+      unit_price: line.unitPrice,
+      discount: line.discount,
+      amount: line.amount,
+      skip: line.skip,
+      skip_reason: line.skipReason,
     })),
   };
 }
@@ -236,9 +236,9 @@ export function billSlipText(bill: Bill, tx: Tx): string {
   if (tx.ReceiptNum !== '') out += `Receipt ${tx.ReceiptNum}\n`;
   out += '\n';
   for (const line of productLines(bill)) {
-    let name = line.ReceiptName;
-    if (name === '') name = line.ProductName;
-    out += `${name}  ${line.Quantity} x ${line.UnitPrice}  ${line.Amount}\n`;
+    let name = line.receiptName;
+    if (name === '') name = line.productName;
+    out += `${name}  ${line.quantity} x ${line.unitPrice}  ${line.amount}\n`;
   }
   return out;
 }

@@ -17,7 +17,7 @@ import { search } from '../../domain/match';
 import { quotesByProduct } from '../../domain/price-stats';
 import type { ProductAlias } from '../aliases/aliases.models';
 import { KIND_PURCHASE } from '../purchases/purchases.models';
-import { emptyImage, type MergePlan, type Product, type ProductConversion, type ProductListItem, type ProductQuote } from './products.models';
+import { type MergePlan, type Product, type ProductConversion, type ProductListItem, type ProductQuote } from './products.models';
 import { AliasesRepository } from '@app/store/aliases';
 import { ComparisonGroupsRepository } from '@app/store/comparison-groups';
 import { LocationsRepository } from '@app/store/locations';
@@ -49,18 +49,18 @@ export class ProductsRepository {
     q = q.trim();
     if (q === '') return [];
     const items = this.listProductsAt(q, now, limit);
-    return items.map((it) => ({ Product: this.asProduct(it), Quote: it.Quote }));
+    return items.map((it) => ({ product: this.asProduct(it), quote: it.quote }));
   }
 
   getProduct(id: number): Product {
     const p = this.getProductRow(id);
-    p.Conversions = this.listProductConversions(id);
+    p.conversions = this.listProductConversions(id);
     return p;
   }
 
-  createProduct(name: string, unitID: number, image: string | null, conversions: ProductConversion[] = []): Product {
+  createProduct(name: string, unitId: number, image: string | null, conversions: ProductConversion[] = []): Product {
     try {
-      this.units.getUnit(unitID);
+      this.units.getUnit(unitId);
     } catch (err) {
       if (err instanceof NotFoundError) throw new InvalidUnitError();
       throw err;
@@ -70,10 +70,10 @@ export class ProductsRepository {
       const pid = lastId(
         this.orm
           .insert(products)
-          .values({ name, unitId: unitID, imagePath: image, createdAt: nowRFC3339() })
+          .values({ name, unitId, imagePath: image, createdAt: nowRFC3339() })
           .run(),
       );
-      this.setProductConversions(pid, unitID, conversions);
+      this.setProductConversions(pid, unitId, conversions);
       return pid;
     });
     return this.getProduct(id);
@@ -82,109 +82,109 @@ export class ProductsRepository {
   updateProduct(
     id: number,
     name: string,
-    unitID: number,
+    unitId: number,
     imagePathVal: string | null,
     clearImage: boolean,
     conversions?: ProductConversion[],
   ): void {
     try {
-      this.units.getUnit(unitID);
+      this.units.getUnit(unitId);
     } catch (err) {
       if (err instanceof NotFoundError) throw new InvalidUnitError();
       throw err;
     }
     if (this.aliases.aliasExistsExcept(name, id)) throw new DuplicateError();
     const cur = this.getProduct(id);
-    if (unitID !== cur.UnitID) throw new InvalidUnitError();
+    if (unitId !== cur.unitId) throw new InvalidUnitError();
     let path: string | null;
     if (clearImage) path = null;
     else if (imagePathVal !== null) path = imagePathVal;
-    else path = cur.ImagePath.Valid ? cur.ImagePath.String : null;
+    else path = cur.imagePath;
     this.db.immediate(() => {
       const n = changesOf(
-        this.orm.update(products).set({ name, unitId: unitID, imagePath: path }).where(eq(products.id, id)).run(),
+        this.orm.update(products).set({ name, unitId, imagePath: path }).where(eq(products.id, id)).run(),
       );
       if (n === 0) throw new NotFoundError();
-      if (conversions) this.setProductConversions(id, unitID, conversions);
+      if (conversions) this.setProductConversions(id, unitId, conversions);
     });
   }
 
   deleteProduct(id: number): string {
     const p = this.getProduct(id);
     this.orm.delete(products).where(eq(products.id, id)).run();
-    return p.ImagePath.Valid ? p.ImagePath.String : '';
+    return p.imagePath ?? '';
   }
 
-  changePurchaseUnit(productID: number, newUnitID: number): void {
-    const p = this.getProduct(productID);
-    if (newUnitID === p.UnitID) throw new InvalidUnitError();
-    const conv = p.Conversions.find((c) => c.UnitID === newUnitID);
+  changePurchaseUnit(productId: number, newUnitId: number): void {
+    const p = this.getProduct(productId);
+    if (newUnitId === p.unitId) throw new InvalidUnitError();
+    const conv = p.conversions.find((c) => c.unitId === newUnitId);
     if (!conv) throw new InvalidConversionError();
-    const factor = conv.Factor;
+    const factor = conv.factor;
     this.db.immediate(() => {
-      this.orm.update(products).set({ unitId: newUnitID }).where(eq(products.id, productID)).run();
-      const buys = this.purchases.listPurchasesAsc(productID);
+      this.orm.update(products).set({ unitId: newUnitId }).where(eq(products.id, productId)).run();
+      const buys = this.purchases.listPurchasesAsc(productId);
       for (const buy of buys) {
         this.orm
           .update(purchases)
-          .set({ quantity: buy.Quantity.mul(factor).toString() })
-          .where(eq(purchases.id, buy.ID))
+          .set({ quantity: buy.quantity.mul(factor).toString() })
+          .where(eq(purchases.id, buy.id))
           .run();
       }
-      this.setProductConversions(productID, newUnitID, this.rebaseConversions(p.Conversions, p.UnitID, newUnitID, factor));
+      this.setProductConversions(productId, newUnitId, this.rebaseConversions(p.conversions, p.unitId, newUnitId, factor));
     });
   }
 
-  mergePlan(intoID: number, fromID: number): MergePlan {
-    const { into, from } = this.mergePair(intoID, fromID);
-    const history = this.purchases.listPurchases(from.ID);
-    const aliases = this.aliases.listAliasesByProduct(from.ID);
+  mergePlan(intoId: number, fromId: number): MergePlan {
+    const { into, from } = this.mergePair(intoId, fromId);
+    const history = this.purchases.listPurchases(from.id);
+    const aliases = this.aliases.listAliasesByProduct(from.id);
     const plan: MergePlan = {
-      Into: into,
-      From: from,
-      History: history.length,
-      Aliases: aliases.length,
-      NameAsAlias: '',
-      TakePhoto: !into.ImagePath.Valid && from.ImagePath.Valid,
+      into,
+      from,
+      history: history.length,
+      aliases: aliases.length,
+      nameAsAlias: '',
+      takePhoto: !into.imagePath && Boolean(from.imagePath),
     };
-    const fromName = from.Name.trim();
-    if (fromName !== '' && fromName.toLowerCase() !== into.Name.trim().toLowerCase()) plan.NameAsAlias = fromName;
-    this.conversionMergeConflict(into.Conversions, from.Conversions);
+    const fromName = from.name.trim();
+    if (fromName !== '' && fromName.toLowerCase() !== into.name.trim().toLowerCase()) plan.nameAsAlias = fromName;
+    this.conversionMergeConflict(into.conversions, from.conversions);
     return plan;
   }
 
-  mergeProducts(intoID: number, fromID: number): { keeper: Product; dropImage: string } {
-    if (intoID === fromID) throw new SameProductError();
+  mergeProducts(intoId: number, fromId: number): { keeper: Product; dropImage: string } {
+    if (intoId === fromId) throw new SameProductError();
     return this.db.immediate(() => {
-      const into = this.getProductRow(intoID);
-      const from = this.getProductRow(fromID);
-      into.Conversions = this.listProductConversions(into.ID);
-      from.Conversions = this.listProductConversions(from.ID);
-      if (into.UnitID !== from.UnitID) throw new UnitMismatchError();
-      this.mergeConversions(into.ID, from.ID);
-      this.purchases.reassignProduct(from.ID, into.ID);
-      this.aliases.reassignProduct(from.ID, into.ID, into.Name);
-      this.groups.reassignProduct(from.ID, into.ID);
+      const into = this.getProductRow(intoId);
+      const from = this.getProductRow(fromId);
+      into.conversions = this.listProductConversions(into.id);
+      from.conversions = this.listProductConversions(from.id);
+      if (into.unitId !== from.unitId) throw new UnitMismatchError();
+      this.mergeConversions(into.id, from.id);
+      this.purchases.reassignProduct(from.id, into.id);
+      this.aliases.reassignProduct(from.id, into.id, into.name);
+      this.groups.reassignProduct(from.id, into.id);
       const dropImage = this.handOffImage(into, from);
-      this.orm.delete(products).where(eq(products.id, from.ID)).run();
-      this.maybeAliasDroppedName(into.ID, into.Name, from.Name);
-      return { keeper: this.getProduct(into.ID), dropImage };
+      this.orm.delete(products).where(eq(products.id, from.id)).run();
+      this.maybeAliasDroppedName(into.id, into.name, from.name);
+      return { keeper: this.getProduct(into.id), dropImage };
     });
   }
 
-  listProductConversions(productID: number): ProductConversion[] {
+  listProductConversions(productId: number): ProductConversion[] {
     return this.orm
       .select({
-        UnitID: productUnitConversions.unitId,
-        UnitName: units.name,
-        Factor: productUnitConversions.factor,
+        unitId: productUnitConversions.unitId,
+        unitName: units.name,
+        factor: productUnitConversions.factor,
       })
       .from(productUnitConversions)
       .innerJoin(units, eq(units.id, productUnitConversions.unitId))
-      .where(eq(productUnitConversions.productId, productID))
+      .where(eq(productUnitConversions.productId, productId))
       .orderBy(nocaseOrder(units.name))
       .all()
-      .map((r) => ({ UnitID: r.UnitID, UnitName: r.UnitName, Factor: new Decimal(r.Factor) }));
+      .map((r) => ({ unitId: r.unitId, unitName: r.unitName, factor: new Decimal(r.factor) }));
   }
 
   getProductRow(id: number): Product {
@@ -193,8 +193,8 @@ export class ProductsRepository {
     return mapProduct(row);
   }
 
-  insertImported(name: string, unitID: number): Product {
-    const n = this.orm.select({ n: count() }).from(units).where(eq(units.id, unitID)).get();
+  insertImported(name: string, unitId: number): Product {
+    const n = this.orm.select({ n: count() }).from(units).where(eq(units.id, unitId)).get();
     if (countOf(n?.n) === 0) throw new InvalidUnitError();
     const aliasCount = this.orm
       .select({ n: count() })
@@ -205,32 +205,32 @@ export class ProductsRepository {
     const id = lastId(
       this.orm
         .insert(products)
-        .values({ name, unitId: unitID, imagePath: null, createdAt: nowRFC3339() })
+        .values({ name, unitId, imagePath: null, createdAt: nowRFC3339() })
         .run(),
     );
     return this.getProductRow(id);
   }
 
-  findProductByName(name: string, storyID: number): Product {
+  findProductByName(name: string, storyId: number | null): Product {
     name = name.trim();
     if (name === '') throw new NotFoundError();
-    if (storyID > 0) {
+    if (storyId) {
       try {
-        return this.productByAlias(name, storyID, 0);
+        return this.productByAlias(name, storyId, null);
       } catch (err) {
         if (!(err instanceof NotFoundError)) throw err;
       }
-      const chainID = this.locations.storyChainID(storyID);
-      if (chainID > 0) {
+      const chainId = this.locations.storyChainID(storyId);
+      if (chainId) {
         try {
-          return this.productByAlias(name, 0, chainID);
+          return this.productByAlias(name, null, chainId);
         } catch (err) {
           if (!(err instanceof NotFoundError)) throw err;
         }
       }
     }
     try {
-      return this.productByAlias(name, 0, 0);
+      return this.productByAlias(name, null, null);
     } catch (err) {
       if (!(err instanceof NotFoundError)) throw err;
     }
@@ -239,23 +239,22 @@ export class ProductsRepository {
     return mapProduct(row);
   }
 
-  productByAlias(aliasName: string, storyID: number, chainID: number): Product {
+  productByAlias(aliasName: string, storyId: number | null, chainId: number | null): Product {
     aliasName = aliasName.trim();
     if (aliasName === '') throw new NotFoundError();
-    const scope =
-      storyID > 0
-        ? and(nocaseEq(productAliases.alias, aliasName), eq(productAliases.storyId, storyID))
-        : chainID > 0
-          ? and(nocaseEq(productAliases.alias, aliasName), eq(productAliases.retailChainId, chainID))
-          : and(nocaseEq(productAliases.alias, aliasName), isNull(productAliases.storyId), isNull(productAliases.retailChainId));
+    const scope = storyId
+      ? and(nocaseEq(productAliases.alias, aliasName), eq(productAliases.storyId, storyId))
+      : chainId
+        ? and(nocaseEq(productAliases.alias, aliasName), eq(productAliases.retailChainId, chainId))
+        : and(nocaseEq(productAliases.alias, aliasName), isNull(productAliases.storyId), isNull(productAliases.retailChainId));
     const row = this.orm
       .select({
-        ID: products.id,
-        Name: products.name,
-        UnitID: products.unitId,
-        UnitName: units.name,
-        image_path: products.imagePath,
-        CreatedAt: products.createdAt,
+        id: products.id,
+        name: products.name,
+        unitId: products.unitId,
+        unitName: units.name,
+        imagePath: products.imagePath,
+        createdAt: products.createdAt,
       })
       .from(productAliases)
       .innerJoin(products, eq(products.id, productAliases.productId))
@@ -269,32 +268,32 @@ export class ProductsRepository {
   }
 
   private handOffImage(into: Product, from: Product): string {
-    if (into.ImagePath.Valid) {
-      if (from.ImagePath.Valid && from.ImagePath.String !== into.ImagePath.String) return from.ImagePath.String;
+    if (into.imagePath) {
+      if (from.imagePath && from.imagePath !== into.imagePath) return from.imagePath;
       return '';
     }
-    if (!from.ImagePath.Valid) return '';
-    this.orm.update(products).set({ imagePath: from.ImagePath.String }).where(eq(products.id, into.ID)).run();
-    this.orm.update(products).set({ imagePath: null }).where(eq(products.id, from.ID)).run();
+    if (!from.imagePath) return '';
+    this.orm.update(products).set({ imagePath: from.imagePath }).where(eq(products.id, into.id)).run();
+    this.orm.update(products).set({ imagePath: null }).where(eq(products.id, from.id)).run();
     return '';
   }
 
-  private maybeAliasDroppedName(intoID: number, intoName: string, fromName: string): void {
+  private maybeAliasDroppedName(intoId: number, intoName: string, fromName: string): void {
     fromName = fromName.trim();
     if (fromName === '' || fromName.toLowerCase() === intoName.trim().toLowerCase()) return;
     try {
-      this.aliases.createAlias(intoID, 0, 0, fromName);
+      this.aliases.createAlias(intoId, null, null, fromName);
     } catch (err) {
       if (err instanceof DuplicateError) return;
       throw err;
     }
   }
 
-  private mergePair(intoID: number, fromID: number): { into: Product; from: Product } {
-    if (intoID === fromID) throw new SameProductError();
-    const into = this.getProduct(intoID);
-    const from = this.getProduct(fromID);
-    if (into.UnitID !== from.UnitID) throw new UnitMismatchError();
+  private mergePair(intoId: number, fromId: number): { into: Product; from: Product } {
+    if (intoId === fromId) throw new SameProductError();
+    const into = this.getProduct(intoId);
+    const from = this.getProduct(fromId);
+    if (into.unitId !== from.unitId) throw new UnitMismatchError();
     return { into, from };
   }
 
@@ -303,26 +302,26 @@ export class ProductsRepository {
     const rows = this.productQuery().orderBy(nocaseOrder(products.name)).all();
     const items: ProductListItem[] = rows.map((r) => ({
       ...mapProduct(r),
-      LastBought: emptyImage(),
-      LifetimeAmount: new Decimal(0),
-      PurchaseCount: 0,
-      Quote: null,
+      lastBought: null,
+      lifetimeAmount: new Decimal(0),
+      purchaseCount: 0,
+      quote: null,
     }));
     const index = new Map<number, number>();
-    items.forEach((it, i) => index.set(it.ID, i));
+    items.forEach((it, i) => index.set(it.id, i));
     if (items.length === 0) return items;
     const prows = this.orm
-      .select({ ProductID: purchases.productId, BoughtOn: purchases.boughtOn, Amount: purchases.amount })
+      .select({ productId: purchases.productId, boughtOn: purchases.boughtOn, amount: purchases.amount })
       .from(purchases)
       .where(eq(purchases.kind, KIND_PURCHASE))
       .all();
     for (const pr of prows) {
-      const i = index.get(pr.ProductID);
+      const i = index.get(pr.productId);
       if (i === undefined) continue;
-      items[i]!.LifetimeAmount = items[i]!.LifetimeAmount.add(new Decimal(pr.Amount));
-      items[i]!.PurchaseCount++;
-      if (!items[i]!.LastBought.Valid || pr.BoughtOn > items[i]!.LastBought.String) {
-        items[i]!.LastBought = { Valid: true, String: pr.BoughtOn };
+      items[i]!.lifetimeAmount = items[i]!.lifetimeAmount.add(new Decimal(pr.amount));
+      items[i]!.purchaseCount++;
+      if (!items[i]!.lastBought || pr.boughtOn > items[i]!.lastBought) {
+        items[i]!.lastBought = pr.boughtOn;
       }
     }
     this.attachItemConversions(items);
@@ -336,20 +335,20 @@ export class ProductsRepository {
   private filterProductSearch(items: ProductListItem[], q: string, aliases: ProductAlias[]): ProductListItem[] {
     const labels = new Map<number, string[]>();
     for (const a of aliases) {
-      const list = labels.get(a.ProductID) ?? [];
-      list.push(a.Alias);
-      labels.set(a.ProductID, list);
+      const list = labels.get(a.productId) ?? [];
+      list.push(a.alias);
+      labels.set(a.productId, list);
     }
     const hits: { item: ProductListItem; score: number }[] = [];
     for (const it of items) {
-      const labs = [it.Name, ...(labels.get(it.ID) ?? [])];
+      const labs = [it.name, ...(labels.get(it.id) ?? [])];
       const score = search(q, ...labs);
       if (score <= 0) continue;
       hits.push({ item: it, score });
     }
     hits.sort((a, b) => {
       if (a.score !== b.score) return b.score - a.score;
-      return a.item.Name.toLowerCase() < b.item.Name.toLowerCase() ? -1 : 1;
+      return a.item.name.toLowerCase() < b.item.name.toLowerCase() ? -1 : 1;
     });
     return hits.map((h) => h.item);
   }
@@ -357,43 +356,43 @@ export class ProductsRepository {
   private attachItemConversions(items: ProductListItem[]): void {
     const rows = this.orm
       .select({
-        ProductID: productUnitConversions.productId,
-        UnitID: productUnitConversions.unitId,
-        UnitName: units.name,
-        Factor: productUnitConversions.factor,
+        productId: productUnitConversions.productId,
+        unitId: productUnitConversions.unitId,
+        unitName: units.name,
+        factor: productUnitConversions.factor,
       })
       .from(productUnitConversions)
       .innerJoin(units, eq(units.id, productUnitConversions.unitId))
       .orderBy(nocaseOrder(units.name))
       .all();
-    const byID = new Map<number, ProductConversion[]>();
+    const byId = new Map<number, ProductConversion[]>();
     for (const r of rows) {
-      const list = byID.get(r.ProductID) ?? [];
-      list.push({ UnitID: r.UnitID, UnitName: r.UnitName, Factor: new Decimal(r.Factor) });
-      byID.set(r.ProductID, list);
+      const list = byId.get(r.productId) ?? [];
+      list.push({ unitId: r.unitId, unitName: r.unitName, factor: new Decimal(r.factor) });
+      byId.set(r.productId, list);
     }
-    for (const it of items) it.Conversions = byID.get(it.ID) ?? [];
+    for (const it of items) it.conversions = byId.get(it.id) ?? [];
   }
 
   private attachProductQuotes(items: ProductListItem[], now: Date): void {
     if (items.length === 0) return;
-    const buys = this.purchases.listPurchasesForProductIDs(items.map((it) => it.ID));
+    const buys = this.purchases.listPurchasesForProductIDs(items.map((it) => it.id));
     const quotes = quotesByProduct(buys, now);
     for (const it of items) {
-      const q = quotes.get(it.ID);
-      if (q) it.Quote = q;
+      const q = quotes.get(it.id);
+      if (q) it.quote = q;
     }
   }
 
   private productQuery() {
     return this.orm
       .select({
-        ID: products.id,
-        Name: products.name,
-        UnitID: products.unitId,
-        UnitName: units.name,
-        image_path: products.imagePath,
-        CreatedAt: products.createdAt,
+        id: products.id,
+        name: products.name,
+        unitId: products.unitId,
+        unitName: units.name,
+        imagePath: products.imagePath,
+        createdAt: products.createdAt,
       })
       .from(products)
       .innerJoin(units, eq(units.id, products.unitId));
@@ -401,38 +400,38 @@ export class ProductsRepository {
 
   private asProduct(it: ProductListItem): Product {
     return {
-      ID: it.ID,
-      Name: it.Name,
-      UnitID: it.UnitID,
-      UnitName: it.UnitName,
-      ImagePath: it.ImagePath,
-      CreatedAt: it.CreatedAt,
-      Conversions: it.Conversions,
+      id: it.id,
+      name: it.name,
+      unitId: it.unitId,
+      unitName: it.unitName,
+      imagePath: it.imagePath,
+      createdAt: it.createdAt,
+      conversions: it.conversions,
     };
   }
 
-  private setProductConversions(productID: number, purchaseUnitID: number, conversions: ProductConversion[]): void {
-    const normalized = this.normalizeConversions(purchaseUnitID, conversions);
-    this.orm.delete(productUnitConversions).where(eq(productUnitConversions.productId, productID)).run();
+  private setProductConversions(productId: number, purchaseUnitId: number, conversions: ProductConversion[]): void {
+    const normalized = this.normalizeConversions(purchaseUnitId, conversions);
+    this.orm.delete(productUnitConversions).where(eq(productUnitConversions.productId, productId)).run();
     for (const c of normalized) {
       this.orm
         .insert(productUnitConversions)
-        .values({ productId: productID, unitId: c.UnitID, factor: c.Factor.toString() })
+        .values({ productId, unitId: c.unitId, factor: c.factor.toString() })
         .run();
     }
   }
 
-  private normalizeConversions(purchaseUnitID: number, conversions: ProductConversion[]): ProductConversion[] {
+  private normalizeConversions(purchaseUnitId: number, conversions: ProductConversion[]): ProductConversion[] {
     const seen = new Set<number>();
     const out: ProductConversion[] = [];
     for (const c of conversions) {
-      if (c.UnitID === 0) continue;
-      if (c.UnitID === purchaseUnitID) throw new InvalidConversionError();
-      if (seen.has(c.UnitID)) throw new InvalidConversionError();
-      if (c.Factor.isNegative() || c.Factor.isZero()) throw new InvalidConversionError();
-      const n = this.orm.select({ n: count() }).from(units).where(eq(units.id, c.UnitID)).get();
+      if (c.unitId === 0) continue;
+      if (c.unitId === purchaseUnitId) throw new InvalidConversionError();
+      if (seen.has(c.unitId)) throw new InvalidConversionError();
+      if (c.factor.isNegative() || c.factor.isZero()) throw new InvalidConversionError();
+      const n = this.orm.select({ n: count() }).from(units).where(eq(units.id, c.unitId)).get();
       if (countOf(n?.n) === 0) throw new InvalidUnitError();
-      seen.add(c.UnitID);
+      seen.add(c.unitId);
       out.push(c);
     }
     return out;
@@ -440,38 +439,38 @@ export class ProductsRepository {
 
   private rebaseConversions(
     convs: ProductConversion[],
-    oldUnitID: number,
-    newUnitID: number,
+    oldUnitId: number,
+    newUnitId: number,
     factor: Decimal,
   ): ProductConversion[] {
     const out: ProductConversion[] = [];
     for (const c of convs) {
-      if (c.UnitID === newUnitID) continue;
-      out.push({ UnitID: c.UnitID, UnitName: c.UnitName, Factor: c.Factor.div(factor) });
+      if (c.unitId === newUnitId) continue;
+      out.push({ unitId: c.unitId, unitName: c.unitName, factor: c.factor.div(factor) });
     }
-    out.push({ UnitID: oldUnitID, UnitName: '', Factor: new Decimal(1).div(factor) });
+    out.push({ unitId: oldUnitId, unitName: '', factor: new Decimal(1).div(factor) });
     return out;
   }
 
-  private mergeConversions(intoID: number, fromID: number): void {
-    const into = this.listProductConversions(intoID);
-    const from = this.listProductConversions(fromID);
+  private mergeConversions(intoId: number, fromId: number): void {
+    const into = this.listProductConversions(intoId);
+    const from = this.listProductConversions(fromId);
     this.conversionMergeConflict(into, from);
-    const intoByUnit = new Set(into.map((c) => c.UnitID));
+    const intoByUnit = new Set(into.map((c) => c.unitId));
     for (const c of from) {
-      if (intoByUnit.has(c.UnitID)) continue;
+      if (intoByUnit.has(c.unitId)) continue;
       this.orm
         .insert(productUnitConversions)
-        .values({ productId: intoID, unitId: c.UnitID, factor: c.Factor.toString() })
+        .values({ productId: intoId, unitId: c.unitId, factor: c.factor.toString() })
         .run();
     }
   }
 
   private conversionMergeConflict(into: ProductConversion[], from: ProductConversion[]): void {
-    const intoByUnit = new Map(into.map((c) => [c.UnitID, c]));
+    const intoByUnit = new Map(into.map((c) => [c.unitId, c]));
     for (const c of from) {
-      const existing = intoByUnit.get(c.UnitID);
-      if (existing && !existing.Factor.eq(c.Factor)) throw new ConversionConflictError(c.UnitName);
+      const existing = intoByUnit.get(c.unitId);
+      if (existing && !existing.factor.eq(c.factor)) throw new ConversionConflictError(c.unitName);
     }
   }
 }

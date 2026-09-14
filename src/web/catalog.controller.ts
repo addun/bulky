@@ -24,7 +24,7 @@ import { parseDecimal } from '../domain/format';
 import { joinBoughtOn, normalizeBoughtOn } from '../domain/bought-on';
 import { AliasesRepository, type ProductAlias } from '@app/store/aliases';
 import { ComparisonGroupsRepository } from '@app/store/comparison-groups';
-import { LocationsRepository, type Story } from '@app/store/locations';
+import { LocationsRepository, type RetailChain, type Story } from '@app/store/locations';
 import { ProductsRepository, type Product, type ProductConversion } from '@app/store/products';
 import { KIND_PURCHASE, PurchasesRepository, type Purchase } from '@app/store/purchases';
 import { UnitsRepository } from '@app/store/units';
@@ -91,9 +91,9 @@ export class CatalogController {
     try {
       const items = this.products.listProducts(q);
       this.views.html(res, 'index', 200, {
-        Page: this.views.adminPage('Products', q, query.error),
-        Products: items.map(presentListItem),
-        Imported: query.imported,
+        page: this.views.adminPage('Products', q, query.error),
+        products: items.map(presentListItem),
+        imported: query.imported,
       });
     } catch {
       this.views.text(res, 500, 'could not load products');
@@ -115,8 +115,8 @@ export class CatalogController {
     const body = parsed.data;
     try {
       this.unitsStore.setUnitDefaults({
-        PieceID: body.piece_unit_id,
-        WeightID: body.weight_unit_id,
+        pieceId: body.piece_unit_id,
+        weightId: body.weight_unit_id,
       });
       this.unitsStore.setSetting('ocr_model', body.ocr_model);
     } catch (err) {
@@ -133,10 +133,10 @@ export class CatalogController {
   private renderAdmin(res: Response, status: number, errMsg: string): void {
     try {
       this.views.html(res, 'admin', status, {
-        Page: this.views.adminPage('Settings', '', errMsg),
-        OCRModel: this.unitsStore.ocrModel(),
-        Units: this.unitsStore.listUnits(),
-        Defaults: this.unitsStore.unitDefaults(),
+        page: this.views.adminPage('Settings', '', errMsg),
+        ocrModel: this.unitsStore.ocrModel(),
+        units: this.unitsStore.listUnits(),
+        defaults: this.unitsStore.unitDefaults(),
       });
     } catch {
       this.views.text(res, 500, 'could not load settings');
@@ -149,8 +149,8 @@ export class CatalogController {
   units(@Query({ schema: flashQuery }) query: { error: string }, @Res() res: Response): void {
     try {
       this.views.html(res, 'units', 200, {
-        Page: this.views.adminPage('Units', '', query.error),
-        Units: this.unitsStore.listUnits(),
+        page: this.views.adminPage('Units', '', query.error),
+        units: this.unitsStore.listUnits(),
       });
     } catch {
       this.views.text(res, 500, 'could not load units');
@@ -180,7 +180,7 @@ export class CatalogController {
   editUnit(@Param('id', { schema: id }) unitId: number, @Res() res: Response): void {
     try {
       const u = this.unitsStore.getUnit(unitId);
-      this.views.html(res, 'unit_form', 200, { Page: this.views.adminPage('Rename unit', '', ''), Unit: u });
+      this.views.html(res, 'unit_form', 200, { page: this.views.adminPage('Rename unit', '', ''), unit: u });
     } catch (err) {
       if (err instanceof NotFoundError) return this.views.text(res, 404, 'not found');
       this.views.text(res, 500, 'could not load unit');
@@ -193,8 +193,8 @@ export class CatalogController {
     const name = nameFields.parse(raw).name;
     if (!parsed.success) {
       this.views.html(res, 'unit_form', 422, {
-        Page: this.views.adminPage('Rename unit', '', formIssue(parsed.error)),
-        Unit: { ID: unitId, Name: name, ProductCount: 0 },
+        page: this.views.adminPage('Rename unit', '', formIssue(parsed.error)),
+        unit: { id: unitId, name: name, productCount: 0 },
       });
       return;
     }
@@ -205,8 +205,8 @@ export class CatalogController {
       if (err instanceof NotFoundError) return this.views.text(res, 404, 'not found');
       if (err instanceof DuplicateError) {
         this.views.html(res, 'unit_form', 422, {
-          Page: this.views.adminPage('Rename unit', '', 'That unit already exists.'),
-          Unit: { ID: unitId, Name: name, ProductCount: 0 },
+          page: this.views.adminPage('Rename unit', '', 'That unit already exists.'),
+          unit: { id: unitId, name: name, productCount: 0 },
         });
         return;
       }
@@ -218,20 +218,20 @@ export class CatalogController {
   confirmDeleteUnit(@Param('id', { schema: id }) unitId: number, @Res() res: Response): void {
     try {
       const u = this.unitsStore.getUnit(unitId);
-      if (u.ProductCount > 0) {
+      if (u.productCount > 0) {
         this.views.redirect(
           res,
-          '/admin/units?error=' + encodeURIComponent(`Cannot delete “${u.Name}” while a product still uses it.`),
+          '/admin/units?error=' + encodeURIComponent(`Cannot delete “${u.name}” while a product still uses it.`),
         );
         return;
       }
       this.views.html(res, 'confirm', 200, {
-        Page: this.views.adminPage('Delete unit', '', ''),
-        Title: `Delete unit “${u.Name}”?`,
-        Body: 'This only removes the unit from the list. No products use it.',
-        Action: `/admin/units/${unitId}/delete`,
-        Cancel: '/admin/units',
-        Confirm: 'Delete unit',
+        page: this.views.adminPage('Delete unit', '', ''),
+        title: `Delete unit “${u.name}”?`,
+        body: 'This only removes the unit from the list. No products use it.',
+        action: `/admin/units/${unitId}/delete`,
+        cancel: '/admin/units',
+        confirm: 'Delete unit',
       });
     } catch (err) {
       if (err instanceof NotFoundError) return this.views.text(res, 404, 'not found');
@@ -260,8 +260,8 @@ export class CatalogController {
   retailChains(@Query({ schema: flashQuery }) query: { error: string }, @Res() res: Response): void {
     try {
       this.views.html(res, 'retail_chains', 200, {
-        Page: this.views.adminPage('Retail chains', '', query.error),
-        RetailChains: this.locations.listRetailChains().map(presentChain),
+        page: this.views.adminPage('Retail chains', '', query.error),
+        retailChains: this.locations.listRetailChains().map(presentChain),
       });
     } catch {
       this.views.text(res, 500, 'could not load retail chains');
@@ -270,13 +270,13 @@ export class CatalogController {
 
   @Get('/admin/retail-chains/new')
   newRetailChain(@Res() res: Response): void {
-    this.renderRetailChainForm(res, 200, { ID: 0, Name: '', LegalName: '', TaxID: '', StoryCount: 0 }, true, '');
+    this.renderRetailChainForm(res, 200, { id: 0, name: '', legalName: '', taxId: '', storyCount: 0 }, true, '');
   }
 
   @Post('/admin/retail-chains')
   createRetailChain(@Body() raw: unknown, @Res() res: Response): void {
     const fields = retailChainFields.parse(raw);
-    const form = { ID: 0, Name: fields.name, LegalName: fields.legal_name, TaxID: fields.tax_id, StoryCount: 0 };
+    const form = { id: 0, name: fields.name, legalName: fields.legal_name, taxId: fields.tax_id, storyCount: 0 };
     const parsed = retailChainForm.safeParse(raw);
     if (!parsed.success) {
       this.renderRetailChainForm(res, 422, form, true, formIssue(parsed.error));
@@ -309,7 +309,7 @@ export class CatalogController {
       this.renderRetailChainForm(
         res,
         422,
-        { ID: chainId, Name: fields.name, LegalName: fields.legal_name, TaxID: fields.tax_id, StoryCount: 0 },
+        { id: chainId, name: fields.name, legalName: fields.legal_name, taxId: fields.tax_id, storyCount: 0 },
         false,
         formIssue(parsed.error),
       );
@@ -321,7 +321,7 @@ export class CatalogController {
     } catch (err) {
       if (err instanceof NotFoundError) return this.views.text(res, 404, 'not found');
       const msg = retailChainFormError(err) || 'Could not save the retail chain.';
-      this.renderRetailChainForm(res, 422, { ID: chainId, Name: fields.name, LegalName: fields.legal_name, TaxID: fields.tax_id, StoryCount: 0 }, false, msg);
+      this.renderRetailChainForm(res, 422, { id: chainId, name: fields.name, legalName: fields.legal_name, taxId: fields.tax_id, storyCount: 0 }, false, msg);
     }
   }
 
@@ -329,20 +329,20 @@ export class CatalogController {
   confirmDeleteRetailChain(@Param('id', { schema: id }) chainId: number, @Res() res: Response): void {
     try {
       const c = this.locations.getRetailChain(chainId);
-      if (c.StoryCount > 0) {
+      if (c.storyCount > 0) {
         this.views.redirect(
           res,
-          '/admin/retail-chains?error=' + encodeURIComponent(`Cannot delete “${c.Name}” while a store still uses it.`),
+          '/admin/retail-chains?error=' + encodeURIComponent(`Cannot delete “${c.name}” while a store still uses it.`),
         );
         return;
       }
       this.views.html(res, 'confirm', 200, {
-        Page: this.views.adminPage('Delete retail chain', '', ''),
-        Title: `Delete retail chain “${c.Name}”?`,
-        Body: 'This only removes the chain from the list. No stores use it.',
-        Action: `/admin/retail-chains/${chainId}/delete`,
-        Cancel: '/admin/retail-chains',
-        Confirm: 'Delete chain',
+        page: this.views.adminPage('Delete retail chain', '', ''),
+        title: `Delete retail chain “${c.name}”?`,
+        body: 'This only removes the chain from the list. No stores use it.',
+        action: `/admin/retail-chains/${chainId}/delete`,
+        cancel: '/admin/retail-chains',
+        confirm: 'Delete chain',
       });
     } catch (err) {
       if (err instanceof NotFoundError) return this.views.text(res, 404, 'not found');
@@ -371,14 +371,14 @@ export class CatalogController {
   private renderRetailChainForm(
     res: Response,
     status: number,
-    chain: { ID: number; Name: string; LegalName: string; TaxID: string; StoryCount: number },
+    chain: RetailChain,
     isNew: boolean,
     errMsg: string,
   ): void {
     this.views.html(res, 'retail_chain_form', status, {
-      Page: this.views.adminPage(isNew ? 'Add retail chain' : 'Edit retail chain', '', errMsg),
-      Chain: presentChain(chain),
-      New: isNew,
+      page: this.views.adminPage(isNew ? 'Add retail chain' : 'Edit retail chain', '', errMsg),
+      retailChain: presentChain(chain),
+      new: isNew,
     });
   }
 
@@ -388,8 +388,8 @@ export class CatalogController {
   stories(@Query({ schema: flashQuery }) query: { error: string }, @Res() res: Response): void {
     try {
       this.views.html(res, 'stories', 200, {
-        Page: this.views.adminPage('Stores', '', query.error),
-        Stories: this.locations.listStories().map(presentStory),
+        page: this.views.adminPage('Stores', '', query.error),
+        stories: this.locations.listStories().map(presentStory),
       });
     } catch {
       this.views.text(res, 500, 'could not load stores');
@@ -400,13 +400,13 @@ export class CatalogController {
   newStory(@Query({ schema: newStoryQuery }) query: NewStoryQuery, @Res() res: Response): void {
     const next = receiptReturnPath(query.next);
     const form = emptyStory();
-    form.Name = query.name;
-    form.StreetName = query.street_name;
-    form.BuildingNumber = query.building_number;
-    form.ApartmentNumber = query.apartment_number;
-    form.PostalCode = query.postal_code;
-    form.City = query.city;
-    form.ExternalID = query.external_id;
+    form.name = query.name;
+    form.streetName = query.street_name;
+    form.buildingNumber = query.building_number;
+    form.apartmentNumber = query.apartment_number;
+    form.postalCode = query.postal_code;
+    form.city = query.city;
+    form.externalId = query.external_id;
     this.renderStoryForm(res, 200, form, true, '', next);
   }
 
@@ -416,7 +416,7 @@ export class CatalogController {
     const next = receiptReturnPath(fields.next);
     const parsed = storyForm.safeParse(raw);
     if (!parsed.success) {
-      const form = { ...emptyStory(), ...storyFromFields(fields), RetailChainID: fields.retail_chain_id };
+      const form = { ...emptyStory(), ...storyFromFields(fields), retailChainId: fields.retail_chain_id };
       this.renderStoryForm(res, 422, form, true, formIssue(parsed.error), next);
       return;
     }
@@ -433,7 +433,7 @@ export class CatalogController {
       );
       this.views.redirect(res, next || '/admin/stories');
     } catch (err) {
-      const form = { ...emptyStory(), ...storyFromFields(fields), RetailChainID: fields.retail_chain_id };
+      const form = { ...emptyStory(), ...storyFromFields(fields), retailChainId: fields.retail_chain_id };
       const msg = storyFormError(err) || 'Could not save the store.';
       this.renderStoryForm(res, 422, form, true, msg, next);
     }
@@ -454,7 +454,7 @@ export class CatalogController {
     const fields = storyFields.parse(raw);
     const parsed = storyForm.safeParse(raw);
     if (!parsed.success) {
-      const form = { ...storyFromFields(fields), ID: storyId, RetailChainID: fields.retail_chain_id };
+      const form = { ...storyFromFields(fields), id: storyId, retailChainId: fields.retail_chain_id };
       this.renderStoryForm(res, 422, form, false, formIssue(parsed.error), '');
       return;
     }
@@ -473,7 +473,7 @@ export class CatalogController {
       this.views.redirect(res, '/admin/stories');
     } catch (err) {
       if (err instanceof NotFoundError) return this.views.text(res, 404, 'not found');
-      const form = { ...storyFromFields(fields), ID: storyId, RetailChainID: fields.retail_chain_id };
+      const form = { ...storyFromFields(fields), id: storyId, retailChainId: fields.retail_chain_id };
       const msg = storyFormError(err) || 'Could not save the store.';
       this.renderStoryForm(res, 422, form, false, msg, '');
     }
@@ -483,20 +483,20 @@ export class CatalogController {
   confirmDeleteStory(@Param('id', { schema: id }) storyId: number, @Res() res: Response): void {
     try {
       const co = this.locations.getStory(storyId);
-      if (co.PurchaseCount > 0) {
+      if (co.purchaseCount > 0) {
         this.views.redirect(
           res,
-          '/admin/stories?error=' + encodeURIComponent(`Cannot delete “${co.Name}” while a purchase still uses it.`),
+          '/admin/stories?error=' + encodeURIComponent(`Cannot delete “${co.name}” while a purchase still uses it.`),
         );
         return;
       }
       this.views.html(res, 'confirm', 200, {
-        Page: this.views.adminPage('Delete store', '', ''),
-        Title: `Delete store “${co.Name}”?`,
-        Body: 'This only removes the store from the list. No purchases use it.',
-        Action: `/admin/stories/${storyId}/delete`,
-        Cancel: '/admin/stories',
-        Confirm: 'Delete store',
+        page: this.views.adminPage('Delete store', '', ''),
+        title: `Delete store “${co.name}”?`,
+        body: 'This only removes the store from the list. No purchases use it.',
+        action: `/admin/stories/${storyId}/delete`,
+        cancel: '/admin/stories',
+        confirm: 'Delete store',
       });
     } catch (err) {
       if (err instanceof NotFoundError) return this.views.text(res, 404, 'not found');
@@ -522,11 +522,11 @@ export class CatalogController {
   private renderStoryForm(res: Response, status: number, co: Story, isNew: boolean, errMsg: string, next: string): void {
     try {
       this.views.html(res, 'story_form', status, {
-        Page: this.views.adminPage(isNew ? 'Add store' : 'Edit store', '', errMsg),
-        Story: presentStory(co),
-        RetailChains: this.locations.listRetailChains().map(presentChain),
-        New: isNew,
-        Next: next,
+        page: this.views.adminPage(isNew ? 'Add store' : 'Edit store', '', errMsg),
+        story: presentStory(co),
+        retailChains: this.locations.listRetailChains().map(presentChain),
+        new: isNew,
+        next: next,
       });
     } catch {
       this.views.text(res, 500, 'could not load retail chains');
@@ -541,12 +541,12 @@ export class CatalogController {
     try {
       let filter: Product | null = null;
       if (productID > 0) filter = this.products.getProduct(productID);
-      const list = filter ? this.aliasesStore.listAliasesByProduct(filter.ID) : this.aliasesStore.listAliases();
+      const list = filter ? this.aliasesStore.listAliasesByProduct(filter.id) : this.aliasesStore.listAliases();
       this.views.html(res, 'aliases', 200, {
-        Page: this.views.adminPage('Aliases', '', query.error),
-        Aliases: list.map(presentAlias),
-        Filter: filter,
-        ProductQuery: aliasesQuerySuffix(filter?.ID ?? 0),
+        page: this.views.adminPage('Aliases', '', query.error),
+        aliases: list.map(presentAlias),
+        filter: filter,
+        productQuery: aliasesQuerySuffix(filter?.id ?? 0),
       });
     } catch (err) {
       if (err instanceof NotFoundError) return this.views.text(res, 404, 'not found');
@@ -563,7 +563,7 @@ export class CatalogController {
       const form = emptyAlias();
       if (from > 0) {
         locked = this.products.getProduct(from);
-        form.ProductID = locked.ID;
+        form.productId = locked.id;
       }
       this.renderAliasForm(res, 200, form, lookups, from, locked, true, '');
     } catch (err) {
@@ -637,7 +637,7 @@ export class CatalogController {
     const parsed = aliasForm.safeParse(raw);
     if (!parsed.success) {
       const form = aliasFormFromPost(fields);
-      form.ID = aliasId;
+      form.id = aliasId;
       this.renderAliasForm(res, 422, form, this.aliasLookups(), from, null, false, formIssue(parsed.error));
       return;
     }
@@ -650,7 +650,7 @@ export class CatalogController {
       const msg = aliasFormError(err);
       if (msg) {
         const form = aliasFormFromPost(fields);
-        form.ID = aliasId;
+        form.id = aliasId;
         this.renderAliasForm(res, 422, form, this.aliasLookups(), from, null, false, msg);
         return;
       }
@@ -671,12 +671,12 @@ export class CatalogController {
       const q = aliasesQuerySuffix(from);
       if (q) action += q;
       this.views.html(res, 'confirm', 200, {
-        Page: this.views.adminPage(`Delete alias “${a.Alias}”?`, '', ''),
-        Title: `Delete alias “${a.Alias}”?`,
-        Body: 'This only removes the alternate name. The product stays.',
-        Action: action,
-        Cancel: aliasesPath(from),
-        Confirm: 'Delete alias',
+        page: this.views.adminPage(`Delete alias “${a.alias}”?`, '', ''),
+        title: `Delete alias “${a.alias}”?`,
+        body: 'This only removes the alternate name. The product stays.',
+        action: action,
+        cancel: aliasesPath(from),
+        confirm: 'Delete alias',
       });
     } catch (err) {
       if (err instanceof NotFoundError) return this.views.text(res, 404, 'not found');
@@ -718,15 +718,15 @@ export class CatalogController {
     errMsg: string,
   ): void {
     this.views.html(res, 'alias_form', status, {
-      Page: this.views.adminPage(isNew ? 'Add alias' : 'Edit alias', '', errMsg),
-      Alias: presentAlias(a),
-      Products: lookups.products,
-      Stories: lookups.stories.map(presentStory),
-      Chains: lookups.chains.map(presentChain),
-      FromProduct: from,
-      LockedProduct: locked,
-      Cancel: aliasesPath(from),
-      New: isNew,
+      page: this.views.adminPage(isNew ? 'Add alias' : 'Edit alias', '', errMsg),
+      alias: presentAlias(a),
+      products: lookups.products,
+      stories: lookups.stories.map(presentStory),
+      chains: lookups.chains.map(presentChain),
+      fromProduct: from,
+      lockedProduct: locked,
+      cancel: aliasesPath(from),
+      new: isNew,
     });
   }
 
@@ -742,8 +742,8 @@ export class CatalogController {
   comparisonGroups(@Query({ schema: flashQuery }) query: { error: string }, @Res() res: Response): void {
     try {
       this.views.html(res, 'comparison_groups', 200, {
-        Page: this.views.adminPage('Comparison groups', '', query.error),
-        Groups: this.groups.listComparisonGroups(),
+        page: this.views.adminPage('Comparison groups', '', query.error),
+        groups: this.groups.listComparisonGroups(),
       });
     } catch {
       this.views.text(res, 500, 'could not load comparison groups');
@@ -752,7 +752,7 @@ export class CatalogController {
 
   @Get('/admin/comparison-groups/new')
   newComparisonGroup(@Res() res: Response): void {
-    this.renderComparisonGroupForm(res, 200, { ID: 0, Name: '', UnitID: 0, UnitName: '', CreatedAt: '', ProductCount: 0 }, [], true, '');
+    this.renderComparisonGroupForm(res, 200, { id: 0, name: '', unitId: 0, unitName: '', createdAt: '', productCount: 0 }, [], true, '');
   }
 
   @Post('/admin/comparison-groups')
@@ -763,7 +763,7 @@ export class CatalogController {
       this.renderComparisonGroupForm(
         res,
         422,
-        { ID: 0, Name: fields.name, UnitID: fields.unit_id, UnitName: '', CreatedAt: '', ProductCount: 0 },
+        { id: 0, name: fields.name, unitId: fields.unit_id, unitName: '', createdAt: '', productCount: 0 },
         fields.product_id,
         true,
         formIssue(parsed.error),
@@ -775,7 +775,7 @@ export class CatalogController {
       this.views.redirect(res, '/admin/comparison-groups');
     } catch (err) {
       const msg = comparisonGroupFormError(err) || 'Could not save the comparison group.';
-      this.renderComparisonGroupForm(res, 422, { ID: 0, Name: fields.name, UnitID: fields.unit_id, UnitName: '', CreatedAt: '', ProductCount: 0 }, fields.product_id, true, msg);
+      this.renderComparisonGroupForm(res, 422, { id: 0, name: fields.name, unitId: fields.unit_id, unitName: '', createdAt: '', productCount: 0 }, fields.product_id, true, msg);
     }
   }
 
@@ -799,7 +799,7 @@ export class CatalogController {
       this.renderComparisonGroupForm(
         res,
         422,
-        { ID: groupId, Name: fields.name, UnitID: fields.unit_id, UnitName: '', CreatedAt: '', ProductCount: 0 },
+        { id: groupId, name: fields.name, unitId: fields.unit_id, unitName: '', createdAt: '', productCount: 0 },
         fields.product_id,
         false,
         formIssue(parsed.error),
@@ -814,7 +814,7 @@ export class CatalogController {
       if (err instanceof NotFoundError) return this.views.text(res, 404, 'not found');
       const msg = comparisonGroupFormError(err);
       if (msg) {
-        this.renderComparisonGroupForm(res, 422, { ID: groupId, Name: fields.name, UnitID: fields.unit_id, UnitName: '', CreatedAt: '', ProductCount: 0 }, fields.product_id, false, msg);
+        this.renderComparisonGroupForm(res, 422, { id: groupId, name: fields.name, unitId: fields.unit_id, unitName: '', createdAt: '', productCount: 0 }, fields.product_id, false, msg);
         return;
       }
       this.views.text(res, 500, 'could not save comparison group');
@@ -826,12 +826,12 @@ export class CatalogController {
     try {
       const g = this.groups.getComparisonGroup(groupId);
       this.views.html(res, 'confirm', 200, {
-        Page: this.views.adminPage('Delete comparison group', '', ''),
-        Title: `Delete comparison group “${g.Name}”?`,
-        Body: 'Products stay in the catalog. They just leave this group.',
-        Action: `/admin/comparison-groups/${groupId}/delete`,
-        Cancel: '/admin/comparison-groups',
-        Confirm: 'Delete group',
+        page: this.views.adminPage('Delete comparison group', '', ''),
+        title: `Delete comparison group “${g.name}”?`,
+        body: 'Products stay in the catalog. They just leave this group.',
+        action: `/admin/comparison-groups/${groupId}/delete`,
+        cancel: '/admin/comparison-groups',
+        confirm: 'Delete group',
       });
     } catch (err) {
       if (err instanceof NotFoundError) return this.views.text(res, 404, 'not found');
@@ -853,7 +853,7 @@ export class CatalogController {
   private renderComparisonGroupForm(
     res: Response,
     status: number,
-    g: { ID: number; Name: string; UnitID: number; UnitName: string; CreatedAt: string; ProductCount: number },
+    g: { id: number; name: string; unitId: number; unitName: string; createdAt: string; productCount: number },
     selected: number[],
     isNew: boolean,
     errMsg: string,
@@ -861,11 +861,11 @@ export class CatalogController {
     try {
       const selectedSet = new Set(selected);
       this.views.html(res, 'comparison_group_form', status, {
-        Page: this.views.adminPage(isNew ? 'Add comparison group' : 'Edit comparison group', '', errMsg),
-        Group: g,
-        Units: this.unitsStore.listUnits(),
-        Products: this.products.listProducts('').map((p) => ({ ...p, Selected: selectedSet.has(p.ID) })),
-        New: isNew,
+        page: this.views.adminPage(isNew ? 'Add comparison group' : 'Edit comparison group', '', errMsg),
+        group: g,
+        units: this.unitsStore.listUnits(),
+        products: this.products.listProducts('').map((p) => ({ ...p, selected: selectedSet.has(p.id) })),
+        new: isNew,
       });
     } catch {
       this.views.text(res, 500, 'could not load products');
@@ -878,11 +878,11 @@ export class CatalogController {
   newProduct(@Res() res: Response): void {
     try {
       this.views.html(res, 'product_form', 200, {
-        Page: this.views.adminPage('Add product', '', ''),
-        Units: this.unitsStore.listUnits(),
-        Groups: this.comparisonGroupOptions([]),
-        Product: presentProduct(emptyProduct()),
-        New: true,
+        page: this.views.adminPage('Add product', '', ''),
+        units: this.unitsStore.listUnits(),
+        groups: this.comparisonGroupOptions([]),
+        product: presentProduct(emptyProduct()),
+        new: true,
       });
     } catch {
       this.views.text(res, 500, 'could not load units');
@@ -901,11 +901,11 @@ export class CatalogController {
       const stories = this.locations.listStories();
       const groups = this.groups.listComparisonGroupsForProduct(productId);
       this.views.html(res, 'product_show', 200, {
-        Page: this.views.adminPage(p.Name, '', query.error),
-        Product: presentProduct(p),
-        Purchases: purchases.map(presentPurchase),
-        StoryByID: storiesByID(stories),
-        Groups: groups,
+        page: this.views.adminPage(p.name, '', query.error),
+        product: presentProduct(p),
+        purchases: purchases.map(presentPurchase),
+        storyById: storiesByID(stories),
+        groups: groups,
       });
     } catch (err) {
       if (err instanceof NotFoundError) return this.views.text(res, 404, 'not found');
@@ -917,13 +917,13 @@ export class CatalogController {
   editProduct(@Param('id', { schema: id }) productId: number, @Res() res: Response): void {
     try {
       const p = this.products.getProduct(productId);
-      const selected = this.groups.listComparisonGroupsForProduct(productId).map((g) => g.ID);
+      const selected = this.groups.listComparisonGroupsForProduct(productId).map((g) => g.id);
       this.views.html(res, 'product_form', 200, {
-        Page: this.views.adminPage('Edit ' + p.Name, '', ''),
-        Units: this.unitsStore.listUnits(),
-        Groups: this.comparisonGroupOptions(selected),
-        Product: presentProduct(p),
-        New: false,
+        page: this.views.adminPage('Edit ' + p.name, '', ''),
+        units: this.unitsStore.listUnits(),
+        groups: this.comparisonGroupOptions(selected),
+        product: presentProduct(p),
+        new: false,
       });
     } catch (err) {
       if (err instanceof NotFoundError) return this.views.text(res, 404, 'not found');
@@ -959,20 +959,20 @@ export class CatalogController {
     const unitID = fields.unit_id;
     const groupIDs = fields.group_id;
     const { convs, msg: convMsg } = parseExtraUnits(fields, unitID);
-    const draft: Product = { ...emptyProduct(), ID: productId, Name: name, UnitID: unitID, Conversions: convs };
+    const draft: Product = { ...emptyProduct(), id: productId, name: name, unitId: unitID, conversions: convs };
     try {
       const u = this.unitsStore.getUnit(unitID);
-      draft.UnitName = u.Name;
+      draft.unitName = u.name;
     } catch {
       /* ignore */
     }
     const renderErr = (msg: string, p: Product) => {
       this.views.html(res, 'product_form', 422, {
-        Page: this.views.adminPage(productId === 0 ? 'Add product' : 'Edit product', '', msg),
-        Units: this.unitsStore.listUnits(),
-        Groups: this.comparisonGroupOptions(groupIDs),
-        Product: presentProduct(p),
-        New: productId === 0,
+        page: this.views.adminPage(productId === 0 ? 'Add product' : 'Edit product', '', msg),
+        units: this.unitsStore.listUnits(),
+        groups: this.comparisonGroupOptions(groupIDs),
+        product: presentProduct(p),
+        new: productId === 0,
       });
     };
     if (!parsed.success) {
@@ -994,15 +994,15 @@ export class CatalogController {
     try {
       if (productId === 0) {
         const p = this.products.createProduct(parsed.data.name, parsed.data.unit_id, imgName || null, convs);
-        this.groups.setProductComparisonGroups(p.ID, groupIDs);
-        this.views.redirect(res, '/admin/products/' + p.ID);
+        this.groups.setProductComparisonGroups(p.id, groupIDs);
+        this.views.redirect(res, '/admin/products/' + p.id);
         return;
       }
       const cur = this.products.getProduct(productId);
-      this.products.updateProduct(productId, parsed.data.name, cur.UnitID, imgName || null, clearImage && imgName === '', convs);
+      this.products.updateProduct(productId, parsed.data.name, cur.unitId, imgName || null, clearImage && imgName === '', convs);
       this.groups.setProductComparisonGroups(productId, groupIDs);
-      if (imgName && cur.ImagePath.Valid) this.images.deleteImage(cur.ImagePath.String);
-      if (clearImage && imgName === '' && cur.ImagePath.Valid) this.images.deleteImage(cur.ImagePath.String);
+      if (imgName && cur.imagePath) this.images.deleteImage(cur.imagePath);
+      if (clearImage && imgName === '' && cur.imagePath) this.images.deleteImage(cur.imagePath);
       this.views.redirect(res, '/admin/products/' + productId);
     } catch (err) {
       if (imgName) this.images.deleteImage(imgName);
@@ -1045,7 +1045,7 @@ export class CatalogController {
         return;
       }
       const unitID = parsed.data.unit_id;
-      if (!p.Conversions.some((c) => c.UnitID === unitID)) {
+      if (!p.conversions.some((c) => c.unitId === unitID)) {
         this.renderChangeUnit(res, 422, p, unitID, 'Choose one of the extra units on this product.');
         return;
       }
@@ -1066,12 +1066,12 @@ export class CatalogController {
 
   private renderChangeUnit(res: Response, status: number, p: Product, newUnitID: number, errMsg: string): void {
     try {
-      const buys = this.purchases.listPurchases(p.ID);
+      const buys = this.purchases.listPurchases(p.id);
       this.views.html(res, 'product_change_unit', status, {
-        Page: this.views.adminPage('Change unit for ' + p.Name, '', errMsg),
-        Product: presentProduct(p),
-        NewUnitID: newUnitID,
-        History: buys.length,
+        page: this.views.adminPage('Change unit for ' + p.name, '', errMsg),
+        product: presentProduct(p),
+        newUnitId: newUnitID,
+        history: buys.length,
       });
     } catch {
       this.views.text(res, 500, 'could not load purchases');
@@ -1122,8 +1122,8 @@ export class CatalogController {
       }
       const plan = this.products.mergePlan(intoID, productId);
       this.views.html(res, 'product_merge_confirm', 200, {
-        Page: this.views.adminPage('Merge ' + plan.From.Name, '', ''),
-        Plan: { ...plan, Into: presentProduct(plan.Into), From: presentProduct(plan.From) },
+        page: this.views.adminPage('Merge ' + plan.from.name, '', ''),
+        plan: { ...plan, into: presentProduct(plan.into), from: presentProduct(plan.from) },
       });
     } catch (err) {
       if (err instanceof NotFoundError) {
@@ -1162,7 +1162,7 @@ export class CatalogController {
       }
       const { keeper, dropImage } = this.products.mergeProducts(intoID, productId);
       this.images.deleteImage(dropImage);
-      this.views.redirect(res, '/admin/products/' + keeper.ID);
+      this.views.redirect(res, '/admin/products/' + keeper.id);
     } catch (err) {
       if (err instanceof NotFoundError) return this.views.text(res, 404, 'not found');
       const msg = mergeFormError(err);
@@ -1179,12 +1179,12 @@ export class CatalogController {
   }
 
   private renderMergeForm(res: Response, status: number, p: Product, intoID: number, errMsg: string): void {
-    const items = this.products.listProducts('').filter((it) => it.ID !== p.ID);
+    const items = this.products.listProducts('').filter((it) => it.id !== p.id);
     this.views.html(res, 'product_merge', status, {
-      Page: this.views.adminPage('Merge ' + p.Name, '', errMsg),
-      Product: presentProduct(p),
-      Targets: items,
-      IntoID: intoID,
+      page: this.views.adminPage('Merge ' + p.name, '', errMsg),
+      product: presentProduct(p),
+      targets: items,
+      intoId: intoID,
     });
   }
 
@@ -1193,12 +1193,12 @@ export class CatalogController {
     try {
       const p = this.products.getProduct(productId);
       this.views.html(res, 'confirm', 200, {
-        Page: this.views.adminPage('Delete ' + p.Name, '', ''),
-        Title: `Delete ${p.Name}?`,
-        Body: 'This removes the product and every purchase and price recorded for it. The unit stays.',
-        Action: `/admin/products/${productId}/delete`,
-        Cancel: `/admin/products/${productId}`,
-        Confirm: 'Delete product',
+        page: this.views.adminPage('Delete ' + p.name, '', ''),
+        title: `Delete ${p.name}?`,
+        body: 'This removes the product and every purchase and price recorded for it. The unit stays.',
+        action: `/admin/products/${productId}/delete`,
+        cancel: `/admin/products/${productId}`,
+        confirm: 'Delete product',
       });
     } catch (err) {
       if (err instanceof NotFoundError) return this.views.text(res, 404, 'not found');
@@ -1229,15 +1229,15 @@ export class CatalogController {
     const ctx = this.purchaseProduct(productId, res);
     if (!ctx) return;
     const draft: Purchase = {
-      ID: 0,
-      ProductID: ctx.prod.ID,
-      StoryID: 0,
-      Kind: KIND_PURCHASE,
-      ReceiptID: 0,
-      BoughtOn: nowBoughtOn(),
-      Quantity: new Decimal(0),
-      Amount: new Decimal(0),
-      CreatedAt: '',
+      id: 0,
+      productId: ctx.prod.id,
+      storyId: null,
+      kind: KIND_PURCHASE,
+      receiptId: null,
+      boughtOn: nowBoughtOn(),
+      quantity: new Decimal(0),
+      amount: new Decimal(0),
+      createdAt: '',
     };
     this.renderPurchaseForm(res, 200, ctx.prod, draft, ctx.stories, true, query.error);
   }
@@ -1260,8 +1260,8 @@ export class CatalogController {
     try {
       const kind = this.purchases.parsePurchaseKind(body.kind);
       const storyID = this.resolveStoryForm(body.story_id);
-      this.purchases.createPurchase(ctx.prod.ID, storyID, parsed.boughtOn, parsed.qty, parsed.amount, kind);
-      this.views.redirect(res, '/admin/products/' + ctx.prod.ID);
+      this.purchases.createPurchase(ctx.prod.id, storyID, parsed.boughtOn, parsed.qty, parsed.amount, kind);
+      this.views.redirect(res, '/admin/products/' + ctx.prod.id);
     } catch (err) {
       this.renderPurchaseForm(res, 422, ctx.prod, form, ctx.stories, true, purchaseSaveError(err));
     }
@@ -1271,7 +1271,7 @@ export class CatalogController {
   editPurchase(@Param('id', { schema: id }) purchaseId: number, @Res() res: Response): void {
     try {
       const p = this.purchases.getPurchase(purchaseId);
-      const prod = this.products.getProduct(p.ProductID);
+      const prod = this.products.getProduct(p.productId);
       const stories = this.locations.listStories();
       this.renderPurchaseForm(res, 200, prod, p, stories, false, '');
     } catch (err) {
@@ -1288,12 +1288,12 @@ export class CatalogController {
   ): void {
     try {
       const p = this.purchases.getPurchase(purchaseId);
-      const prod = this.products.getProduct(p.ProductID);
+      const prod = this.products.getProduct(p.productId);
       const stories = this.locations.listStories();
       const body = purchaseForm.parse(raw);
       const form = purchaseFromForm(body);
-      form.ID = p.ID;
-      form.ReceiptID = p.ReceiptID;
+      form.id = p.id;
+      form.receiptId = p.receiptId;
       const parsed = this.parsePurchase(body);
       if (parsed.err) {
         this.renderPurchaseForm(res, 422, prod, form, stories, false, parsed.err);
@@ -1302,7 +1302,7 @@ export class CatalogController {
       const kind = this.purchases.parsePurchaseKind(body.kind);
       const storyID = this.resolveStoryForm(body.story_id);
       this.purchases.updatePurchase(purchaseId, storyID, parsed.boughtOn, parsed.qty, parsed.amount, kind);
-      this.views.redirect(res, '/admin/products/' + p.ProductID);
+      this.views.redirect(res, '/admin/products/' + p.productId);
     } catch (err) {
       if (err instanceof NotFoundError) return this.views.text(res, 404, 'not found');
       this.views.text(res, 500, 'could not load purchase');
@@ -1313,19 +1313,19 @@ export class CatalogController {
   confirmDeletePurchase(@Param('id', { schema: id }) purchaseId: number, @Res() res: Response): void {
     try {
       const p = this.purchases.getPurchase(purchaseId);
-      const prod = this.products.getProduct(p.ProductID);
-      const noun = p.Kind === 'price' ? 'price' : 'purchase';
+      const prod = this.products.getProduct(p.productId);
+      const noun = p.kind === 'price' ? 'price' : 'purchase';
       const body =
-        p.Kind === 'price'
+        p.kind === 'price'
           ? 'The product stays. Only this price is removed from the history.'
           : 'The product stays. Only this buy is removed from the history.';
       this.views.html(res, 'confirm', 200, {
-        Page: this.views.adminPage('Delete ' + noun, '', ''),
-        Title: `Delete this ${noun} of ${prod.Name}?`,
-        Body: body,
-        Action: `/admin/purchases/${purchaseId}/delete`,
-        Cancel: `/admin/products/${p.ProductID}`,
-        Confirm: 'Delete ' + noun,
+        page: this.views.adminPage('Delete ' + noun, '', ''),
+        title: `Delete this ${noun} of ${prod.name}?`,
+        body: body,
+        action: `/admin/purchases/${purchaseId}/delete`,
+        cancel: `/admin/products/${p.productId}`,
+        confirm: 'Delete ' + noun,
       });
     } catch (err) {
       if (err instanceof NotFoundError) return this.views.text(res, 404, 'not found');
@@ -1338,7 +1338,7 @@ export class CatalogController {
     try {
       const p = this.purchases.getPurchase(purchaseId);
       this.purchases.deletePurchase(purchaseId);
-      this.views.redirect(res, '/admin/products/' + p.ProductID);
+      this.views.redirect(res, '/admin/products/' + p.productId);
     } catch (err) {
       if (err instanceof NotFoundError) return this.views.text(res, 404, 'not found');
       this.views.text(res, 500, 'could not delete');
@@ -1365,13 +1365,13 @@ export class CatalogController {
     errMsg: string,
   ): void {
     let title = 'Add new purchase';
-    if (!isNew) title = p.Kind === 'price' ? 'Edit price' : 'Edit purchase';
+    if (!isNew) title = p.kind === 'price' ? 'Edit price' : 'Edit purchase';
     this.views.html(res, 'purchase_form', status, {
-      Page: this.views.adminPage(title, '', errMsg),
-      Product: presentProduct(prod),
-      Purchase: presentPurchase(p),
-      Stories: stories.map(presentStory),
-      New: isNew,
+      page: this.views.adminPage(title, '', errMsg),
+      product: presentProduct(prod),
+      purchase: presentPurchase(p),
+      stories: stories.map(presentStory),
+      new: isNew,
     });
   }
 
@@ -1405,7 +1405,7 @@ export class CatalogController {
 
   private comparisonGroupOptions(selected: number[]) {
     const set = new Set(selected);
-    return this.groups.listComparisonGroups().map((g) => ({ ...g, Selected: set.has(g.ID) }));
+    return this.groups.listComparisonGroups().map((g) => ({ ...g, selected: set.has(g.id) }));
   }
 }
 
@@ -1495,13 +1495,13 @@ function receiptReturnPath(s: string): string {
 }
 
 function storyFromFields(f: StoryFields): Story {
-  return { ...emptyStory(), Name: f.name, StreetName: f.street_name, BuildingNumber: f.building_number, ApartmentNumber: f.apartment_number, PostalCode: f.postal_code, City: f.city, ExternalID: f.external_id };
+  return { ...emptyStory(), name: f.name, streetName: f.street_name, buildingNumber: f.building_number, apartmentNumber: f.apartment_number, postalCode: f.postal_code, city: f.city, externalId: f.external_id };
 }
 
 function emptyStory(): Story {
   return {
-    ID: 0, Name: '', StreetName: '', BuildingNumber: '', ApartmentNumber: '', PostalCode: '', City: '',
-    ExternalID: '', RetailChainID: 0, RetailChainName: '', PurchaseCount: 0,
+    id: 0, name: '', streetName: '', buildingNumber: '', apartmentNumber: '', postalCode: '', city: '',
+    externalId: '', retailChainId: null, retailChainName: '', purchaseCount: 0,
   };
 }
 
@@ -1517,19 +1517,19 @@ function aliasFormFromPost(body: AliasFields): ProductAlias {
   }
   return {
     ...emptyAlias(),
-    ProductID: body.product_id,
-    StoryID: storyID,
-    RetailChainID: chainID,
-    Alias: body.alias,
+    productId: body.product_id,
+    storyId: storyID || null,
+    retailChainId: chainID || null,
+    alias: body.alias,
   };
 }
 
 function emptyAlias(): ProductAlias {
-  return { ID: 0, ProductID: 0, ProductName: '', StoryID: 0, StoryName: '', RetailChainID: 0, RetailChainName: '', Alias: '' };
+  return { id: 0, productId: 0, productName: '', storyId: null, storyName: '', retailChainId: null, retailChainName: '', alias: '' };
 }
 
 function emptyProduct(): Product {
-  return { ID: 0, Name: '', UnitID: 0, UnitName: '', ImagePath: { Valid: false, String: '' }, CreatedAt: '', Conversions: [] };
+  return { id: 0, name: '', unitId: 0, unitName: '', imagePath: null, createdAt: '', conversions: [] };
 }
 
 function parseExtraUnits(body: ProductFields, purchaseUnitID: number): { convs: ProductConversion[]; msg: string } {
@@ -1549,7 +1549,7 @@ function parseExtraUnits(body: ProductFields, purchaseUnitID: number): { convs: 
     seen.add(extraUnitID);
     try {
       const factor = parseDecimal(facStr, 8, false);
-      out.push({ UnitID: extraUnitID, UnitName: '', Factor: factor });
+      out.push({ unitId: extraUnitID, unitName: '', factor: factor });
     } catch (err) {
       return { convs: out, msg: 'Extra unit factor ' + (err as Error).message + '.' };
     }
@@ -1571,15 +1571,15 @@ function purchaseFromForm(body: PurchaseForm): Purchase {
     /* keep 0 */
   }
   return {
-    ID: 0,
-    ProductID: 0,
-    StoryID: body.story_id,
-    Kind: body.kind as Purchase['Kind'],
-    ReceiptID: 0,
-    BoughtOn: joinBoughtOn(body.bought_on, body.bought_at),
-    Quantity: quantity,
-    Amount: amount,
-    CreatedAt: '',
+    id: 0,
+    productId: 0,
+    storyId: body.story_id || null,
+    kind: body.kind as Purchase['kind'],
+    receiptId: null,
+    boughtOn: joinBoughtOn(body.bought_on, body.bought_at),
+    quantity: quantity,
+    amount: amount,
+    createdAt: '',
   };
 }
 

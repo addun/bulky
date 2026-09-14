@@ -1,22 +1,22 @@
 {{> header}}
-<h1>Merge {{Product.Name}}?</h1>
+<h1>Merge {{product.name}}?</h1>
 <p class="lede">Pick the product to keep. You will see a summary before anything is removed.</p>
-{{#unless Targets}}
+{{#unless targets}}
   <p class="hint">There is no other product to merge into.</p>
-  <p><a href="/admin/products/{{Product.ID}}">Cancel</a></p>
+  <p><a href="/admin/products/{{product.id}}">Cancel</a></p>
 {{else}}
-<form class="stack" method="post" action="/admin/products/{{Product.ID}}/merge-with">
+<form class="stack" method="post" action="/admin/products/{{product.id}}/merge-with">
   <label>Merge into
     <select name="into_id" required>
       <option value="">Select…</option>
-      {{#each Targets}}
-      <option value="{{this.ID}}" {{#if (eq this.ID ../IntoID)}}selected{{/if}}>{{this.Name}} ({{this.UnitName}})</option>
+      {{#each targets}}
+      <option value="{{this.id}}" {{#if (eq this.id ../intoId)}}selected{{/if}}>{{this.name}} ({{this.unitName}})</option>
       {{/each}}
     </select>
   </label>
   <div class="actions">
     <button type="submit" class="btn btn-tag">Continue</button>
-    <a href="/admin/products/{{Product.ID}}">Cancel</a>
+    <a href="/admin/products/{{product.id}}">Cancel</a>
   </div>
 </form>
 {{/unless}}

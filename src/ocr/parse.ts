@@ -14,18 +14,18 @@ export function parseBill(raw: Buffer | string): Bill {
     throw new Error('model returned invalid JSON');
   }
   const bill = unmarshalBill(parsed);
-  bill.Notes = bill.Notes.trim();
-  bill.StoryName = bill.StoryName.trim();
-  bill.ExternalID = bill.ExternalID.trim();
-  bill.StreetName = stripStreetPrefix(bill.StreetName);
-  bill.BuildingNumber = bill.BuildingNumber.trim();
-  bill.ApartmentNumber = bill.ApartmentNumber.trim();
-  bill.PostalCode = normalizePostal(bill.PostalCode);
-  bill.City = bill.City.trim();
-  const split = splitDateAndTime(bill.BoughtOn, bill.BoughtAt);
-  bill.BoughtOn = normalizeDate(split.date);
-  bill.BoughtAt = normalizeTime(split.clock);
-  for (const line of bill.Lines) {
+  bill.notes = bill.notes.trim();
+  bill.storyName = bill.storyName.trim();
+  bill.externalId = bill.externalId.trim();
+  bill.streetName = stripStreetPrefix(bill.streetName);
+  bill.buildingNumber = bill.buildingNumber.trim();
+  bill.apartmentNumber = bill.apartmentNumber.trim();
+  bill.postalCode = normalizePostal(bill.postalCode);
+  bill.city = bill.city.trim();
+  const split = splitDateAndTime(bill.boughtOn, bill.boughtAt);
+  bill.boughtOn = normalizeDate(split.date);
+  bill.boughtAt = normalizeTime(split.clock);
+  for (const line of bill.lines) {
     normalizeLine(line);
     inferUnitFromSize(line);
     fixWeighedKg(line);
@@ -42,24 +42,24 @@ function unmarshalBill(parsed: unknown): Bill {
   }
   const raw = parsed as Record<string, unknown>;
   const bill = emptyBill();
-  bill.BoughtOn = asStringField(raw.bought_on);
-  bill.BoughtAt = asStringField(raw.bought_at);
-  bill.Notes = asStringField(raw.notes);
-  bill.NotABill = asBoolField(raw.not_a_bill);
-  bill.StoryID = flexInt(raw.company_id);
-  bill.StoryName = asStringField(raw.company_name);
-  bill.ExternalID = asStringField(raw.external_id);
-  bill.StreetName = asStringField(raw.street_name);
-  bill.BuildingNumber = asStringField(raw.building_number);
-  bill.ApartmentNumber = asStringField(raw.apartment_number);
-  bill.PostalCode = asStringField(raw.postal_code);
-  bill.City = asStringField(raw.city);
+  bill.boughtOn = asStringField(raw.bought_on);
+  bill.boughtAt = asStringField(raw.bought_at);
+  bill.notes = asStringField(raw.notes);
+  bill.notABill = asBoolField(raw.not_a_bill);
+  bill.storyId = flexInt(raw.company_id);
+  bill.storyName = asStringField(raw.company_name);
+  bill.externalId = asStringField(raw.external_id);
+  bill.streetName = asStringField(raw.street_name);
+  bill.buildingNumber = asStringField(raw.building_number);
+  bill.apartmentNumber = asStringField(raw.apartment_number);
+  bill.postalCode = asStringField(raw.postal_code);
+  bill.city = asStringField(raw.city);
   if (raw.lines == null) {
-    bill.Lines = [];
+    bill.lines = [];
   } else if (!Array.isArray(raw.lines)) {
     throw new Error('model returned invalid JSON');
   } else {
-    bill.Lines = raw.lines.map(unmarshalLine);
+    bill.lines = raw.lines.map(unmarshalLine);
   }
   return bill;
 }
@@ -70,20 +70,20 @@ function unmarshalLine(item: unknown): Line {
   }
   const raw = item as Record<string, unknown>;
   const line = emptyLine();
-  line.ReceiptName = asStringField(raw.receipt_name);
-  line.ProductName = asStringField(raw.product_name);
-  line.ProductID = flexInt(raw.product_id);
-  line.UnitID = flexInt(raw.unit_id);
-  line.UnitName = asStringField(raw.unit_name);
-  line.VatType = asStringField(raw.vat_type);
-  line.PackageCount = flexNum(raw.package_count);
-  line.PackageSize = flexNum(raw.package_size);
-  line.Quantity = flexNum(raw.quantity);
-  line.UnitPrice = flexNum(raw.unit_price);
-  line.Discount = flexNum(raw.discount);
-  line.Amount = flexNum(raw.amount);
-  line.Skip = asBoolField(raw.skip);
-  line.SkipReason = asStringField(raw.skip_reason);
+  line.receiptName = asStringField(raw.receipt_name);
+  line.productName = asStringField(raw.product_name);
+  line.productId = flexInt(raw.product_id);
+  line.unitId = flexInt(raw.unit_id);
+  line.unitName = asStringField(raw.unit_name);
+  line.vatType = asStringField(raw.vat_type);
+  line.packageCount = flexNum(raw.package_count);
+  line.packageSize = flexNum(raw.package_size);
+  line.quantity = flexNum(raw.quantity);
+  line.unitPrice = flexNum(raw.unit_price);
+  line.discount = flexNum(raw.discount);
+  line.amount = flexNum(raw.amount);
+  line.skip = asBoolField(raw.skip);
+  line.skipReason = asStringField(raw.skip_reason);
   return line;
 }
 
@@ -124,23 +124,23 @@ function flexNum(v: unknown): string {
 }
 
 function normalizeLine(line: Line): void {
-  line.ReceiptName = line.ReceiptName.trim();
-  line.ProductName = line.ProductName.trim();
-  if (line.ProductName === '') line.ProductName = line.ReceiptName;
-  line.UnitName = normalizeUnitName(line.UnitName);
-  line.SkipReason = line.SkipReason.trim();
+  line.receiptName = line.receiptName.trim();
+  line.productName = line.productName.trim();
+  if (line.productName === '') line.productName = line.receiptName;
+  line.unitName = normalizeUnitName(line.unitName);
+  line.skipReason = line.skipReason.trim();
 
-  const [unitPrice, vatFromPrice] = peelVAT(line.UnitPrice);
-  const [amount, vatFromAmount] = peelVAT(line.Amount);
-  const [count, vatFromCount] = peelVAT(line.PackageCount);
-  const [qty, vatFromQty] = peelVAT(line.Quantity);
-  line.UnitPrice = normalizeNumber(unitPrice);
-  line.Amount = normalizeNumber(amount);
-  line.PackageCount = normalizeNumber(count);
-  line.PackageSize = normalizeNumber(line.PackageSize);
-  line.Quantity = normalizeNumber(qty);
-  line.Discount = normalizeDiscount(line.Discount);
-  line.VatType = normalizeVAT(line.VatType, vatFromPrice, vatFromAmount, vatFromCount, vatFromQty);
+  const [unitPrice, vatFromPrice] = peelVAT(line.unitPrice);
+  const [amount, vatFromAmount] = peelVAT(line.amount);
+  const [count, vatFromCount] = peelVAT(line.packageCount);
+  const [qty, vatFromQty] = peelVAT(line.quantity);
+  line.unitPrice = normalizeNumber(unitPrice);
+  line.amount = normalizeNumber(amount);
+  line.packageCount = normalizeNumber(count);
+  line.packageSize = normalizeNumber(line.packageSize);
+  line.quantity = normalizeNumber(qty);
+  line.discount = normalizeDiscount(line.discount);
+  line.vatType = normalizeVAT(line.vatType, vatFromPrice, vatFromAmount, vatFromCount, vatFromQty);
 }
 
 function extractJSON(raw: string): string {
@@ -341,19 +341,19 @@ export function normalizeNumber(s: string): string {
 }
 
 function coalesceQuantity(line: Line): void {
-  if (line.Quantity.trim() !== '') return;
-  const c = line.PackageCount.trim();
-  if (c !== '') line.Quantity = c;
+  if (line.quantity.trim() !== '') return;
+  const c = line.packageCount.trim();
+  if (c !== '') line.quantity = c;
 }
 
 function inferUnitFromSize(line: Line): void {
-  if (line.UnitName !== '') return;
-  if (looksLikeScaleKg(line.PackageSize)) line.UnitName = 'kg';
+  if (line.unitName !== '') return;
+  if (looksLikeScaleKg(line.packageSize)) line.unitName = 'kg';
 }
 
 function inferUnitFromQuantity(line: Line): void {
-  if (line.UnitName !== '') return;
-  if (looksLikeScaleKg(line.Quantity)) line.UnitName = 'kg';
+  if (line.unitName !== '') return;
+  if (looksLikeScaleKg(line.quantity)) line.unitName = 'kg';
 }
 
 function normalizeUnitName(s: string): string {
@@ -399,38 +399,38 @@ function normalizeUnitName(s: string): string {
 }
 
 function fillMissingAmount(line: Line): void {
-  if (line.Skip || line.Amount.trim() !== '') return;
+  if (line.skip || line.amount.trim() !== '') return;
   let price: Decimal;
   try {
-    price = new Decimal(line.UnitPrice);
+    price = new Decimal(line.unitPrice);
   } catch {
     return;
   }
   if (price.isZero()) return;
   let count: Decimal;
   try {
-    count = new Decimal(line.Quantity);
+    count = new Decimal(line.quantity);
   } catch {
     return;
   }
   if (count.isZero()) return;
   let discount = new Decimal(0);
-  if (line.Discount !== '') {
+  if (line.discount !== '') {
     try {
-      discount = new Decimal(line.Discount).abs();
+      discount = new Decimal(line.discount).abs();
     } catch {
       /* ignore */
     }
   }
-  line.Amount = count.mul(price).sub(discount).toDecimalPlaces(2, Decimal.ROUND_HALF_EVEN).toFixed(2);
+  line.amount = count.mul(price).sub(discount).toDecimalPlaces(2, Decimal.ROUND_HALF_EVEN).toFixed(2);
 }
 
 function fixWeighedKg(line: Line): void {
-  if (line.UnitName.toLowerCase() !== 'kg') return;
-  if (!isOne(line.PackageCount)) return;
-  if (!looksLikeScaleKg(line.PackageSize)) return;
-  line.PackageCount = line.PackageSize;
-  line.PackageSize = '1';
+  if (line.unitName.toLowerCase() !== 'kg') return;
+  if (!isOne(line.packageCount)) return;
+  if (!looksLikeScaleKg(line.packageSize)) return;
+  line.packageCount = line.packageSize;
+  line.packageSize = '1';
 }
 
 function isOne(s: string): boolean {

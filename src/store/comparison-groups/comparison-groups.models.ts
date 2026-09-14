@@ -3,29 +3,29 @@ import type { QuotedPrice } from '../../domain/price-stats';
 import type { Product } from '../products/products.models';
 
 export type ComparisonGroup = {
-  ID: number;
-  Name: string;
-  UnitID: number;
-  UnitName: string;
-  CreatedAt: string;
-  ProductCount: number;
+  id: number;
+  name: string;
+  unitId: number;
+  unitName: string;
+  createdAt: string;
+  productCount: number;
 };
 
 export type ComparisonOffer = {
-  ProductID: number;
-  ProductName: string;
-  Price: Decimal;
-  BoughtOn: string;
+  productId: number;
+  productName: string;
+  price: Decimal;
+  boughtOn: string;
 };
 
 export type GroupComparison = {
-  Group: ComparisonGroup;
-  Selected: ComparisonOffer | null;
-  Leader: ComparisonOffer | null;
-  SelectedIsLeader: boolean;
-  SelectedComparable: boolean;
+  group: ComparisonGroup;
+  selected: ComparisonOffer | null;
+  leader: ComparisonOffer | null;
+  selectedIsLeader: boolean;
+  selectedComparable: boolean;
 };
 
 export type RelatedProduct = Product & {
-  Quote: QuotedPrice | null;
+  quote: QuotedPrice | null;
 };

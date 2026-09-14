@@ -8,10 +8,6 @@ export function nocaseOrder(column: SQLWrapper): SQL {
   return sql`${column} collate nocase`;
 }
 
-export function int0(column: SQLWrapper): SQL<number> {
-  return sql<number>`coalesce(${column}, 0)`.mapWith(Number);
-}
-
 export function emptyStr(column: SQLWrapper): SQL<string> {
   return sql<string>`coalesce(${column}, '')`.mapWith(String);
 }

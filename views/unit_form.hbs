@@ -1,7 +1,7 @@
 {{> header}}
 <h1>Rename unit</h1>
-<form class="stack" method="post" action="/admin/units/{{Unit.ID}}">
-  <label>Name <input name="name" required value="{{Unit.Name}}" autofocus></label>
+<form class="stack" method="post" action="/admin/units/{{unit.id}}">
+  <label>Name <input name="name" required value="{{unit.name}}" autofocus></label>
   <div class="actions">
     <button type="submit" class="btn btn-tag">Save name</button>
     <a href="/admin/units">Cancel</a>

@@ -39,7 +39,7 @@ async function main(): Promise<void> {
   const stories: ReturnType<LocationsRepository['createStory']>[] = [];
   for (let i = 0; i < args.stories; i++) {
     const apt = Math.random() < 0.5 ? faker.string.numeric(2) : '';
-    const chainID = chains.length && Math.random() < 0.8 ? chains[Math.floor(Math.random() * chains.length)]!.ID : 0;
+    const chainID = chains.length && Math.random() < 0.8 ? chains[Math.floor(Math.random() * chains.length)]!.id : null;
     stories.push(
       locations.createStory(
         faker.company.name(),
@@ -65,7 +65,7 @@ async function main(): Promise<void> {
     }
     seen.add(key);
     const unit = units[Math.floor(Math.random() * units.length)]!;
-    products.push(productsSvc.createProduct(name, unit.ID, null));
+    products.push(productsSvc.createProduct(name, unit.id, null));
   }
   const start = new Date();
   start.setFullYear(start.getFullYear() - 2);
@@ -77,15 +77,15 @@ async function main(): Promise<void> {
       let price = 1 + Math.random() * 99;
       for (let n = 0; n < args.history; n++) {
         const kind = Math.random() < 0.12 ? KIND_PRICE : KIND_PURCHASE;
-        const storyID = stories.length && Math.random() < 0.8 ? stories[Math.floor(Math.random() * stories.length)]!.ID : 0;
+        const storyID = stories.length && Math.random() < 0.8 ? stories[Math.floor(Math.random() * stories.length)]!.id : null;
         const when = args.history > 1 ? new Date(start.getTime() + (n * span) / (args.history - 1)) : start;
         const jitterH = Math.floor(Math.random() * 37);
         const bought = new Date(when.getTime() + jitterH * 3600_000);
         const boughtOn = `${bought.getFullYear()}-${pad(bought.getMonth() + 1)}-${pad(bought.getDate())} ${pad(bought.getHours())}:${pad(bought.getMinutes())}`;
         price = Math.min(100, Math.max(1, price * (0.93 + Math.random() * 0.15)));
-        const qty = p.UnitName === 'kg' || p.UnitName === 'g' ? new Decimal((0.4 + Math.random() * 11.6).toFixed(3)) : new Decimal(1 + Math.floor(Math.random() * 8));
+        const qty = p.unitName === 'kg' || p.unitName === 'g' ? new Decimal((0.4 + Math.random() * 11.6).toFixed(3)) : new Decimal(1 + Math.floor(Math.random() * 8));
         const amount = qty.mul(price).toDecimalPlaces(2);
-        purchasesSvc.createPurchase(p.ID, storyID, boughtOn, qty, amount, kind);
+        purchasesSvc.createPurchase(p.id, storyID, boughtOn, qty, amount, kind);
         purchases++;
       }
     }
@@ -106,7 +106,7 @@ function clampExistingUnitPrices(db: DatabaseService, productsSvc: ProductsRepos
   return db.immediate(() => {
     let updated = 0;
     for (const p of products) {
-      updated += rescalePurchases(purchasesSvc, purchasesSvc.listPurchases(p.ID));
+      updated += rescalePurchases(purchasesSvc, purchasesSvc.listPurchases(p.id));
     }
     return updated;
   });
@@ -117,8 +117,8 @@ function rescalePurchases(purchasesSvc: PurchasesRepository, rows: ReturnType<Pu
   let lo = new Decimal(0);
   let hi = new Decimal(0);
   for (const row of rows) {
-    if (row.Quantity.isZero()) continue;
-    const price = row.Amount.div(row.Quantity);
+    if (row.quantity.isZero()) continue;
+    const price = row.amount.div(row.quantity);
     if (pts.length === 0 || price.lt(lo)) lo = price;
     if (pts.length === 0 || price.gt(hi)) hi = price;
     pts.push({ row, price });
@@ -131,8 +131,8 @@ function rescalePurchases(purchasesSvc: PurchasesRepository, rows: ReturnType<Pu
   let n = 0;
   for (const pt of pts) {
     const newPrice = span.isZero() ? mid : minP.add(pt.price.sub(lo).div(span).mul(maxP.sub(minP)));
-    const amount = newPrice.mul(pt.row.Quantity).toDecimalPlaces(2);
-    purchasesSvc.updatePurchase(pt.row.ID, pt.row.StoryID, pt.row.BoughtOn, pt.row.Quantity, amount, pt.row.Kind);
+    const amount = newPrice.mul(pt.row.quantity).toDecimalPlaces(2);
+    purchasesSvc.updatePurchase(pt.row.id, pt.row.storyId, pt.row.boughtOn, pt.row.quantity, amount, pt.row.kind);
     n++;
   }
   return n;

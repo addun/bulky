@@ -4,21 +4,21 @@
   <a class="btn btn-tag" href="/admin/retail-chains/new">Add chain</a>
 </div>
 
-{{#unless RetailChains}}
+{{#unless retailChains}}
   <p class="empty">No retail chains yet.</p>
 {{else}}
   <ul class="units">
-    {{#each RetailChains}}
+    {{#each retailChains}}
     <li>
       <span class="row-main">
-        <span class="unit-name">{{this.Name}}</span>
-        <span class="meta">{{this.LegalName}} · {{this.TaxID}}</span>
+        <span class="unit-name">{{this.name}}</span>
+        <span class="meta">{{this.legalName}} · {{this.taxId}}</span>
       </span>
-      <span class="meta">{{this.StoryCount}} store{{#if (ne this.StoryCount 1)}}s{{/if}}</span>
+      <span class="meta">{{this.storyCount}} store{{#if (ne this.storyCount 1)}}s{{/if}}</span>
       <span class="tight">
-        <a href="/admin/retail-chains/{{this.ID}}/edit">Edit</a>
-        {{#if (eq this.StoryCount 0)}}
-          <a class="danger" href="/admin/retail-chains/{{this.ID}}/delete">Delete</a>
+        <a href="/admin/retail-chains/{{this.id}}/edit">Edit</a>
+        {{#if (eq this.storyCount 0)}}
+          <a class="danger" href="/admin/retail-chains/{{this.id}}/delete">Delete</a>
         {{/if}}
       </span>
     </li>

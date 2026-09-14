@@ -1,15 +1,15 @@
 {{> header}}
-<h1>{{#if New}}Add comparison group{{else}}Edit comparison group{{/if}}</h1>
-<form class="stack" method="post" action="{{#if New}}/admin/comparison-groups{{else}}/admin/comparison-groups/{{Group.ID}}{{/if}}">
+<h1>{{#if new}}Add comparison group{{else}}Edit comparison group{{/if}}</h1>
+<form class="stack" method="post" action="{{#if new}}/admin/comparison-groups{{else}}/admin/comparison-groups/{{group.id}}{{/if}}">
   <fieldset class="form-group">
     <legend>Group</legend>
-    <label>Name <input name="name" required value="{{Group.Name}}" autofocus></label>
+    <label>Name <input name="name" required value="{{group.name}}" autofocus></label>
     <label>
       Compare in
       <select name="unit_id" required>
         <option value="">Select…</option>
-        {{#each Units}}
-        <option value="{{this.ID}}" {{#if (eq this.ID ../Group.UnitID)}}selected{{/if}}>{{this.Name}}</option>
+        {{#each units}}
+        <option value="{{this.id}}" {{#if (eq this.id ../group.unitId)}}selected{{/if}}>{{this.name}}</option>
         {{/each}}
       </select>
     </label>
@@ -18,19 +18,19 @@
 
   <fieldset class="form-group">
     <legend>Products</legend>
-    {{#unless Products}}
+    {{#unless products}}
       <p class="hint">No products yet. <a href="/admin/products/new">Add a product</a> first.</p>
     {{else}}
       <div class="checks">
-        {{#each Products}}
-        <label class="check"><input type="checkbox" name="product_id" value="{{this.ID}}" {{#if this.Selected}}checked{{/if}}> {{this.Name}} <span class="meta">{{this.UnitName}}</span></label>
+        {{#each products}}
+        <label class="check"><input type="checkbox" name="product_id" value="{{this.id}}" {{#if this.selected}}checked{{/if}}> {{this.name}} <span class="meta">{{this.unitName}}</span></label>
         {{/each}}
       </div>
     {{/unless}}
   </fieldset>
 
   <div class="form-actions">
-    <button type="submit" class="btn btn-tag">{{#if New}}Add group{{else}}Save group{{/if}}</button>
+    <button type="submit" class="btn btn-tag">{{#if new}}Add group{{else}}Save group{{/if}}</button>
     <a href="/admin/comparison-groups">Cancel</a>
   </div>
 </form>

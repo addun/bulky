@@ -29,14 +29,14 @@ const groupMemberCount = sql<number>`cast((
 ) as integer)`.mapWith(Number);
 
 type ComparisonMemberRow = {
-  GroupID: number;
-  GroupName: string;
-  GroupUnitID: number;
-  GroupUnitName: string;
-  ProductID: number;
-  ProductName: string;
-  ProductUnitID: number;
-  ConversionFactor: string | null;
+  groupId: number;
+  groupName: string;
+  groupUnitId: number;
+  groupUnitName: string;
+  productId: number;
+  productName: string;
+  productUnitId: number;
+  conversionFactor: string | null;
 };
 
 @Injectable()
@@ -61,9 +61,9 @@ export class ComparisonGroupsRepository {
     return row;
   }
 
-  createComparisonGroup(name: string, unitID: number, productIDs: number[]): ComparisonGroup {
+  createComparisonGroup(name: string, unitId: number, productIds: number[]): ComparisonGroup {
     try {
-      this.units.getUnit(unitID);
+      this.units.getUnit(unitId);
     } catch (err) {
       if (err instanceof NotFoundError) throw new InvalidUnitError();
       throw err;
@@ -72,21 +72,21 @@ export class ComparisonGroupsRepository {
       let gid: number;
       try {
         gid = lastId(
-          this.orm.insert(comparisonGroups).values({ name, unitId: unitID, createdAt: nowRFC3339() }).run(),
+          this.orm.insert(comparisonGroups).values({ name, unitId, createdAt: nowRFC3339() }).run(),
         );
       } catch (err) {
         if (isUniqueErr(err)) throw new DuplicateError();
         throw err;
       }
-      this.setComparisonGroupProducts(gid, productIDs);
+      this.setComparisonGroupProducts(gid, productIds);
       return gid;
     });
     return this.getComparisonGroup(id);
   }
 
-  updateComparisonGroup(id: number, name: string, unitID: number, productIDs: number[]): void {
+  updateComparisonGroup(id: number, name: string, unitId: number, productIds: number[]): void {
     try {
-      this.units.getUnit(unitID);
+      this.units.getUnit(unitId);
     } catch (err) {
       if (err instanceof NotFoundError) throw new InvalidUnitError();
       throw err;
@@ -94,7 +94,7 @@ export class ComparisonGroupsRepository {
     this.db.immediate(() => {
       try {
         const n = changesOf(
-          this.orm.update(comparisonGroups).set({ name, unitId: unitID }).where(eq(comparisonGroups.id, id)).run(),
+          this.orm.update(comparisonGroups).set({ name, unitId }).where(eq(comparisonGroups.id, id)).run(),
         );
         if (n === 0) throw new NotFoundError();
       } catch (err) {
@@ -102,7 +102,7 @@ export class ComparisonGroupsRepository {
         if (isUniqueErr(err)) throw new DuplicateError();
         throw err;
       }
-      this.setComparisonGroupProducts(id, productIDs);
+      this.setComparisonGroupProducts(id, productIds);
     });
   }
 
@@ -111,95 +111,95 @@ export class ComparisonGroupsRepository {
     if (n === 0) throw new NotFoundError();
   }
 
-  listComparisonGroupProductIDs(groupID: number): number[] {
+  listComparisonGroupProductIDs(groupId: number): number[] {
     return this.orm
       .select({ productId: comparisonGroupProducts.productId })
       .from(comparisonGroupProducts)
-      .where(eq(comparisonGroupProducts.groupId, groupID))
+      .where(eq(comparisonGroupProducts.groupId, groupId))
       .orderBy(comparisonGroupProducts.productId)
       .all()
       .map((r) => r.productId);
   }
 
-  listComparisonGroupsForProduct(productID: number): ComparisonGroup[] {
+  listComparisonGroupsForProduct(productId: number): ComparisonGroup[] {
     return this.orm
       .select({
-        ID: comparisonGroups.id,
-        Name: comparisonGroups.name,
-        UnitID: comparisonGroups.unitId,
-        UnitName: units.name,
-        CreatedAt: comparisonGroups.createdAt,
-        ProductCount: groupMemberCount,
+        id: comparisonGroups.id,
+        name: comparisonGroups.name,
+        unitId: comparisonGroups.unitId,
+        unitName: units.name,
+        createdAt: comparisonGroups.createdAt,
+        productCount: groupMemberCount,
       })
       .from(comparisonGroupProducts)
       .innerJoin(comparisonGroups, eq(comparisonGroups.id, comparisonGroupProducts.groupId))
       .innerJoin(units, eq(units.id, comparisonGroups.unitId))
-      .where(eq(comparisonGroupProducts.productId, productID))
+      .where(eq(comparisonGroupProducts.productId, productId))
       .orderBy(nocaseOrder(comparisonGroups.name), comparisonGroups.id)
       .all();
   }
 
-  setProductComparisonGroups(productID: number, groupIDs: number[]): void {
-    this.requireProduct(productID);
+  setProductComparisonGroups(productId: number, groupIds: number[]): void {
+    this.requireProduct(productId);
     this.db.immediate(() => {
-      const ids = this.uniquePositiveIDs(groupIDs);
+      const ids = this.uniquePositiveIDs(groupIds);
       for (const id of ids) {
         const n = this.orm.select({ n: count() }).from(comparisonGroups).where(eq(comparisonGroups.id, id)).get();
         if (countOf(n?.n) === 0) throw new InvalidComparisonGroupError();
       }
-      this.orm.delete(comparisonGroupProducts).where(eq(comparisonGroupProducts.productId, productID)).run();
+      this.orm.delete(comparisonGroupProducts).where(eq(comparisonGroupProducts.productId, productId)).run();
       for (const id of ids) {
-        this.orm.insert(comparisonGroupProducts).values({ groupId: id, productId: productID }).run();
+        this.orm.insert(comparisonGroupProducts).values({ groupId: id, productId }).run();
       }
     });
   }
 
-  relatedGroupProducts(productID: number, now: Date): RelatedProduct[] {
-    this.requireProduct(productID);
+  relatedGroupProducts(productId: number, now: Date): RelatedProduct[] {
+    this.requireProduct(productId);
     const mine = tableAlias(comparisonGroupProducts, 'mine');
     const member = tableAlias(comparisonGroupProducts, 'm');
     const rows = this.orm
       .selectDistinct({
-        ID: products.id,
-        Name: products.name,
-        UnitID: products.unitId,
-        UnitName: units.name,
-        image_path: products.imagePath,
-        CreatedAt: products.createdAt,
+        id: products.id,
+        name: products.name,
+        unitId: products.unitId,
+        unitName: units.name,
+        imagePath: products.imagePath,
+        createdAt: products.createdAt,
       })
       .from(mine)
       .innerJoin(member, eq(member.groupId, mine.groupId))
       .innerJoin(products, eq(products.id, member.productId))
       .innerJoin(units, eq(units.id, products.unitId))
-      .where(and(eq(mine.productId, productID), ne(products.id, productID)))
+      .where(and(eq(mine.productId, productId), ne(products.id, productId)))
       .orderBy(nocaseOrder(products.name), products.id)
       .all();
     if (rows.length === 0) return [];
-    const buys = this.purchases.listPurchasesForProductIDs(rows.map((r) => r.ID));
+    const buys = this.purchases.listPurchasesForProductIDs(rows.map((r) => r.id));
     const quotes = quotesByProduct(buys, now);
     const out: RelatedProduct[] = [];
     for (const r of rows) {
-      const q = quotes.get(r.ID);
+      const q = quotes.get(r.id);
       if (!q) continue;
-      out.push({ ...mapProduct(r), Quote: q });
+      out.push({ ...mapProduct(r), quote: q });
     }
     return out;
   }
 
-  comparisonLeaders(productID: number): GroupComparison[] {
-    this.requireProduct(productID);
+  comparisonLeaders(productId: number): GroupComparison[] {
+    this.requireProduct(productId);
     const mine = tableAlias(comparisonGroupProducts, 'mine');
     const member = tableAlias(comparisonGroupProducts, 'm');
     const members = this.orm
       .select({
-        GroupID: comparisonGroups.id,
-        GroupName: comparisonGroups.name,
-        GroupUnitID: comparisonGroups.unitId,
-        GroupUnitName: units.name,
-        ProductID: products.id,
-        ProductName: products.name,
-        ProductUnitID: products.unitId,
-        ConversionFactor: productUnitConversions.factor,
+        groupId: comparisonGroups.id,
+        groupName: comparisonGroups.name,
+        groupUnitId: comparisonGroups.unitId,
+        groupUnitName: units.name,
+        productId: products.id,
+        productName: products.name,
+        productUnitId: products.unitId,
+        conversionFactor: productUnitConversions.factor,
       })
       .from(mine)
       .innerJoin(comparisonGroups, eq(comparisonGroups.id, mine.groupId))
@@ -213,133 +213,133 @@ export class ComparisonGroupsRepository {
           eq(productUnitConversions.unitId, comparisonGroups.unitId),
         ),
       )
-      .where(eq(mine.productId, productID))
+      .where(eq(mine.productId, productId))
       .orderBy(nocaseOrder(comparisonGroups.name), comparisonGroups.id, nocaseOrder(products.name), products.id)
       .all();
     if (members.length === 0) return [];
     const ids: number[] = [];
     const seen = new Set<number>();
     for (const m of members) {
-      if (seen.has(m.ProductID)) continue;
-      seen.add(m.ProductID);
-      ids.push(m.ProductID);
+      if (seen.has(m.productId)) continue;
+      seen.add(m.productId);
+      ids.push(m.productId);
     }
     const last = lastPricesByProduct(this.purchases.listPurchasesForProductIDs(ids));
-    return this.pickGroupLeaders(productID, members, last);
+    return this.pickGroupLeaders(productId, members, last);
   }
 
-  reassignProduct(fromID: number, intoID: number): void {
+  reassignProduct(fromId: number, intoId: number): void {
     const groupRows = this.orm
       .select({ groupId: comparisonGroupProducts.groupId })
       .from(comparisonGroupProducts)
-      .where(eq(comparisonGroupProducts.productId, fromID))
+      .where(eq(comparisonGroupProducts.productId, fromId))
       .all();
     for (const row of groupRows) {
       this.orm
         .insert(comparisonGroupProducts)
-        .values({ groupId: row.groupId, productId: intoID })
+        .values({ groupId: row.groupId, productId: intoId })
         .onConflictDoNothing()
         .run();
     }
   }
 
   private pickGroupLeaders(
-    selectedID: number,
+    selectedId: number,
     members: ComparisonMemberRow[],
-    last: Map<number, { BoughtOn: string; Price: Decimal }>,
+    last: Map<number, { boughtOn: string; price: Decimal }>,
   ): GroupComparison[] {
     const out: GroupComparison[] = [];
     let idx = -1;
     for (const m of members) {
-      if (idx < 0 || out[idx]!.Group.ID !== m.GroupID) {
+      if (idx < 0 || out[idx]!.group.id !== m.groupId) {
         out.push({
-          Group: {
-            ID: m.GroupID,
-            Name: m.GroupName,
-            UnitID: m.GroupUnitID,
-            UnitName: m.GroupUnitName,
-            CreatedAt: '',
-            ProductCount: 0,
+          group: {
+            id: m.groupId,
+            name: m.groupName,
+            unitId: m.groupUnitId,
+            unitName: m.groupUnitName,
+            createdAt: '',
+            productCount: 0,
           },
-          Selected: null,
-          Leader: null,
-          SelectedIsLeader: false,
-          SelectedComparable: false,
+          selected: null,
+          leader: null,
+          selectedIsLeader: false,
+          selectedComparable: false,
         });
         idx = out.length - 1;
       }
       const offer = this.comparableOffer(m, last);
       if (!offer) continue;
-      if (m.ProductID === selectedID) {
-        out[idx]!.Selected = offer;
-        out[idx]!.SelectedComparable = true;
+      if (m.productId === selectedId) {
+        out[idx]!.selected = offer;
+        out[idx]!.selectedComparable = true;
       }
-      if (this.betterOffer(offer, out[idx]!.Leader, selectedID)) out[idx]!.Leader = offer;
+      if (this.betterOffer(offer, out[idx]!.leader, selectedId)) out[idx]!.leader = offer;
     }
     for (const g of out) {
-      if (g.Leader && g.Selected && g.Leader.ProductID === selectedID) g.SelectedIsLeader = true;
+      if (g.leader && g.selected && g.leader.productId === selectedId) g.selectedIsLeader = true;
     }
     return out;
   }
 
   private comparableOffer(
     m: {
-      ProductID: number;
-      ProductName: string;
-      ProductUnitID: number;
-      GroupUnitID: number;
-      ConversionFactor: string | null;
+      productId: number;
+      productName: string;
+      productUnitId: number;
+      groupUnitId: number;
+      conversionFactor: string | null;
     },
-    last: Map<number, { BoughtOn: string; Price: Decimal }>,
+    last: Map<number, { boughtOn: string; price: Decimal }>,
   ): ComparisonOffer | null {
-    const pt = last.get(m.ProductID);
+    const pt = last.get(m.productId);
     if (!pt) return null;
     let factor: Decimal;
-    if (m.ProductUnitID === m.GroupUnitID) factor = new Decimal(1);
-    else if (!m.ConversionFactor) return null;
+    if (m.productUnitId === m.groupUnitId) factor = new Decimal(1);
+    else if (!m.conversionFactor) return null;
     else {
-      factor = new Decimal(m.ConversionFactor);
+      factor = new Decimal(m.conversionFactor);
       if (factor.isZero() || factor.isNegative()) return null;
     }
     return {
-      ProductID: m.ProductID,
-      ProductName: m.ProductName,
-      Price: pt.Price.div(factor),
-      BoughtOn: pt.BoughtOn,
+      productId: m.productId,
+      productName: m.productName,
+      price: pt.price.div(factor),
+      boughtOn: pt.boughtOn,
     };
   }
 
-  private betterOffer(candidate: ComparisonOffer, current: ComparisonOffer | null, selectedID: number): boolean {
+  private betterOffer(candidate: ComparisonOffer, current: ComparisonOffer | null, selectedId: number): boolean {
     if (!current) return true;
-    if (candidate.Price.lt(current.Price)) return true;
-    if (current.Price.lt(candidate.Price)) return false;
-    if (candidate.ProductID === selectedID) return true;
-    if (current.ProductID === selectedID) return false;
-    return candidate.ProductID < current.ProductID;
+    if (candidate.price.lt(current.price)) return true;
+    if (current.price.lt(candidate.price)) return false;
+    if (candidate.productId === selectedId) return true;
+    if (current.productId === selectedId) return false;
+    return candidate.productId < current.productId;
   }
 
   private groupQuery() {
     return this.orm
       .select({
-        ID: comparisonGroups.id,
-        Name: comparisonGroups.name,
-        UnitID: comparisonGroups.unitId,
-        UnitName: units.name,
-        CreatedAt: comparisonGroups.createdAt,
-        ProductCount: groupMemberCount,
+        id: comparisonGroups.id,
+        name: comparisonGroups.name,
+        unitId: comparisonGroups.unitId,
+        unitName: units.name,
+        createdAt: comparisonGroups.createdAt,
+        productCount: groupMemberCount,
       })
       .from(comparisonGroups)
       .innerJoin(units, eq(units.id, comparisonGroups.unitId));
   }
 
-  private setComparisonGroupProducts(groupID: number, productIDs: number[]): void {
-    const ids = this.uniquePositiveIDs(productIDs);
+  private setComparisonGroupProducts(groupId: number, productIds: number[]): void {
+    const ids = this.uniquePositiveIDs(productIds);
     for (const id of ids) {
       this.requireProduct(id);
     }
-    this.orm.delete(comparisonGroupProducts).where(eq(comparisonGroupProducts.groupId, groupID)).run();
+    this.orm.delete(comparisonGroupProducts).where(eq(comparisonGroupProducts.groupId, groupId)).run();
     for (const id of ids) {
-      this.orm.insert(comparisonGroupProducts).values({ groupId: groupID, productId: id }).run();
+      this.orm.insert(comparisonGroupProducts).values({ groupId, productId: id }).run();
     }
   }
 

@@ -6,18 +6,18 @@
   <button type="submit" class="btn btn-tag">Add unit</button>
 </form>
 
-{{#unless Units}}
+{{#unless units}}
   <p class="empty">No units yet.</p>
 {{else}}
   <ul class="units">
-    {{#each Units}}
+    {{#each units}}
     <li>
-      <span class="unit-name">{{this.Name}}</span>
-      <span class="meta">{{this.ProductCount}} product{{#if (ne this.ProductCount 1)}}s{{/if}}</span>
+      <span class="unit-name">{{this.name}}</span>
+      <span class="meta">{{this.productCount}} product{{#if (ne this.productCount 1)}}s{{/if}}</span>
       <span class="tight">
-        <a href="/admin/units/{{this.ID}}/edit">Rename</a>
-        {{#if (eq this.ProductCount 0)}}
-          <a class="danger" href="/admin/units/{{this.ID}}/delete">Delete</a>
+        <a href="/admin/units/{{this.id}}/edit">Rename</a>
+        {{#if (eq this.productCount 0)}}
+          <a class="danger" href="/admin/units/{{this.id}}/delete">Delete</a>
         {{/if}}
       </span>
     </li>

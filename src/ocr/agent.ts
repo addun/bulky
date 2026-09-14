@@ -133,7 +133,7 @@ export class Agent {
 function finishExtract(body: Buffer): { bill: Bill; rawJSON: Buffer } {
   const bill = parseBill(body);
   const rawJSON = Buffer.from(marshalBill(bill));
-  if (bill.NotABill) throw new NotABillError();
+  if (bill.notABill) throw new NotABillError();
   if (productLines(bill).length === 0) throw new NoLinesError();
   return { bill, rawJSON };
 }

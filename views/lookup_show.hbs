@@ -1,28 +1,28 @@
 {{> header}}
 <article class="product-head">
-  {{#if Product.ImagePath.Valid}}
-    <img class="hero" src="/images/{{Product.ImagePath.String}}" alt="">
+  {{#if product.imagePath}}
+    <img class="hero" src="/images/{{product.imagePath}}" alt="">
   {{else}}
     <span class="hero hero-empty" aria-hidden="true"></span>
   {{/if}}
   <div>
-    <h1>{{Product.Name}}</h1>
+    <h1>{{product.name}}</h1>
   </div>
 </article>
 
 <section class="price-stats">
   <div>
-    {{#if Quote}}
-      {{#if Quote.IsLast30Days}}
+    {{#if quote}}
+      {{#if quote.isLast30Days}}
         <p class="eyebrow">Lowest · 30 days</p>
       {{else}}
         <p class="eyebrow">Last recorded</p>
       {{/if}}
-      <p class="price-stat">{{money Quote.Price}} / {{Product.UnitName}}</p>
-      {{#each (extraQuotes Quote Product)}}
-      <p class="price-extra">{{money this.Price}} / {{this.UnitName}}</p>
+      <p class="price-stat">{{money quote.price}} / {{product.unitName}}</p>
+      {{#each (extraQuotes quote product)}}
+      <p class="price-extra">{{money this.price}} / {{this.unitName}}</p>
       {{/each}}
-      <p class="meta">{{date Quote.BoughtOn}}</p>
+      <p class="meta">{{date quote.boughtOn}}</p>
     {{else}}
       <p class="eyebrow">Lowest · 30 days</p>
       <p class="price-stat">—</p>
@@ -32,29 +32,29 @@
 
 <section>
   <h2>Last 365 days</h2>
-  {{#if HasChart}}
-    <div class="price-chart" data-price-chart="{{ChartJSON}}" data-chart-from="{{ChartFrom}}" data-chart-to="{{ChartTo}}" data-chart-symbol="{{Page.Symbol}}"></div>
+  {{#if hasChart}}
+    <div class="price-chart" data-price-chart="{{chartJSON}}" data-chart-from="{{chartFrom}}" data-chart-to="{{chartTo}}" data-chart-symbol="{{page.symbol}}"></div>
   {{else}}
     <p class="empty">No prices in the last year.</p>
   {{/if}}
 </section>
 
-{{#if Related}}
+{{#if related}}
 <section>
   <h2>Check also</h2>
   <ul class="ledger">
-    {{#each Related}}
+    {{#each related}}
     <li>
-      <a class="row" href="/products/{{this.ID}}">
-        {{#if this.ImagePath.Valid}}
-          <img class="thumb" src="/images/{{this.ImagePath.String}}" alt="">
+      <a class="row" href="/products/{{this.id}}">
+        {{#if this.imagePath}}
+          <img class="thumb" src="/images/{{this.imagePath}}" alt="">
         {{else}}
           <span class="thumb thumb-empty" aria-hidden="true"></span>
         {{/if}}
         <span class="row-main">
-          <strong>{{this.Name}}</strong>
+          <strong>{{this.name}}</strong>
         </span>
-        <span class="row-amt">{{money this.Quote.Price}} / {{this.UnitName}}</span>
+        <span class="row-amt">{{money this.quote.price}} / {{this.unitName}}</span>
       </a>
     </li>
     {{/each}}

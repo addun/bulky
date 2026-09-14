@@ -28,10 +28,3 @@ export function parseListenAddr(addr: string): { host: string; port: number } {
   };
 }
 
-export function firstEnv(...keys: string[]): string {
-  for (const key of keys) {
-    const v = process.env[key];
-    if (v) return v;
-  }
-  return '';
-}

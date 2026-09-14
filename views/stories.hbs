@@ -4,23 +4,23 @@
   <a class="btn btn-tag" href="/admin/stories/new">Add store</a>
 </div>
 
-{{#unless Stories}}
+{{#unless stories}}
   <p class="empty">No stores yet.</p>
 {{else}}
   <ul class="units stories">
-    {{#each Stories}}
+    {{#each stories}}
     <li>
       <span class="row-main">
-        <span class="unit-name">{{this.Name}}</span>
-        {{#if this.RetailChainName}}<span class="meta">{{this.RetailChainName}}</span>{{/if}}
-        {{#if this.ExternalID}}<span class="meta">{{this.ExternalID}}</span>{{/if}}
-        <span class="meta story-addr">{{this.AddressLine}}</span>
+        <span class="unit-name">{{this.name}}</span>
+        {{#if this.retailChainName}}<span class="meta">{{this.retailChainName}}</span>{{/if}}
+        {{#if this.externalId}}<span class="meta">{{this.externalId}}</span>{{/if}}
+        <span class="meta story-addr">{{this.addressLine}}</span>
       </span>
-      <span class="meta">{{this.PurchaseCount}} purchase{{#if (ne this.PurchaseCount 1)}}s{{/if}}</span>
+      <span class="meta">{{this.purchaseCount}} purchase{{#if (ne this.purchaseCount 1)}}s{{/if}}</span>
       <span class="tight">
-        <a href="/admin/stories/{{this.ID}}/edit">Edit</a>
-        {{#if (eq this.PurchaseCount 0)}}
-          <a class="danger" href="/admin/stories/{{this.ID}}/delete">Delete</a>
+        <a href="/admin/stories/{{this.id}}/edit">Edit</a>
+        {{#if (eq this.purchaseCount 0)}}
+          <a class="danger" href="/admin/stories/{{this.id}}/delete">Delete</a>
         {{/if}}
       </span>
     </li>

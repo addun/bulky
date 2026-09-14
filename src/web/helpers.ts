@@ -58,6 +58,7 @@ export function registerHandlebarsHelpers(): void {
     extraQuotes(quote, product),
   );
   hbs.registerHelper('qtyIn', (qty: Decimal, conv: ProductConversion) => qtyInSafe(qty, conv));
+  hbs.registerHelper('isZero', (d: Decimal | undefined) => Boolean(d && asDecimal(d).isZero()));
   hbs.registerHelper('hasImage', (path: string) => Boolean(path && path.trim() !== ''));
   hbs.registerHelper('add', (a: number, b: number) => Number(a) + Number(b));
 }
@@ -67,7 +68,7 @@ function asDecimal(d: Decimal | string | number): Decimal {
 }
 
 function qtyInSafe(qty: Decimal, conv: ProductConversion): Decimal {
-  return asDecimal(qty).mul(asDecimal(conv.Factor));
+  return asDecimal(qty).mul(asDecimal(conv.factor));
 }
 
 /** Handlebars treats [] as truthy; Go templates do not. */

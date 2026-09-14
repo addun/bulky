@@ -4,19 +4,19 @@
   <a class="btn btn-tag" href="/admin/comparison-groups/new">Add group</a>
 </div>
 
-{{#unless Groups}}
+{{#unless groups}}
   <p class="empty">No comparison groups yet.</p>
 {{else}}
   <ul class="units">
-    {{#each Groups}}
+    {{#each groups}}
     <li>
       <span class="row-main">
-        <span class="unit-name">{{this.Name}}</span>
-        <span class="meta">{{this.UnitName}} · {{this.ProductCount}} product{{#if (ne this.ProductCount 1)}}s{{/if}}</span>
+        <span class="unit-name">{{this.name}}</span>
+        <span class="meta">{{this.unitName}} · {{this.productCount}} product{{#if (ne this.productCount 1)}}s{{/if}}</span>
       </span>
       <span class="tight">
-        <a href="/admin/comparison-groups/{{this.ID}}/edit">Edit</a>
-        <a class="danger" href="/admin/comparison-groups/{{this.ID}}/delete">Delete</a>
+        <a href="/admin/comparison-groups/{{this.id}}/edit">Edit</a>
+        <a class="danger" href="/admin/comparison-groups/{{this.id}}/delete">Delete</a>
       </span>
     </li>
     {{/each}}

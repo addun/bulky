@@ -116,8 +116,8 @@ export class ReceiptsController {
       this.renderReceipts(res, status, msg);
       return;
     }
-    this.queue.enqueueOCR(receipt.ID);
-    this.views.redirect(res, '/admin/receipts/' + String(receipt.ID));
+    this.queue.enqueueOCR(receipt.id);
+    this.views.redirect(res, '/admin/receipts/' + String(receipt.id));
   }
 
   @Get(':id/preview')
@@ -129,8 +129,8 @@ export class ReceiptsController {
       res.status(404).end();
       return;
     }
-    const path = this.images.receiptImagePath(receipt.ImagePath);
-    if (!path || !this.images.previewExists(receipt.ImagePath)) {
+    const path = this.images.receiptImagePath(receipt.imagePath);
+    if (!path || !this.images.previewExists(receipt.imagePath)) {
       res.status(404).end();
       return;
     }
@@ -155,7 +155,7 @@ export class ReceiptsController {
       this.views.text(res, 500, 'could not load the receipt');
       return;
     }
-    if (receipt.Status !== RECEIPT_MIGRATED) {
+    if (receipt.status !== RECEIPT_MIGRATED) {
       this.views.redirect(res, '/admin/receipts/' + String(receiptId));
       return;
     }
@@ -179,7 +179,7 @@ export class ReceiptsController {
       this.views.text(res, 500, 'could not load the receipt');
       return;
     }
-    if (receipt.Status !== RECEIPT_MIGRATED) {
+    if (receipt.status !== RECEIPT_MIGRATED) {
       this.views.redirect(res, '/admin/receipts/' + String(receiptId));
       return;
     }
@@ -223,11 +223,11 @@ export class ReceiptsController {
       this.views.text(res, 500, 'could not load the receipt');
       return;
     }
-    if (receipt.Status !== RECEIPT_FAILED && receipt.Status !== RECEIPT_PENDING) {
+    if (receipt.status !== RECEIPT_FAILED && receipt.status !== RECEIPT_PENDING) {
       this.views.redirect(res, '/admin/receipts/' + String(receiptId));
       return;
     }
-    if (receipt.Status === RECEIPT_FAILED) {
+    if (receipt.status === RECEIPT_FAILED) {
       if (!this.ocr.configured()) {
         this.views.redirect(
           res,
@@ -259,7 +259,7 @@ export class ReceiptsController {
         return;
       }
       try {
-        await this.images.loadReceiptSource(receipt.ImagePath);
+        await this.images.loadReceiptSource(receipt.imagePath);
       } catch {
         this.views.redirect(
           res,
@@ -301,11 +301,11 @@ export class ReceiptsController {
       this.views.text(res, 500, 'could not load the receipt');
       return;
     }
-    if (receipt.Status === RECEIPT_PENDING || receipt.Status === RECEIPT_FAILED) {
+    if (receipt.status === RECEIPT_PENDING || receipt.status === RECEIPT_FAILED) {
       this.renderReceiptStatus(res, 200, receipt, query.error);
       return;
     }
-    if (receipt.Status === RECEIPT_MIGRATED) {
+    if (receipt.status === RECEIPT_MIGRATED) {
       this.renderReceiptShow(res, 200, receipt, query.error, query.imported);
       return;
     }
@@ -370,11 +370,11 @@ export class ReceiptsController {
     }
     const get = (name: string) => field.parse(body[name]);
     let { inn, view, msg } = parseReceiptForm(get, products);
-    view.ReceiptID = receiptId;
-    view.ImagePath = receipt.ImagePath;
-    view.Status = receipt.Status;
-    view.StoryID = knownStoryID(view.StoryID, stories);
-    inn.StoryID = view.StoryID;
+    view.receiptId = receiptId;
+    view.imagePath = receipt.imagePath;
+    view.status = receipt.status;
+    view.storyId = knownStoryID(view.storyId, stories);
+    inn.storyId = view.storyId;
     view = decorateReceiptView(view);
     let rawJSON = '';
     let jsonErr: unknown = null;
@@ -390,11 +390,11 @@ export class ReceiptsController {
         /* ignore */
       }
     }
-    if (receipt.Status === RECEIPT_MIGRATED) {
+    if (receipt.status === RECEIPT_MIGRATED) {
       this.renderReceiptShow(res, 409, receipt, 'This bill is already saved as purchases.', 0);
       return;
     }
-    if (view.StoryID === 0 && optInt.parse(body.story_id) > 0) {
+    if (view.storyId === 0 && optInt.parse(body.story_id) > 0) {
       this.renderReceiptReview(res, 422, view, products, units, stories, 'Choose a store.');
       return;
     }
@@ -408,7 +408,7 @@ export class ReceiptsController {
     }
     try {
       const result = this.receiptsStore.migrateReceipt(receiptId, inn, rawJSON);
-      this.views.redirect(res, '/admin/receipts/' + String(receiptId) + '?imported=' + String(result.Purchases));
+      this.views.redirect(res, '/admin/receipts/' + String(receiptId) + '?imported=' + String(result.purchases));
     } catch (err) {
       let errMsg = 'Could not save the purchases.';
       if (err instanceof ReceiptMigratedError) errMsg = 'This bill is already saved as purchases.';
@@ -468,10 +468,10 @@ export class ReceiptsController {
       return;
     }
     this.views.html(res, 'receipts', status, {
-      Page: this.views.adminPage('Receipts', '', errMsg),
-      Configured: this.ocr.configured(),
-      Model: model,
-      Receipts: list.map(presentReceipt),
+      page: this.views.adminPage('Receipts', '', errMsg),
+      configured: this.ocr.configured(),
+      model: model,
+      receipts: list.map(presentReceipt),
     });
   }
 
@@ -485,26 +485,26 @@ export class ReceiptsController {
     errMsg: string,
   ): void {
     this.views.html(res, 'receipt_review', status, {
-      Page: this.views.adminPage('Confirm bill', '', errMsg),
-      View: view,
-      Products: products,
-      Units: units,
-      Stories: stories.map(presentStory),
+      page: this.views.adminPage('Confirm bill', '', errMsg),
+      view: view,
+      products: products,
+      units: units,
+      stories: stories.map(presentStory),
     });
   }
 
   private renderReceiptStatus(res: Response, status: number, receipt: Receipt, errMsg: string): void {
-    const reading = receipt.Status === RECEIPT_PENDING;
+    const reading = receipt.status === RECEIPT_PENDING;
     this.views.html(res, 'receipt_status', status, {
-      Page: this.views.adminPage('Receipt', '', errMsg, reading ? 3 : 0),
-      Receipt: presentReceipt(receipt),
+      page: this.views.adminPage('Receipt', '', errMsg, reading ? 3 : 0),
+      receipt: presentReceipt(receipt),
     });
   }
 
   private renderReceiptShow(res: Response, status: number, receipt: Receipt, errMsg: string, imported: number): void {
     let buys;
     try {
-      buys = this.purchases.listPurchasesByReceipt(receipt.ID);
+      buys = this.purchases.listPurchasesByReceipt(receipt.id);
     } catch {
       this.views.text(res, 500, 'could not load purchases');
       return;
@@ -520,14 +520,14 @@ export class ReceiptsController {
     if (boughtAt === '') boughtAt = boughtOnTime(boughtOn);
     boughtOn = joinBoughtOn(boughtOn, boughtAt);
     this.views.html(res, 'receipt_show', status, {
-      Page: this.views.adminPage('Receipt', '', errMsg),
-      Receipt: presentReceipt(receipt),
-      Purchases: buys,
-      BoughtOn: boughtOn,
-      BoughtAt: boughtAt,
-      Notes: notes,
-      Story: presentStory(story),
-      Imported: imported,
+      page: this.views.adminPage('Receipt', '', errMsg),
+      receipt: presentReceipt(receipt),
+      purchases: buys,
+      boughtOn: boughtOn,
+      boughtAt: boughtAt,
+      notes: notes,
+      story: presentStory(story),
+      imported: imported,
     });
   }
 
@@ -541,7 +541,7 @@ export class ReceiptsController {
   ): void {
     let buys;
     try {
-      buys = this.purchases.listPurchasesByReceipt(receipt.ID);
+      buys = this.purchases.listPurchasesByReceipt(receipt.id);
     } catch {
       this.views.text(res, 500, 'could not load purchases');
       return;
@@ -558,19 +558,19 @@ export class ReceiptsController {
       const facts = receiptVisitFacts(receipt, buys, stories);
       boughtOn = facts.boughtOn;
       boughtAt = facts.boughtAt;
-      storyID = facts.story.ID;
+      storyID = facts.story.id;
     } else {
       boughtAt = receiptVisitFacts(receipt, buys, stories).boughtAt;
     }
     if (boughtAt === '') boughtAt = boughtOnTime(boughtOn);
     boughtOn = joinBoughtOn(boughtOn, boughtAt);
     this.views.html(res, 'receipt_edit', status, {
-      Page: this.views.adminPage('Edit visit', '', errMsg),
-      Receipt: presentReceipt(receipt),
-      BoughtOn: boughtOn,
-      BoughtAt: boughtAt,
-      Story: presentStory(storyByID(stories, storyID)),
-      Stories: stories.map(presentStory),
+      page: this.views.adminPage('Edit visit', '', errMsg),
+      receipt: presentReceipt(receipt),
+      boughtOn: boughtOn,
+      boughtAt: boughtAt,
+      story: presentStory(storyByID(stories, storyID)),
+      stories: stories.map(presentStory),
     });
   }
 
@@ -608,15 +608,15 @@ function pickFormFile(
 
 function emptyReceipt(): Receipt {
   return {
-    ID: 0,
-    ImagePath: '',
-    RawResponse: '',
-    Status: '',
-    ErrorMessage: '',
-    CreatedAt: '',
-    Source: '',
-    ExternalID: '',
-    SourcePayload: '',
+    id: 0,
+    imagePath: '',
+    rawResponse: '',
+    status: '',
+    errorMessage: '',
+    createdAt: '',
+    source: '',
+    externalId: '',
+    sourcePayload: '',
   };
 }
 
