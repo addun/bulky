@@ -1,5 +1,4 @@
--- Canonical SQLite schema for sqlc.
--- Goose remains the migrator. Update this snapshot when a migration changes tables.
+-- Canonical SQLite schema. Applied on first boot for empty databases.
 
 CREATE TABLE units (
   id INTEGER PRIMARY KEY,
