@@ -1,5 +1,18 @@
-import { sql } from 'drizzle-orm';
-import { check, index, integer, primaryKey, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { sql, type SQL } from 'drizzle-orm';
+import {
+  check,
+  index,
+  integer,
+  primaryKey,
+  sqliteTable,
+  text,
+  uniqueIndex,
+  type AnySQLiteColumn,
+} from 'drizzle-orm/sqlite-core';
+
+function nocase(column: AnySQLiteColumn): SQL {
+  return sql`${column} collate nocase`;
+}
 
 export const units = sqliteTable(
   'units',
@@ -7,7 +20,7 @@ export const units = sqliteTable(
     id: integer('id').primaryKey(),
     name: text('name').notNull(),
   },
-  (t) => [uniqueIndex('units_name').on(t.name)],
+  (t) => [uniqueIndex('units_name').on(nocase(t.name))],
 );
 
 export const products = sqliteTable(
@@ -21,7 +34,7 @@ export const products = sqliteTable(
     imagePath: text('image_path'),
     createdAt: text('created_at').notNull(),
   },
-  (t) => [index('idx_products_name').on(t.name)],
+  (t) => [index('idx_products_name').on(nocase(t.name))],
 );
 
 export const retailChains = sqliteTable(
@@ -32,7 +45,7 @@ export const retailChains = sqliteTable(
     legalName: text('legal_name').notNull(),
     taxId: text('tax_id').notNull(),
   },
-  (t) => [uniqueIndex('retail_chains_name').on(t.name), uniqueIndex('retail_chains_tax_id').on(t.taxId)],
+  (t) => [uniqueIndex('retail_chains_name').on(nocase(t.name)), uniqueIndex('retail_chains_tax_id').on(nocase(t.taxId))],
 );
 
 export const stories = sqliteTable(
@@ -49,10 +62,10 @@ export const stories = sqliteTable(
     externalId: text('external_id').notNull().default(''),
   },
   (t) => [
-    index('idx_stories_name').on(t.name),
+    index('idx_stories_name').on(nocase(t.name)),
     index('idx_stories_retail_chain').on(t.retailChainId),
     uniqueIndex('idx_stories_external_id')
-      .on(t.externalId)
+      .on(nocase(t.externalId))
       .where(sql`external_id != ''`),
   ],
 );
@@ -115,13 +128,13 @@ export const productAliases = sqliteTable(
     check('product_aliases_scope', sql`NOT (story_id IS NOT NULL AND retail_chain_id IS NOT NULL)`),
     index('idx_product_aliases_product').on(t.productId),
     uniqueIndex('idx_product_aliases_shop')
-      .on(t.storyId, t.alias)
+      .on(t.storyId, nocase(t.alias))
       .where(sql`story_id IS NOT NULL`),
     uniqueIndex('idx_product_aliases_chain')
-      .on(t.retailChainId, t.alias)
+      .on(t.retailChainId, nocase(t.alias))
       .where(sql`retail_chain_id IS NOT NULL`),
     uniqueIndex('idx_product_aliases_global')
-      .on(t.alias)
+      .on(nocase(t.alias))
       .where(sql`story_id IS NULL AND retail_chain_id IS NULL`),
   ],
 );
@@ -155,7 +168,7 @@ export const comparisonGroups = sqliteTable(
       .references(() => units.id),
     createdAt: text('created_at').notNull(),
   },
-  (t) => [uniqueIndex('comparison_groups_name').on(t.name), index('idx_comparison_groups_unit').on(t.unitId)],
+  (t) => [uniqueIndex('comparison_groups_name').on(nocase(t.name)), index('idx_comparison_groups_unit').on(t.unitId)],
 );
 
 export const comparisonGroupProducts = sqliteTable(

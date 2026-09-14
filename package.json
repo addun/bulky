@@ -8,7 +8,8 @@
     "build": "nest build",
     "start": "node dist/main.js",
     "start:dev": "nest start --watch",
-    "seed": "node dist/seed/cli.js"
+    "seed": "node dist/seed/cli.js",
+    "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
     "@faker-js/faker": "9.9.0",
@@ -36,6 +37,7 @@
     "@types/hbs": "4.0.5",
     "@types/multer": "1.4.13",
     "@types/node": "24.13.4",
+    "drizzle-kit": "0.31.6",
     "typescript": "6.0.3"
   }
 }
