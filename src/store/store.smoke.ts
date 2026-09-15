@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { ConfigService } from '@nestjs/config';
 import Decimal from 'decimal.js';
 import { DatabaseService } from '../db/database.service';
-import { DuplicateError } from '../domain/errors';
+import { DuplicateError, NotFoundError } from '../domain/errors';
 import {
   AliasesRepository,
   ComparisonGroupsRepository,
@@ -79,6 +79,63 @@ function runStoreSmoke(): void {
     const receipt = store.receipts.createReceipt('bill.jpg');
     store.receipts.saveAIResponse(receipt.id, JSON.stringify({ bought_on: '2026-03-01' }));
     if (store.receipts.latestSourcedBoughtOn('ocr') !== '2026-03-01') throw new Error('json extract');
+    store.receipts.deleteReceipt(receipt.id);
+    try {
+      store.receipts.getReceipt(receipt.id);
+      throw new Error('deleted receipt should be gone');
+    } catch (err) {
+      if (!(err instanceof NotFoundError)) throw err;
+    }
+
+    const only = store.receipts.createReceipt('only.jpg');
+    store.receipts.saveAIResponse(only.id, '{}');
+    const onlyRes = store.receipts.migrateReceipt(only.id, {
+      storyId: story.id,
+      story: null,
+      receiptId: only.id,
+      boughtOn: '2026-04-01 12:00',
+      lines: [
+        {
+          productId: 0,
+          productName: 'Chleb',
+          receiptName: 'CHLEB',
+          unitId: kg.id,
+          quantity: new Decimal(1),
+          amount: new Decimal('4.50'),
+        },
+      ],
+    }, '{}');
+    const breadId = onlyRes.productIds[0]!;
+    store.receipts.deleteReceipt(only.id);
+    try {
+      store.products.getProduct(breadId);
+      throw new Error('orphan product should be gone');
+    } catch (err) {
+      if (!(err instanceof NotFoundError)) throw err;
+    }
+
+    const keep = store.receipts.createReceipt('keep.jpg');
+    store.receipts.saveAIResponse(keep.id, '{}');
+    store.receipts.migrateReceipt(keep.id, {
+      storyId: story.id,
+      story: null,
+      receiptId: keep.id,
+      boughtOn: '2026-04-02 12:00',
+      lines: [
+        {
+          productId: flour.id,
+          productName: 'Maka',
+          receiptName: 'MAKA',
+          unitId: kg.id,
+          quantity: new Decimal(1),
+          amount: new Decimal('5'),
+        },
+      ],
+    }, '{}');
+    if (store.purchases.listPurchases(flour.id).length !== 3) throw new Error('receipt purchase missing');
+    store.receipts.deleteReceipt(keep.id);
+    if (store.purchases.listPurchases(flour.id).length !== 2) throw new Error('shared product purchases');
+    store.products.getProduct(flour.id);
 
     try {
       store.units.createUnit('kg');

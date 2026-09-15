@@ -148,6 +148,31 @@ export class PurchasesRepository {
     if (n === 0) throw new NotFoundError();
   }
 
+  deleteByReceipt(receiptId: number): number[] {
+    const ids = [
+      ...new Set(
+        this.orm
+          .select({ productId: purchases.productId })
+          .from(purchases)
+          .where(eq(purchases.receiptId, receiptId))
+          .all()
+          .map((r) => r.productId),
+      ),
+    ];
+    this.orm.delete(purchases).where(eq(purchases.receiptId, receiptId)).run();
+    return ids;
+  }
+
+  hasPurchases(productId: number): boolean {
+    const row = this.orm
+      .select({ id: purchases.id })
+      .from(purchases)
+      .where(eq(purchases.productId, productId))
+      .limit(1)
+      .get();
+    return row != null;
+  }
+
   parsePurchaseKind(s: string): PurchaseKind {
     const k = s.trim();
     if (k === KIND_PURCHASE || k === KIND_PRICE) return k;

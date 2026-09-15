@@ -23,6 +23,9 @@
       </form>
       <p class="hint">Or upload a new photo from <a href="/admin/receipts">Receipts</a>.</p>
     {{/if}}
+    <p class="danger-zone">
+      <a class="danger" href="/admin/receipts/{{receipt.id}}/delete">Delete receipt</a>
+    </p>
   </div>
 </div>
 {{> footer}}

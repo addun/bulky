@@ -195,6 +195,21 @@ export class ReceiptsRepository {
     });
   }
 
+  deleteReceipt(id: number): { imagePath: string; productImages: string[] } {
+    return this.db.immediate(() => {
+      const r = this.getReceipt(id);
+      const productIds = this.purchases.deleteByReceipt(id);
+      const productImages: string[] = [];
+      for (const productId of productIds) {
+        if (this.purchases.hasPurchases(productId)) continue;
+        const img = this.products.deleteProduct(productId);
+        if (img) productImages.push(img);
+      }
+      this.orm.delete(receipts).where(eq(receipts.id, id)).run();
+      return { imagePath: r.imagePath, productImages };
+    });
+  }
+
   updateReceiptVisit(id: number, storyId: number | null, boughtOn: string): void {
     const story = this.locations.optionalStory(storyId);
     boughtOn = normalizeBoughtOn(boughtOn);

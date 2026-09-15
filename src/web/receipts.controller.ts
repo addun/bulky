@@ -47,6 +47,7 @@ import {
   decorateReceiptView,
   type ReceiptView,
 } from './receipt-form';
+import { ImagesService } from './images.service';
 import { ReceiptImagesService } from './receipt-images';
 import { ViewsService } from './views.service';
 import { field, flashQuery, formBody, id, optInt, receiptShowQuery, receiptVisitForm } from './schema';
@@ -64,6 +65,7 @@ export class ReceiptsController {
     private readonly ocr: OcrService,
     private readonly queue: OcrQueueService,
     private readonly images: ReceiptImagesService,
+    private readonly catalogImages: ImagesService,
   ) {}
 
   @Get()
@@ -282,6 +284,52 @@ export class ReceiptsController {
     }
     this.queue.enqueueOCR(receiptId);
     this.views.redirect(res, '/admin/receipts/' + String(receiptId));
+  }
+
+  @Get(':id/delete')
+  confirmDeleteReceipt(@Param('id', { schema: id }) receiptId: number, @Res() res: Response): void {
+    let receipt: Receipt;
+    try {
+      receipt = this.receiptsStore.getReceipt(receiptId);
+    } catch (err) {
+      if (err instanceof NotFoundError) {
+        this.views.text(res, 404, 'not found');
+        return;
+      }
+      this.views.text(res, 500, 'could not load the receipt');
+      return;
+    }
+    const body =
+      receipt.status === RECEIPT_MIGRATED
+        ? 'This removes the receipt and every purchase saved from this bill. Products with no other buys left are removed too.'
+        : 'This removes the scan and the stored photo. Nothing has been saved as purchases yet.';
+    this.views.html(res, 'confirm', 200, {
+      page: this.views.adminPage('Delete receipt', '', ''),
+      title: 'Delete this receipt?',
+      body,
+      action: `/admin/receipts/${receiptId}/delete`,
+      cancel: `/admin/receipts/${receiptId}`,
+      confirm: 'Delete receipt',
+    });
+  }
+
+  @Post(':id/delete')
+  async deleteReceipt(@Param('id', { schema: id }) receiptId: number, @Res() res: Response): Promise<void> {
+    let imagePath: string;
+    let productImages: string[];
+    try {
+      ({ imagePath, productImages } = this.receiptsStore.deleteReceipt(receiptId));
+    } catch (err) {
+      if (err instanceof NotFoundError) {
+        this.views.text(res, 404, 'not found');
+        return;
+      }
+      this.views.text(res, 500, 'could not delete the receipt');
+      return;
+    }
+    await this.images.deleteReceiptFiles(imagePath);
+    for (const img of productImages) this.catalogImages.deleteImage(img);
+    this.views.redirect(res, '/admin/receipts');
   }
 
   @Get(':id')
