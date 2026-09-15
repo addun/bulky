@@ -195,7 +195,7 @@ export class ReceiptsRepository {
     });
   }
 
-  deleteReceipt(id: number): { imagePath: string; productImages: string[] } {
+  deleteReceipt(id: number): { imagePath: string | null; productImages: string[] } {
     return this.db.immediate(() => {
       const r = this.getReceipt(id);
       const productIds = this.purchases.deleteByReceipt(id);

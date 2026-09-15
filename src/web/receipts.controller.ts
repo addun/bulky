@@ -315,7 +315,7 @@ export class ReceiptsController {
 
   @Post(':id/delete')
   async deleteReceipt(@Param('id', { schema: id }) receiptId: number, @Res() res: Response): Promise<void> {
-    let imagePath: string;
+    let imagePath: string | null;
     let productImages: string[];
     try {
       ({ imagePath, productImages } = this.receiptsStore.deleteReceipt(receiptId));
