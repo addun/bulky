@@ -69,6 +69,14 @@ export class OcrQueueService implements OnModuleInit {
       return;
     }
     if (receipt.status !== RECEIPT_PENDING) return;
+    if (!receipt.imagePath) {
+      try {
+        this.receipts.failReceipt(id, 'Could not read the stored bill.');
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
 
     let raw: Buffer;
     try {

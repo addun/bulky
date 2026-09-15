@@ -162,6 +162,7 @@ export class ComparisonGroupsRepository {
       .selectDistinct({
         id: products.id,
         name: products.name,
+        ean: products.ean,
         unitId: products.unitId,
         unitName: units.name,
         imagePath: products.imagePath,

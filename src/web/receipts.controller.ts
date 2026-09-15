@@ -130,7 +130,7 @@ export class ReceiptsController {
       return;
     }
     const path = this.images.receiptImagePath(receipt.imagePath);
-    if (!path || !this.images.previewExists(receipt.imagePath)) {
+    if (!receipt.imagePath || !path || !this.images.previewExists(receipt.imagePath)) {
       res.status(404).end();
       return;
     }
@@ -371,7 +371,7 @@ export class ReceiptsController {
     const get = (name: string) => field.parse(body[name]);
     let { inn, view, msg } = parseReceiptForm(get, products);
     view.receiptId = receiptId;
-    view.imagePath = receipt.imagePath;
+    view.imagePath = receipt.imagePath ?? '';
     view.status = receipt.status;
     view.storyId = knownStoryID(view.storyId, stories);
     inn.storyId = view.storyId;
@@ -609,7 +609,7 @@ function pickFormFile(
 function emptyReceipt(): Receipt {
   return {
     id: 0,
-    imagePath: '',
+    imagePath: null,
     rawResponse: '',
     status: '',
     errorMessage: '',

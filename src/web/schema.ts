@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { biedronkaImportReceipt } from '../imports/biedronka.schema';
 
 /** One HTML/query field: missing, scalar, or first of a repeated field, then trimmed. */
 const field = z.preprocess((v) => {
@@ -167,6 +168,7 @@ export const comparisonGroupForm = z.object({
 export const productFields = z.object({
   name: field,
   unit_id: optInt,
+  ean: field,
   group_id: ids,
   clear_image: field,
   extra_unit_id: strs,
@@ -178,6 +180,7 @@ export const productForm = z.object({
   unit_id: field
     .transform((s) => Number.parseInt(s, 10))
     .pipe(z.number().int().positive('Choose a unit.')),
+  ean: field,
   group_id: ids,
   clear_image: field,
   extra_unit_id: strs,
@@ -238,7 +241,16 @@ export const biedronkaImportBody = z.object({
   store_name: field,
   receipt_num: field,
   total_price: z.coerce.number().catch(0),
-  receipt: z.unknown().optional(),
+  receipt: z.preprocess((v) => {
+    if (typeof v !== 'string') return v;
+    const s = v.trim();
+    if (s === '') return v;
+    try {
+      return JSON.parse(s);
+    } catch {
+      return v;
+    }
+  }, biedronkaImportReceipt),
 });
 
 export const biedronkaTokenBody = z

@@ -90,6 +90,13 @@ function runStoreSmoke(): void {
     const listed = store.units.listUnits();
     const kgRow = listed.find((u) => u.name === 'kg');
     if (!kgRow || kgRow.productCount < 1) throw new Error('unit use count');
+
+    const milk = store.products.insertImported('Mleko', kg.id, '5900000000001');
+    if (milk.ean !== '5900000000001') throw new Error('imported ean');
+    store.products.applyImportedEan(milk.id, '5900000000002');
+    if (store.products.getProduct(milk.id).ean !== '5900000000002') throw new Error('update ean');
+    store.products.applyImportedEan(milk.id, '');
+    if (store.products.getProduct(milk.id).ean !== '5900000000002') throw new Error('empty ean must not clear');
   } finally {
     db.onModuleDestroy();
     rmSync(dir, { recursive: true, force: true });

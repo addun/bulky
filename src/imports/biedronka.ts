@@ -1,28 +1,94 @@
 import Decimal from 'decimal.js';
-import { parseBill } from './parse';
-import { emptyBill, NoLinesError, productLines, type Bill, type Line } from './types';
+import { parseBill } from '../ocr/parse';
+import { emptyBill, NoLinesError, productLines, type Bill, type Line } from '../ocr/types';
+import {
+  biedronkaReceipt,
+  type BiedronkaReceipt,
+  type BiedronkaReceiptItem,
+  type BiedronkaTx,
+} from './biedronka.schema';
 
-export type Tx = {
-  id: string;
-  Date: string;
-  StoreName: string;
-  ReceiptNum: string;
-  TotalPrice: number;
-};
+export type { BiedronkaTx };
 
 const shopNumber = /\d{3,5}/;
 
-export function billFromBiedronka(raw: Buffer | string, tx: Tx): Bill {
-  const lines = extractBiedronkaLines(typeof raw === 'string' ? Buffer.from(raw) : raw);
-  if (lines.length === 0) throw new NoLinesError();
-  const scale = moneyScale(lines, tx.TotalPrice);
+export function billFromBiedronka(raw: unknown, tx: BiedronkaTx): Bill {
+  const payload = decodePayload(raw);
+  const details = biedronkaReceipt.safeParse(payload);
+  if (details.success) return billFromDetails(details.data, tx);
+  if (payload && typeof payload === 'object' && !Array.isArray(payload) && 'receipt' in payload) {
+    const nested = biedronkaReceipt.safeParse((payload as { receipt: unknown }).receipt);
+    if (nested.success) return billFromDetails(nested.data, tx);
+  }
+  return billFromTill(payload, tx);
+}
+
+function billFromDetails(receipt: BiedronkaReceipt, tx: BiedronkaTx): Bill {
   const bill = emptyBill();
-  bill.boughtOn = tx.Date.trim();
-  bill.storyName = tx.StoreName.trim();
+  bill.boughtOn = tx.date.trim() || receipt.date;
+  bill.storyName = biedronkaStoreName(tx.store_name || receipt.store_name, receipt.store);
+  bill.externalId = receipt.store_id.trim();
+  if (bill.externalId === '') {
+    const n = shopNumber.exec(tx.store_name || receipt.store_name);
+    if (n) bill.externalId = n[0]!;
+  }
+  bill.streetName = receipt.store.street;
+  bill.postalCode = receipt.store.zip_code;
+  bill.city = receipt.store.city;
+  const num = (tx.receipt_num || receipt.receipt_num).trim();
+  if (num !== '') bill.notes = 'Receipt ' + num;
+  for (const item of receipt.items) {
+    const line = lineFromDetailsItem(item);
+    if (!line) continue;
+    bill.lines.push(line);
+  }
+  if (productLines(bill).length === 0) throw new NoLinesError();
+  return parseBill(Buffer.from(JSON.stringify(toLooseJSON(bill))));
+}
+
+function biedronkaStoreName(listed: string, store: { street: string; city: string }): string {
+  const raw = listed.trim();
+  if (raw === '') return 'Biedronka';
+  const street = store.street.trim();
+  const city = store.city.trim();
+  if (street !== '' && raw.includes(street)) return 'Biedronka';
+  if (city !== '' && raw.includes(city) && /(?:^|[\s,])(ul\.|ulica|al\.|aleja|pl\.)/i.test(raw)) return 'Biedronka';
+  return raw;
+}
+
+function lineFromDetailsItem(item: BiedronkaReceiptItem): Line | null {
+  const receiptName = item.name.trim();
+  if (receiptName === '') return null;
+  return {
+    receiptName,
+    productName: '',
+    productId: 0,
+    unitId: 0,
+    unitName: item.measure_unit,
+    vatType: item.vat_fiscal_code,
+    packageCount: '',
+    packageSize: '',
+    quantity: formatQty(item.quantity),
+    unitPrice: formatMoney(item.unit_price),
+    discount: item.total_discount === 0 ? '' : formatMoney(item.total_discount),
+    amount: formatMoney(item.total_price),
+    skip: false,
+    skipReason: '',
+    ean: item.ean.trim(),
+  };
+}
+
+function billFromTill(payload: unknown, tx: BiedronkaTx): Bill {
+  const lines = walkBiedronkaLines(payload);
+  if (lines.length === 0) throw new NoLinesError();
+  const scale = moneyScale(lines, tx.total_price);
+  const bill = emptyBill();
+  bill.boughtOn = tx.date.trim();
+  bill.storyName = tx.store_name.trim();
   if (bill.storyName === '') bill.storyName = 'Biedronka';
   const n = shopNumber.exec(bill.storyName);
   if (n) bill.externalId = n[0]!;
-  const num = tx.ReceiptNum.trim();
+  const num = tx.receipt_num.trim();
   if (num !== '') bill.notes = 'Receipt ' + num;
   let current = -1;
   for (const item of lines) {
@@ -47,6 +113,7 @@ export function billFromBiedronka(raw: Buffer | string, tx: Tx): Bill {
         amount: formatMoney(asFloat(sell.total) / scale),
         skip: false,
         skipReason: '',
+        ean: asString(sell.ean),
       };
       if (line.receiptName === '') continue;
       bill.lines.push(line);
@@ -95,20 +162,23 @@ function toLooseJSON(bill: Bill): unknown {
       amount: line.amount,
       skip: line.skip,
       skip_reason: line.skipReason,
+      ean: line.ean,
     })),
   };
 }
 
-function extractBiedronkaLines(raw: Buffer): Record<string, unknown>[] {
-  const text = raw.toString('utf8').trim();
-  if (text === '') return [];
-  let payload: unknown;
-  try {
-    payload = JSON.parse(text);
-  } catch {
-    return [];
+function decodePayload(raw: unknown): unknown {
+  if (raw == null) return null;
+  if (typeof raw === 'string' || Buffer.isBuffer(raw)) {
+    const text = (typeof raw === 'string' ? raw : raw.toString('utf8')).trim();
+    if (text === '') return null;
+    try {
+      return JSON.parse(text);
+    } catch {
+      return null;
+    }
   }
-  return walkBiedronkaLines(payload);
+  return raw;
 }
 
 function walkBiedronkaLines(payload: unknown): Record<string, unknown>[] {
@@ -229,16 +299,3 @@ function formatQty(v: number): string {
   return d.toString();
 }
 
-export function billSlipText(bill: Bill, tx: Tx): string {
-  let out = 'Biedronka e-receipt\n';
-  if (tx.StoreName !== '') out += tx.StoreName + '\n';
-  if (tx.Date !== '') out += tx.Date + '\n';
-  if (tx.ReceiptNum !== '') out += `Receipt ${tx.ReceiptNum}\n`;
-  out += '\n';
-  for (const line of productLines(bill)) {
-    let name = line.receiptName;
-    if (name === '') name = line.productName;
-    out += `${name}  ${line.quantity} x ${line.unitPrice}  ${line.amount}\n`;
-  }
-  return out;
-}

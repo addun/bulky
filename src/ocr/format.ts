@@ -1,6 +1,6 @@
 import { sniffImage } from './image';
 import { prepareJPEG } from './image';
-import { previewPDF, renderTextSlip } from './pdf';
+import { previewPDF } from './pdf';
 import { MaxImageBytes, NoImageError } from './types';
 
 export const fileUnknown = 0;
@@ -31,8 +31,4 @@ export async function previewJPEG(raw: Buffer): Promise<Buffer> {
     default:
       throw new Error('file must be jpeg, png, webp, gif, or pdf');
   }
-}
-
-export async function previewText(text: string): Promise<Buffer> {
-  return renderTextSlip(text);
 }

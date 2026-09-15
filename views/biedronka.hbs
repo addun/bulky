@@ -1,6 +1,6 @@
 {{> header}}
 <h1>Biedronka</h1>
-<p class="lede">Sign in with Moja Biedronka, pull bills since a date, then import them as receipts to confirm. Already imported bills are skipped. Tokens stay in this page, not in the database.</p>
+<p class="lede">Sign in with Moja Biedronka, pull bills since a date, then import them as saved purchases. Open a receipt to change products or the visit. Already imported bills are skipped. Tokens stay in this page, not in the database.</p>
 <div id="biedronka-imported" hidden data-payload="{{importedJSON}}"></div>
 
 <div id="biedronka-signed-out">
@@ -42,7 +42,7 @@
   </label>
   <label class="check">
     <input id="biedronka-receipts" type="checkbox" checked>
-    Also download e-receipt lines (or transaction details when there is no e-receipt)
+    Also download receipt lines (always try e-receipt first, then transaction details)
   </label>
   <div class="form-actions">
     <button type="submit" class="btn btn-tag" id="biedronka-fetch">Fetch bills</button>

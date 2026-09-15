@@ -28,6 +28,7 @@ export const products = sqliteTable(
   {
     id: integer('id').primaryKey(),
     name: text('name').notNull(),
+    ean: text('ean').notNull().default(''),
     unitId: integer('unit_id')
       .notNull()
       .references(() => units.id),

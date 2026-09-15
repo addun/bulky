@@ -58,7 +58,13 @@ export class ProductsRepository {
     return p;
   }
 
-  createProduct(name: string, unitId: number, image: string | null, conversions: ProductConversion[] = []): Product {
+  createProduct(
+    name: string,
+    unitId: number,
+    image: string | null,
+    conversions: ProductConversion[] = [],
+    ean = '',
+  ): Product {
     try {
       this.units.getUnit(unitId);
     } catch (err) {
@@ -70,7 +76,7 @@ export class ProductsRepository {
       const pid = lastId(
         this.orm
           .insert(products)
-          .values({ name, unitId, imagePath: image, createdAt: nowRFC3339() })
+          .values({ name, unitId, imagePath: image, createdAt: nowRFC3339(), ean: normalizeEan(ean) })
           .run(),
       );
       this.setProductConversions(pid, unitId, conversions);
@@ -86,6 +92,7 @@ export class ProductsRepository {
     imagePathVal: string | null,
     clearImage: boolean,
     conversions?: ProductConversion[],
+    ean?: string,
   ): void {
     try {
       this.units.getUnit(unitId);
@@ -101,9 +108,13 @@ export class ProductsRepository {
     else if (imagePathVal !== null) path = imagePathVal;
     else path = cur.imagePath;
     this.db.immediate(() => {
-      const n = changesOf(
-        this.orm.update(products).set({ name, unitId, imagePath: path }).where(eq(products.id, id)).run(),
-      );
+      const patch: { name: string; unitId: number; imagePath: string | null; ean?: string } = {
+        name,
+        unitId,
+        imagePath: path,
+      };
+      if (ean !== undefined) patch.ean = normalizeEan(ean);
+      const n = changesOf(this.orm.update(products).set(patch).where(eq(products.id, id)).run());
       if (n === 0) throw new NotFoundError();
       if (conversions) this.setProductConversions(id, unitId, conversions);
     });
@@ -166,6 +177,9 @@ export class ProductsRepository {
       this.aliases.reassignProduct(from.id, into.id, into.name);
       this.groups.reassignProduct(from.id, into.id);
       const dropImage = this.handOffImage(into, from);
+      if (!into.ean && from.ean) {
+        this.orm.update(products).set({ ean: from.ean }).where(eq(products.id, into.id)).run();
+      }
       this.orm.delete(products).where(eq(products.id, from.id)).run();
       this.maybeAliasDroppedName(into.id, into.name, from.name);
       return { keeper: this.getProduct(into.id), dropImage };
@@ -193,7 +207,7 @@ export class ProductsRepository {
     return mapProduct(row);
   }
 
-  insertImported(name: string, unitId: number): Product {
+  insertImported(name: string, unitId: number, ean = ''): Product {
     const n = this.orm.select({ n: count() }).from(units).where(eq(units.id, unitId)).get();
     if (countOf(n?.n) === 0) throw new InvalidUnitError();
     const aliasCount = this.orm
@@ -205,10 +219,17 @@ export class ProductsRepository {
     const id = lastId(
       this.orm
         .insert(products)
-        .values({ name, unitId, imagePath: null, createdAt: nowRFC3339() })
+        .values({ name, unitId, imagePath: null, createdAt: nowRFC3339(), ean: normalizeEan(ean) })
         .run(),
     );
     return this.getProductRow(id);
+  }
+
+  /** Fill or replace EAN from a trusted import. Empty incoming values do not clear an existing code. */
+  applyImportedEan(id: number, ean: string): void {
+    const next = normalizeEan(ean);
+    if (next === '') return;
+    this.orm.update(products).set({ ean: next }).where(eq(products.id, id)).run();
   }
 
   findProductByName(name: string, storyId: number | null): Product {
@@ -251,6 +272,7 @@ export class ProductsRepository {
       .select({
         id: products.id,
         name: products.name,
+        ean: products.ean,
         unitId: products.unitId,
         unitName: units.name,
         imagePath: products.imagePath,
@@ -389,6 +411,7 @@ export class ProductsRepository {
       .select({
         id: products.id,
         name: products.name,
+        ean: products.ean,
         unitId: products.unitId,
         unitName: units.name,
         imagePath: products.imagePath,
@@ -402,6 +425,7 @@ export class ProductsRepository {
     return {
       id: it.id,
       name: it.name,
+      ean: it.ean,
       unitId: it.unitId,
       unitName: it.unitName,
       imagePath: it.imagePath,
@@ -473,4 +497,8 @@ export class ProductsRepository {
       if (existing && !existing.factor.eq(c.factor)) throw new ConversionConflictError(c.unitName);
     }
   }
+}
+
+function normalizeEan(raw: string | undefined): string {
+  return (raw ?? '').trim();
 }

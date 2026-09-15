@@ -1,11 +1,15 @@
-import { Controller, Get, Param, Post, Query, Req, Res } from '@nestjs/common';
+import { Controller, Get, Logger, Param, Post, Query, Req, Res } from '@nestjs/common';
 import type { Request, Response } from 'express';
-import { DuplicateError } from '../domain/errors';
-import { billFromBiedronka, billSlipText, type Tx } from '../ocr/biedronka';
-import { previewJPEG, previewText } from '../ocr/format';
+import { DuplicateError, InvalidStoryError, InvalidUnitError } from '../domain/errors';
+import { billFromBiedronka, type BiedronkaTx } from '../imports/biedronka';
+import { biedronkaReceipt } from '../imports/biedronka.schema';
 import { marshalBill } from '../ocr/types';
+import { AliasesRepository } from '@app/store/aliases';
+import { LocationsRepository } from '@app/store/locations';
+import { ProductsRepository } from '@app/store/products';
 import { RECEIPT_SOURCE_BIEDRONKA, ReceiptsRepository } from '@app/store/receipts';
-import { ReceiptImagesService } from './receipt-images';
+import { UnitsRepository } from '@app/store/units';
+import { billToImport, hydrateBill, matchStory, storyChainID } from './receipt-form';
 import { ViewsService } from './views.service';
 import { biedronkaFormatQuery, biedronkaImportBody, biedronkaPageQuery, biedronkaTokenBody, biedronkaTxId, formIssue } from './schema';
 
@@ -20,13 +24,17 @@ const biedronkaMaxBody = 5 << 20;
 
 @Controller()
 export class BiedronkaController {
+  private readonly log = new Logger('Biedronka');
   private readonly biedronkaAPI = biedronkaAPIBase;
   private readonly biedronkaAuth = biedronkaTokenURL;
 
   constructor(
     private readonly receipts: ReceiptsRepository,
     private readonly views: ViewsService,
-    private readonly images: ReceiptImagesService,
+    private readonly products: ProductsRepository,
+    private readonly aliases: AliasesRepository,
+    private readonly locations: LocationsRepository,
+    private readonly units: UnitsRepository,
   ) {}
 
   @Get('imports/biedronka')
@@ -50,7 +58,7 @@ export class BiedronkaController {
   }
 
   @Post('api/biedronka/import')
-  async biedronkaImport(@Req() req: Request, @Res() res: Response): Promise<void> {
+  biedronkaImport(@Req() req: Request, @Res() res: Response): void {
     const auth = String(req.headers.authorization ?? '').trim();
     if (auth === '') {
       res.status(401).json({ error: 'missing token' });
@@ -64,67 +72,96 @@ export class BiedronkaController {
     }
     const body = parsed.data;
     const id = body.id;
-    const receiptJSON = receiptPayload(body.receipt);
-    if (receiptJSON.length === 0 || receiptJSON.toString('utf8') === 'null') {
-      res.status(400).json({ error: 'missing e-receipt' });
-      return;
-    }
-    const tx: Tx = {
-      id: id,
-      Date: body.date,
-      StoreName: body.store_name,
-      ReceiptNum: body.receipt_num,
-      TotalPrice: body.total_price,
+    const tx: BiedronkaTx = {
+      id,
+      date: body.date,
+      store_name: body.store_name,
+      receipt_num: body.receipt_num,
+      total_price: body.total_price,
     };
+    const receiptJSON = receiptPayload(body.receipt);
+    const kind = receiptKind(body.receipt);
+    this.log.log(`import ${id}: ${tx.date} ${tx.store_name} ${tx.total_price} kind=${kind}`);
     let bill;
     try {
-      bill = billFromBiedronka(receiptJSON, tx);
+      bill = billFromBiedronka(body.receipt, tx);
     } catch (err) {
-      res.status(422).json({ error: err instanceof Error ? err.message : String(err), id });
+      const msg = err instanceof Error ? err.message : String(err);
+      this.log.warn(`import ${id}: bill failed (${kind}): ${msg}`);
+      res.status(422).json({ error: msg, id });
+      return;
+    }
+    this.log.log(`import ${id}: ${bill.lines.length} lines`);
+    try {
+      const products = this.products.listProducts('');
+      const stories = this.locations.listStories();
+      const aliases = this.aliases.listAliases();
+      const defaults = this.units.unitDefaults();
+      if (bill.storyId === 0) bill.storyId = matchStory(bill, stories);
+      bill = hydrateBill(bill, products, aliases, storyChainID(bill.storyId, stories), defaults.pieceId, defaults.weightId);
+    } catch (err) {
+      this.log.warn(`import ${id}: catalog failed: ${err instanceof Error ? err.message : String(err)}`);
+      res.status(500).json({ error: 'could not load the catalog', id });
+      return;
+    }
+    let inn;
+    try {
+      inn = billToImport(bill);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.log.warn(`import ${id}: import lines failed: ${msg}`);
+      res.status(422).json({ error: msg, id });
+      return;
+    }
+    if (inn.lines.length === 0) {
+      this.log.warn(`import ${id}: no product lines`);
+      res.status(422).json({ error: 'no products found on this bill', id });
       return;
     }
     let rawJSON: string;
     try {
       rawJSON = marshalBill(bill);
     } catch {
+      this.log.warn(`import ${id}: could not marshal bill`);
       res.status(500).json({ error: 'could not save the bill' });
-      return;
-    }
-    const pdf = await this.fetchBiedronkaPDF(req, id, auth);
-    let jpeg: Buffer;
-    let src: Buffer;
-    try {
-      ({ jpeg, src } = await biedronkaPreview(pdf, bill, tx));
-    } catch {
-      res.status(422).json({ error: 'could not make a receipt image', id });
-      return;
-    }
-    let imagePath: string;
-    try {
-      imagePath = await this.images.saveReceiptFiles(src, jpeg);
-    } catch {
-      res.status(500).json({ error: 'could not store the bill' });
       return;
     }
     let receipt;
+    let purchases = 0;
     try {
-      receipt = this.receipts.createSourcedReceipt(imagePath, RECEIPT_SOURCE_BIEDRONKA, id, receiptJSON.toString('utf8'));
+      const out = this.receipts.importTrustedReceipt(
+        null,
+        RECEIPT_SOURCE_BIEDRONKA,
+        id,
+        receiptJSON.toString('utf8'),
+        inn,
+        rawJSON,
+      );
+      receipt = out.receipt;
+      purchases = out.result.purchases;
     } catch (err) {
-      await this.images.deleteReceiptFiles(imagePath);
       if (err instanceof DuplicateError) {
+        this.log.log(`import ${id}: skipped duplicate`);
         res.status(200).json({ status: 'skipped', id });
         return;
       }
+      const msg = err instanceof Error ? err.message : String(err);
+      if (err instanceof InvalidUnitError) {
+        this.log.warn(`import ${id}: missing unit defaults`);
+        res.status(422).json({ error: 'Set piece and weight units under Settings, then import again.', id });
+        return;
+      }
+      if (err instanceof InvalidStoryError) {
+        this.log.warn(`import ${id}: store failed: ${msg}`);
+        res.status(422).json({ error: 'could not save the store', id });
+        return;
+      }
+      this.log.warn(`import ${id}: could not save the receipt: ${msg}`);
       res.status(500).json({ error: 'could not save the receipt' });
       return;
     }
-    try {
-      this.receipts.saveAIResponse(receipt.id, rawJSON);
-    } catch {
-      res.status(500).json({ error: 'could not save the bill' });
-      return;
-    }
-    res.status(200).json({ status: 'imported', id, receipt_id: receipt.id });
+    this.log.log(`import ${id}: imported receipt_id=${receipt.id} purchases=${purchases}`);
+    res.status(200).json({ status: 'imported', id, receipt_id: receipt.id, purchases });
   }
 
   @Get('api/biedronka/transactions')
@@ -215,24 +252,6 @@ export class BiedronkaController {
     return { ids, since };
   }
 
-  private async fetchBiedronkaPDF(req: Request, id: string, auth: string): Promise<Buffer> {
-    try {
-      const { status, payload } = await this.biedronkaDo(
-        req,
-        'GET',
-        this.biedronkaAPIURL('transactions/' + id + '/e-receipt/'),
-        null,
-        { 'output-format': 'pdf', Accept: 'application/pdf' },
-        null,
-        auth,
-      );
-      if (status < 200 || status >= 300) return Buffer.alloc(0);
-      return payload;
-    } catch {
-      return Buffer.alloc(0);
-    }
-  }
-
   private async proxyBiedronka(
     req: Request,
     res: Response,
@@ -244,6 +263,7 @@ export class BiedronkaController {
   ): Promise<void> {
     let auth = String(req.headers.authorization ?? '').trim();
     if (method !== 'POST' && auth === '') {
+      this.log.warn(`proxy ${method} ${rawURL}: missing token`);
       res.status(401).json({ error: 'missing token' });
       return;
     }
@@ -251,7 +271,8 @@ export class BiedronkaController {
     try {
       const { status, contentType, payload } = await this.biedronkaDo(req, method, rawURL, query, extra, body, auth);
       res.status(status).type(contentType).send(payload);
-    } catch {
+    } catch (err) {
+      this.log.warn(`proxy ${method} ${rawURL} failed: ${err instanceof Error ? err.message : String(err)}`);
       res.status(502).json({ error: 'could not reach Biedronka' });
     }
   }
@@ -287,6 +308,10 @@ export class BiedronkaController {
     if (payload.length > biedronkaMaxBody) throw new Error('response too large');
     let ct = resp.headers.get('content-type') ?? '';
     if (ct === '') ct = 'application/json';
+    const format = extra?.['output-format'];
+    this.log.log(
+      `${method} ${parsed.pathname}${parsed.search}${format ? ` format=${format}` : ''} -> ${resp.status} ${payload.length}B`,
+    );
     return { status: resp.status, contentType: ct, payload };
   }
 
@@ -299,6 +324,12 @@ export class BiedronkaController {
   private biedronkaAuthURL(): string {
     return this.biedronkaAuth || biedronkaTokenURL;
   }
+}
+
+function receiptKind(receipt: unknown): string {
+  if (biedronkaReceipt.safeParse(receipt).success) return 'details';
+  if (Array.isArray(receipt)) return 'till';
+  return 'other';
 }
 
 function receiptPayload(receipt: unknown): Buffer {
@@ -337,22 +368,5 @@ function biedronkaCodeFromRedirect(raw: string): string | null {
   } catch {
     return null;
   }
-}
-
-async function biedronkaPreview(
-  pdf: Buffer,
-  bill: ReturnType<typeof billFromBiedronka>,
-  tx: Tx,
-): Promise<{ jpeg: Buffer; src: Buffer }> {
-  if (pdf.length > 0) {
-    try {
-      const jpeg = await previewJPEG(pdf);
-      return { jpeg, src: pdf };
-    } catch {
-      /* fall through */
-    }
-  }
-  const jpeg = await previewText(billSlipText(bill, tx));
-  return { jpeg, src: jpeg };
 }
 

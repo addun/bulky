@@ -959,7 +959,14 @@ export class CatalogController {
     const unitID = fields.unit_id;
     const groupIDs = fields.group_id;
     const { convs, msg: convMsg } = parseExtraUnits(fields, unitID);
-    const draft: Product = { ...emptyProduct(), id: productId, name: name, unitId: unitID, conversions: convs };
+    const draft: Product = {
+      ...emptyProduct(),
+      id: productId,
+      name: name,
+      unitId: unitID,
+      ean: fields.ean,
+      conversions: convs,
+    };
     try {
       const u = this.unitsStore.getUnit(unitID);
       draft.unitName = u.name;
@@ -993,13 +1000,21 @@ export class CatalogController {
     const clearImage = fields.clear_image === '1';
     try {
       if (productId === 0) {
-        const p = this.products.createProduct(parsed.data.name, parsed.data.unit_id, imgName || null, convs);
+        const p = this.products.createProduct(parsed.data.name, parsed.data.unit_id, imgName || null, convs, parsed.data.ean);
         this.groups.setProductComparisonGroups(p.id, groupIDs);
         this.views.redirect(res, '/admin/products/' + p.id);
         return;
       }
       const cur = this.products.getProduct(productId);
-      this.products.updateProduct(productId, parsed.data.name, cur.unitId, imgName || null, clearImage && imgName === '', convs);
+      this.products.updateProduct(
+        productId,
+        parsed.data.name,
+        cur.unitId,
+        imgName || null,
+        clearImage && imgName === '',
+        convs,
+        parsed.data.ean,
+      );
       this.groups.setProductComparisonGroups(productId, groupIDs);
       if (imgName && cur.imagePath) this.images.deleteImage(cur.imagePath);
       if (clearImage && imgName === '' && cur.imagePath) this.images.deleteImage(cur.imagePath);
@@ -1529,7 +1544,7 @@ function emptyAlias(): ProductAlias {
 }
 
 function emptyProduct(): Product {
-  return { id: 0, name: '', unitId: 0, unitName: '', imagePath: null, createdAt: '', conversions: [] };
+  return { id: 0, name: '', ean: '', unitId: 0, unitName: '', imagePath: null, createdAt: '', conversions: [] };
 }
 
 function parseExtraUnits(body: ProductFields, purchaseUnitID: number): { convs: ProductConversion[]; msg: string } {

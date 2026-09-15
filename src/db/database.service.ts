@@ -97,6 +97,7 @@ export class DatabaseService implements OnModuleDestroy {
     this.addColumnIfMissing('receipts', 'source', `TEXT NOT NULL DEFAULT ''`);
     this.addColumnIfMissing('receipts', 'external_id', `TEXT NOT NULL DEFAULT ''`);
     this.addColumnIfMissing('receipts', 'source_payload', `TEXT NOT NULL DEFAULT ''`);
+    this.addColumnIfMissing('products', 'ean', `TEXT NOT NULL DEFAULT ''`);
     this.sqlite.exec(
       `CREATE UNIQUE INDEX IF NOT EXISTS idx_receipts_source_external
        ON receipts(source, external_id)

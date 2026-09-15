@@ -7,6 +7,7 @@
   {{/if}}
   <div>
     <h1>{{product.name}}</h1>
+    {{#if product.ean}}<p class="meta">EAN {{product.ean}}</p>{{/if}}
     <p class="product-actions">
       <a class="btn btn-tag" href="/admin/products/{{product.id}}/purchases/new">Add</a>
       <a href="/admin/products/{{product.id}}/edit">Edit</a>

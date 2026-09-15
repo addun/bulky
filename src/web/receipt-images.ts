@@ -34,17 +34,17 @@ export class ReceiptImagesService {
     return name;
   }
 
-  receiptImagePath(id: string): string | null {
-    if (!receiptImageID.test(id)) return null;
+  receiptImagePath(id: string | null): string | null {
+    if (!id || !receiptImageID.test(id)) return null;
     return join(this.receiptImageDir(), id + '.jpg');
   }
 
-  receiptSourcePath(id: string): string | null {
-    if (!receiptImageID.test(id)) return null;
+  receiptSourcePath(id: string | null): string | null {
+    if (!id || !receiptImageID.test(id)) return null;
     return join(this.receiptImageDir(), id + '.bin');
   }
 
-  async loadReceiptSource(id: string): Promise<Buffer> {
+  async loadReceiptSource(id: string | null): Promise<Buffer> {
     const path = this.receiptSourcePath(id);
     if (!path) {
       const err = new Error('ENOENT');
@@ -54,7 +54,7 @@ export class ReceiptImagesService {
     return readFile(path);
   }
 
-  async deleteReceiptFiles(id: string): Promise<void> {
+  async deleteReceiptFiles(id: string | null): Promise<void> {
     const img = this.receiptImagePath(id);
     if (img) {
       try {
@@ -73,7 +73,7 @@ export class ReceiptImagesService {
     }
   }
 
-  previewExists(id: string): boolean {
+  previewExists(id: string | null): boolean {
     const path = this.receiptImagePath(id);
     return path !== null && existsSync(path);
   }

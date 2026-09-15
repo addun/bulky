@@ -95,6 +95,7 @@ export type Line = {
   amount: string;
   skip: boolean;
   skipReason: string;
+  ean: string;
 };
 
 export function emptyBill(): Bill {
@@ -131,6 +132,7 @@ export function emptyLine(): Line {
     amount: '',
     skip: false,
     skipReason: '',
+    ean: '',
   };
 }
 
@@ -174,5 +176,6 @@ function marshalLine(line: Line): Record<string, unknown> {
   if (line.vatType !== '') raw.vat_type = line.vatType;
   if (line.unitPrice !== '') raw.unit_price = line.unitPrice;
   if (line.discount !== '') raw.discount = line.discount;
+  if (line.ean !== '') raw.ean = line.ean;
   return raw;
 }

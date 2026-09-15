@@ -16,11 +16,11 @@ Open **Receipts**, take a photo or choose a file (jpeg, png, webp, gif, or pdf, 
 
 ## Moja Biedronka
 
-Open `/imports/biedronka` (also linked from Receipts). Sign in with phone, captcha, and SMS, paste the `app://` redirect, fetch bills since a date, then **Import into receipts**. Each imported e-paragon lands as **To confirm** — the same confirm screen as a scanned bill. Lines come from the till JSON; the preview is the e-receipt PDF (or a text slip if the PDF is missing). Purchases are not created until you confirm.
+Open `/imports/biedronka` (also linked from Receipts). Sign in with phone, captcha, and SMS, paste the `app://` redirect, fetch bills since a date, then **Import into receipts**. Each imported e-paragon is saved as purchases immediately — there is no confirm step. Known till names match aliases and the catalog; new names become products (using the piece/weight units from Settings). Open the saved receipt to change products or the visit. API imports do not store a preview image.
 
 Bulkly stores the Biedronka transaction id on the receipt and skips ids it already has. **Since** defaults to the newest imported bill’s date so a later visit can pick up same-day shops. Loyalty tokens stay in the browser tab.
 
-The list shows each scan as reading, to confirm, failed, or saved. Open a scan to see its status. Failed scans can be sent back to the reader with **Read again**, or you can photograph or upload the bill again.
+Photo scans still show as reading, to confirm, failed, or saved. Open a scan to see its status. Failed scans can be sent back to the reader with **Read again**, or you can photograph or upload the bill again.
 
 The reader is for a receipt, invoice, or till bill. A photo that is not a bill, or one where no product lines can be read, is rejected. Cropped, blurry, or unreadable totals may still produce a list, with a warning on the confirm screen.
 

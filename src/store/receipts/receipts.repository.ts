@@ -47,7 +47,12 @@ export class ReceiptsRepository {
     return this.createSourcedReceiptInner(imagePathVal, RECEIPT_SOURCE_OCR, '', '');
   }
 
-  createSourcedReceipt(imagePathVal: string, source: string, externalId: string, payload: string): Receipt {
+  createSourcedReceipt(
+    imagePathVal: string | null,
+    source: string,
+    externalId: string,
+    payload: string,
+  ): Receipt {
     return this.createSourcedReceiptInner(imagePathVal, source, externalId, payload);
   }
 
@@ -84,7 +89,7 @@ export class ReceiptsRepository {
   getReceipt(id: number): Receipt {
     const row = this.orm.select().from(receipts).where(eq(receipts.id, id)).get();
     if (!row) throw new NotFoundError();
-    return row;
+    return mapReceipt(row);
   }
 
   listReceipts(): Receipt[] {
@@ -99,13 +104,15 @@ export class ReceiptsRepository {
       .from(receipts)
       .orderBy(desc(receipts.id))
       .all()
-      .map((r) => ({
-        ...r,
-        rawResponse: '',
-        source: '',
-        externalId: '',
-        sourcePayload: '',
-      }));
+      .map((r) =>
+        mapReceipt({
+          ...r,
+          rawResponse: '',
+          source: '',
+          externalId: '',
+          sourcePayload: '',
+        }),
+      );
   }
 
   listPendingReceiptIDs(): number[] {
@@ -203,19 +210,49 @@ export class ReceiptsRepository {
     });
   }
 
+  importTrustedReceipt(
+    imagePathVal: string | null,
+    source: string,
+    externalId: string,
+    payload: string,
+    inn: BillImport,
+    rawJSON: string,
+  ): { receipt: Receipt; result: BillImportResult } {
+    return this.db.immediate(() => {
+      const receipt = this.createSourcedReceiptInner(
+        imagePathVal,
+        source,
+        externalId,
+        payload,
+        RECEIPT_MIGRATED,
+        rawJSON,
+      );
+      inn.receiptId = receipt.id;
+      const result = this.applyBill(inn);
+      return { receipt, result };
+    });
+  }
+
   importBill(inn: BillImport): BillImportResult {
     return this.db.immediate(() => this.applyBill(inn));
   }
 
-  private createSourcedReceiptInner(imagePathVal: string, source: string, externalId: string, payload: string): Receipt {
+  private createSourcedReceiptInner(
+    imagePathVal: string | null,
+    source: string,
+    externalId: string,
+    payload: string,
+    status = RECEIPT_PENDING,
+    rawJSON = '',
+  ): Receipt {
     try {
       const id = lastId(
         this.orm
           .insert(receipts)
           .values({
-            imagePath: imagePathVal.trim(),
-            rawResponse: '',
-            status: RECEIPT_PENDING,
+            imagePath: (imagePathVal ?? '').trim(),
+            rawResponse: rawJSON,
+            status,
             errorMessage: '',
             createdAt: nowRFC3339(),
             source: source.trim().toLowerCase(),
@@ -264,6 +301,17 @@ export class ReceiptsRepository {
     newIds: Set<number>,
     storyId: number | null,
   ): number {
+    const pid = this.lookupImportProduct(line, created, newIds, storyId);
+    this.products.applyImportedEan(pid, line.ean);
+    return pid;
+  }
+
+  private lookupImportProduct(
+    line: BillLineInput,
+    created: Map<string, number>,
+    newIds: Set<number>,
+    storyId: number | null,
+  ): number {
     if (line.productId > 0) {
       const p = this.products.getProductRow(line.productId);
       this.maybeAliasFromReceipt(p.id, storyId, line.receiptName);
@@ -282,7 +330,7 @@ export class ReceiptsRepository {
     } catch (err) {
       if (!(err instanceof NotFoundError)) throw err;
     }
-    const p = this.products.insertImported(line.productName, line.unitId);
+    const p = this.products.insertImported(line.productName, line.unitId, line.ean);
     created.set(key, p.id);
     newIds.add(p.id);
     this.maybeAliasFromReceipt(p.id, storyId, line.receiptName);
@@ -309,6 +357,21 @@ export class ReceiptsRepository {
       throw err;
     }
   }
+}
+
+function mapReceipt(row: {
+  id: number;
+  imagePath: string;
+  rawResponse: string;
+  status: string;
+  errorMessage: string;
+  createdAt: string;
+  source: string;
+  externalId: string;
+  sourcePayload: string;
+}): Receipt {
+  const imagePath = row.imagePath.trim();
+  return { ...row, imagePath: imagePath === '' ? null : imagePath };
 }
 
 function patchBillVisitJSON(raw: string, storyId: number | null, boughtOn: string): string {
