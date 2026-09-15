@@ -18,7 +18,7 @@ Open **Receipts**, take a photo or choose a file (jpeg, png, webp, gif, or pdf, 
 
 Open `/imports/biedronka` (also linked from Receipts). Sign in with phone, captcha, and SMS, paste the `app://` redirect, fetch bills since a date, then **Import into receipts**. Each imported e-paragon is saved as purchases immediately — there is no confirm step. Known till names match aliases and the catalog; new names become products (using the piece/weight units from Settings). Open the saved receipt to change products or the visit. API imports do not store a preview image.
 
-Bulkly stores the Biedronka transaction id on the receipt and skips ids it already has. **Since** defaults to the newest imported bill’s date so a later visit can pick up same-day shops. Loyalty tokens stay in the browser tab.
+Bulkly stores the Biedronka transaction id on the receipt and skips ids it already has. **Since** defaults to the newest imported bill’s date so a later visit can pick up same-day shops. Loyalty tokens stay in the browser tab. Token exchange, bill list, e-receipts, and import all go through Bulkly; the browser does not call Biedronka’s API.
 
 Photo scans still show as reading, to confirm, failed, or saved. Open a scan to see its status. Failed scans can be sent back to the reader with **Read again**, or you can photograph or upload the bill again.
 
@@ -49,3 +49,5 @@ Open a scan that is **To confirm**. Check the date and hour, pick a store if you
 How printed names are matched to your catalog, and how a new product remembers the till wording, is in [Receipt matching](../receipt-matching/index.md). Aliases themselves are in [Product aliases](../product-aliases/index.md).
 
 **Save purchases** writes the included lines as purchases (date and hour in `bought_on`, for example `2026-08-18 14:32`) and marks the receipt saved. If the till had no clock, the hour is stored as midday (`12:00`). You can still open it later to see the photo and the list; it will not be imported again.
+
+**Delete receipt** on a scan or saved bill asks for confirmation, then removes the receipt, its stored photo, and every purchase saved from that bill. A product that has no other buys left is removed too. Products that still have other history stay.

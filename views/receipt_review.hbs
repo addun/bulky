@@ -12,7 +12,8 @@
   </figure>
   {{/if}}
 
-  <form class="stack" method="post" action="/admin/receipts/{{view.receiptId}}" id="receipt-review">
+  <div>
+    <form class="stack" method="post" action="/admin/receipts/{{view.receiptId}}" id="receipt-review">
     <input type="hidden" name="receipt_id" value="{{view.receiptId}}">
     <input type="hidden" name="image_path" value="{{view.imagePath}}">
     <input type="hidden" name="notes" value="{{view.notes}}">
@@ -92,6 +93,10 @@
       {{#unless view.migrated}}<button type="submit" class="btn btn-tag">Save purchases</button>{{/unless}}
     </div>
   </form>
+    <p class="danger-zone">
+      <a class="danger" href="/admin/receipts/{{view.receiptId}}/delete">Delete receipt</a>
+    </p>
+  </div>
 </div>
 
 <template id="receipt-line-template">

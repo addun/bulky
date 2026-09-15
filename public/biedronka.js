@@ -44,7 +44,7 @@
 
   try {
     localStorage.removeItem("bulkly.biedronka.tokens");
-    sessionStorage.removeItem("bulkly.biedronka.pkce");
+    pkceVerifier = sessionStorage.getItem("bulkly.biedronka.pkce") || "";
   } catch (err) {}
 
   (function loadImported() {
@@ -87,6 +87,7 @@
     accessToken = "";
     refreshToken = "";
     pkceVerifier = "";
+    try { sessionStorage.removeItem("bulkly.biedronka.pkce"); } catch (err) {}
     accessEl.value = "";
     refreshEl.value = "";
     lastPayload = null;
@@ -168,6 +169,8 @@
   async function startSignIn() {
     var pkce = await generatePkce();
     pkceVerifier = pkce.verifier;
+    try { sessionStorage.setItem("bulkly.biedronka.pkce", pkceVerifier); } catch (err) {}
+    if (codeEl) codeEl.value = "";
     var url = authorizationURL(pkce.challenge);
     authHref.href = url;
     authLinkWrap.hidden = false;
@@ -199,11 +202,13 @@
       });
       if (!next.access_token) throw new Error("token rejected");
       pkceVerifier = "";
+      try { sessionStorage.removeItem("bulkly.biedronka.pkce"); } catch (err) {}
       saveTokens(next);
       showSession();
       setStatus("Signed in. Choose a since date, then fetch.");
     } catch (err) {
       setStatus(String(err.message || err));
+      if (codeEl) codeEl.value = "";
     } finally {
       finishBtn.disabled = false;
     }
@@ -631,11 +636,20 @@
       try { data = JSON.parse(text); } catch (err) { data = text; }
     }
     if (!res.ok) {
-      var msg = "http " + res.status;
-      if (data && data.error) msg = data.error;
-      else if (typeof data === "string" && data) msg = data.slice(0, 180);
-      throw new Error(msg);
+      throw new Error(tokenError(data, res.status));
     }
     return data;
+  }
+
+  function tokenError(data, status) {
+    var desc = data && data.error_description ? String(data.error_description) : "";
+    var err = data && data.error ? String(data.error) : "";
+    if (err === "invalid_grant" || /code not valid/i.test(desc)) {
+      return "That login code is expired or already used. Click Sign in again, finish SMS, then paste the new app:// address right away.";
+    }
+    if (desc) return desc;
+    if (err) return err;
+    if (typeof data === "string" && data) return data.slice(0, 180);
+    return "http " + status;
   }
 })();
