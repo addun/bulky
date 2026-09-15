@@ -5,6 +5,10 @@
     Name
     <input name="name" required value="{{product.name}}" autofocus>
   </label>
+  <label>
+    EAN
+    <input name="ean" value="{{product.ean}}" inputmode="numeric" autocomplete="off">
+  </label>
   {{#if new}}
   <label>
     Base Unit

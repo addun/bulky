@@ -1,9 +1,7 @@
 (function () {
-  var DIRECT_API = "https://api.prod.biedronka.cloud/api/v7";
-  var DIRECT_TOKEN = "https://konto.biedronka.pl/realms/loyalty/protocol/openid-connect/token";
   var AUTH_URL = "https://konto.biedronka.pl/realms/loyalty/protocol/openid-connect/auth";
-  var PROXY_API = "/api/biedronka";
-  var PROXY_TOKEN = "/api/biedronka/token";
+  var API = "/api/biedronka";
+  var TOKEN = "/api/biedronka/token";
   var CLIENT_ID = "cma20";
   var REDIRECT = "app://cma20.biedronka.pl";
 
@@ -32,12 +30,16 @@
   var tableBody = document.querySelector("#biedronka-table tbody");
   var jsonEl = document.getElementById("biedronka-json");
 
-  var viaProxy = false;
   var lastPayload = null;
   var accessToken = "";
   var refreshToken = "";
   var pkceVerifier = "";
   var importedSet = {};
+
+  function log() {
+    var args = ["[biedronka]"].concat([].slice.call(arguments));
+    console.info.apply(console, args);
+  }
   var importedSince = "";
 
   try {
@@ -189,7 +191,6 @@
       return;
     }
     finishBtn.disabled = true;
-    viaProxy = false;
     try {
       var next = await tokenRequest({
         grant_type: "authorization_code",
@@ -291,7 +292,6 @@
     fetchBtn.disabled = true;
     downloadBtn.hidden = true;
     lastPayload = null;
-    viaProxy = false;
     try {
       await ensureFresh();
       var collected = [];
@@ -320,36 +320,33 @@
 
       var withReceipts = 0;
       var wantReceipts = receiptsEl.checked;
+      log("listed", collected.length, "bills since", sinceEl && sinceEl.value ? sinceEl.value : defaultSince(), "receipts=" + !!wantReceipts);
       for (var j = 0; j < collected.length; j++) {
         var tx = collected[j];
         if (!wantReceipts || !tx || !tx.id) continue;
         setStatus(progressLine(page, pageCount, collected.length, withReceipts));
         try {
-          if (tx.is_e_receipt_available) {
-            tx.receipt = await apiGet("transactions/" + encodeURIComponent(String(tx.id)) + "/e-receipt/", null, { "output-format": "json" });
-            tx.source = "e_receipt";
-          } else {
-            tx.receipt = await apiGet("transactions/" + encodeURIComponent(String(tx.id)) + "/");
-            tx.source = "details";
-          }
+          var got = await fetchTxReceipt(tx);
+          tx.receipt = got.receipt;
+          tx.source = got.source;
           tx.lines = sellLines(tx.receipt);
+          log(tx.id, "source=" + tx.source, "lines=" + (tx.lines && tx.lines.length || 0), "listed_e_receipt=" + !!tx.is_e_receipt_available);
           withReceipts++;
         } catch (err) {
           tx.receipt_error = String(err.message || err);
+          log(tx.id, "receipt failed:", tx.receipt_error);
         }
       }
 
       lastPayload = {
         fetched_at: new Date().toISOString(),
         since: sinceEl && sinceEl.value ? sinceEl.value : defaultSince(),
-        via: viaProxy ? "proxy" : "browser",
+        via: "proxy",
         transactions: collected
       };
       render(lastPayload);
-      var via = viaProxy
-        ? "Biedronka blocked the browser, so Bulkly forwarded the calls (tokens went through Bulkly for those requests)."
-        : "Fetched directly from the browser.";
-      setStatus(collected.length + " bills since " + lastPayload.since + ". " + via);
+      log("fetch done", collected.length + " bills", withReceipts + " receipts");
+      setStatus(collected.length + " bills since " + lastPayload.since + ".");
       downloadBtn.hidden = collected.length === 0;
       if (importBtn) importBtn.hidden = importableCount(collected) === 0;
     } catch (err) {
@@ -362,7 +359,6 @@
   function progressLine(page, pageCount, n, receipts) {
     var msg = "Page " + page + " of " + pageCount + " · " + n + " bills";
     if (receiptsEl.checked) msg += " · " + receipts + " receipts";
-    if (viaProxy) msg += " · via Bulkly";
     return msg;
   }
 
@@ -441,6 +437,7 @@
         }
         setStatus("Importing " + (imported + skipped + failed + 1) + " of " + todo + " new bills…");
         try {
+          log("POST import", tx.id, "source=" + (tx.source || ""));
           var out = await apiPost("import", {
             id: String(tx.id),
             date: tx.date || "",
@@ -453,15 +450,18 @@
             tx.bulkly_status = "skipped";
             importedSet[tx.id] = true;
             skipped++;
+            log(tx.id, "skipped duplicate");
           } else {
             tx.bulkly_status = "imported";
             tx.receipt_id = out && out.receipt_id;
             importedSet[tx.id] = true;
             imported++;
+            log(tx.id, "imported receipt_id=" + (out && out.receipt_id));
           }
         } catch (err) {
           tx.bulkly_error = String(err.message || err);
           failed++;
+          log(tx.id, "import failed:", tx.bulkly_error);
         }
       }
       render(lastPayload);
@@ -469,7 +469,7 @@
       if (imported) parts.push("imported " + imported);
       if (skipped) parts.push("skipped " + skipped);
       if (failed) parts.push("failed " + failed);
-      setStatus(parts.join(", ") + ". Confirm them under Receipts.");
+      setStatus(parts.join(", ") + ". Open Receipts to edit products or the visit.");
       if (importBtn) importBtn.hidden = importableCount(rows) === 0;
     } finally {
       if (importBtn) importBtn.disabled = false;
@@ -485,7 +485,7 @@
       Accept: "application/json",
       "Content-Type": "application/json"
     };
-    var res = await fetch(PROXY_API + "/" + path.replace(/^\//, ""), {
+    var res = await fetch(API + "/" + path.replace(/^\//, ""), {
       method: "POST",
       headers: headers,
       body: JSON.stringify(body)
@@ -592,35 +592,36 @@
       redirect_uri: REDIRECT
     }, fields));
     var headers = { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" };
-    if (!viaProxy) {
-      try {
-        return await readJSON(await fetch(DIRECT_TOKEN, { method: "POST", headers: headers, body: body }));
-      } catch (err) {
-        viaProxy = true;
-      }
-    }
-    return await readJSON(await fetch(PROXY_TOKEN, { method: "POST", headers: headers, body: body }));
+    return await readJSON(await fetch(TOKEN, { method: "POST", headers: headers, body: body }));
   }
 
-  async function apiGet(path, query, extraHeaders) {
+  async function fetchTxReceipt(tx) {
+    var id = encodeURIComponent(String(tx.id));
+    log(tx.id, "try e-receipt json (listed available=" + !!tx.is_e_receipt_available + ")");
+    try {
+      var receipt = await apiGet("transactions/" + id + "/e-receipt/", { format: "json" });
+      log(tx.id, "e-receipt json ok");
+      return { receipt: receipt, source: "e_receipt" };
+    } catch (err) {
+      log(tx.id, "e-receipt json failed:", String(err.message || err), "-> details");
+      var details = await apiGet("transactions/" + id + "/");
+      log(tx.id, "details ok");
+      return { receipt: details, source: "details" };
+    }
+  }
+
+  async function apiGet(path, query) {
     await ensureFresh();
     var t = tokens();
-    var headers = Object.assign({
+    var headers = {
       Authorization: "Bearer " + t.access_token,
       Accept: "application/json",
       "Accept-Language": "pl-PL"
-    }, extraHeaders || {});
+    };
     var qs = "";
     if (query) qs = "?" + new URLSearchParams(query).toString();
-    if (!viaProxy) {
-      try {
-        return await readJSON(await fetch(DIRECT_API + "/" + path + qs, { headers: headers }));
-      } catch (err) {
-        viaProxy = true;
-      }
-    }
     var proxyPath = path.replace(/\/$/, "");
-    return await readJSON(await fetch(PROXY_API + "/" + proxyPath + qs, { headers: headers }));
+    return await readJSON(await fetch(API + "/" + proxyPath + qs, { headers: headers }));
   }
 
   async function readJSON(res) {

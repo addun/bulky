@@ -10,6 +10,7 @@ export type ProductConversion = {
 export type Product = {
   id: number;
   name: string;
+  ean: string;
   unitId: number;
   unitName: string;
   imagePath: string | null;

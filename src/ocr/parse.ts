@@ -17,8 +17,14 @@ export function parseBill(raw: Buffer | string): Bill {
   bill.notes = bill.notes.trim();
   bill.storyName = bill.storyName.trim();
   bill.externalId = bill.externalId.trim();
-  bill.streetName = stripStreetPrefix(bill.streetName);
-  bill.buildingNumber = bill.buildingNumber.trim();
+  if (bill.buildingNumber.trim() === '') {
+    const parts = splitStreetAndBuilding(bill.streetName);
+    bill.streetName = parts.streetName;
+    bill.buildingNumber = parts.buildingNumber;
+  } else {
+    bill.streetName = stripStreetPrefix(bill.streetName);
+    bill.buildingNumber = bill.buildingNumber.trim();
+  }
   bill.apartmentNumber = bill.apartmentNumber.trim();
   bill.postalCode = normalizePostal(bill.postalCode);
   bill.city = bill.city.trim();
@@ -84,6 +90,7 @@ function unmarshalLine(item: unknown): Line {
   line.amount = flexNum(raw.amount);
   line.skip = asBoolField(raw.skip);
   line.skipReason = asStringField(raw.skip_reason);
+  line.ean = asStringField(raw.ean);
   return line;
 }
 
@@ -283,6 +290,15 @@ export function stripStreetPrefix(s: string): string {
     if (lower.startsWith(p)) return s.slice(p.length).trim();
   }
   return s;
+}
+
+/** "ul. Gościnna 1" → street Gościnna, building 1. */
+export function splitStreetAndBuilding(street: string): { streetName: string; buildingNumber: string } {
+  street = stripStreetPrefix(street);
+  if (street === '') return { streetName: '', buildingNumber: '' };
+  const m = street.match(/^(.*?)\s+(\d+[a-zA-Z]?(?:\/\d+[a-zA-Z]?)?)$/u);
+  if (!m || m[1]!.trim() === '') return { streetName: street, buildingNumber: '' };
+  return { streetName: m[1]!.trim(), buildingNumber: m[2]! };
 }
 
 function peelVAT(s: string): [string, string] {

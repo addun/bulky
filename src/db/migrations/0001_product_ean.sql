@@ -1,0 +1,1 @@
+ALTER TABLE `products` ADD `ean` text DEFAULT '' NOT NULL;

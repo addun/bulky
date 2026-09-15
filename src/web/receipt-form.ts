@@ -42,6 +42,7 @@ export type ReceiptLineView = {
   vatType: string;
   unitPrice: string;
   discount: string;
+  ean: string;
 };
 
 export function hydrateBill(
@@ -98,6 +99,51 @@ export function hydrateBill(
   return bill;
 }
 
+export function billToImport(bill: Bill): BillImport {
+  const boughtOn = normalizeBoughtOn(joinBoughtOn(bill.boughtOn, bill.boughtAt));
+  const storyId = bill.storyId > 0 ? bill.storyId : null;
+  const inn: BillImport = {
+    boughtOn,
+    storyId,
+    story: storyId ? null : storyFromBill(bill),
+    receiptId: null,
+    lines: [],
+  };
+  for (const line of productLines(bill)) {
+    const name = (line.productName || line.receiptName).trim();
+    inn.lines.push({
+      quantity: parseDecimal(line.quantity, 8, false),
+      amount: parseDecimal(line.amount, 2, true),
+      receiptName: line.receiptName,
+      productId: line.productId > 0 ? line.productId : 0,
+      productName: name,
+      unitId: line.unitId,
+      ean: line.ean,
+    });
+  }
+  return inn;
+}
+
+function storyFromBill(bill: Bill): Story | null {
+  const name = bill.storyName.trim();
+  if (name === '' && bill.externalId.trim() === '' && bill.city.trim() === '' && bill.streetName.trim() === '') {
+    return null;
+  }
+  return {
+    id: 0,
+    name: name || 'Biedronka',
+    streetName: bill.streetName,
+    buildingNumber: bill.buildingNumber,
+    apartmentNumber: bill.apartmentNumber,
+    postalCode: bill.postalCode,
+    city: bill.city,
+    externalId: bill.externalId,
+    retailChainId: null,
+    retailChainName: '',
+    purchaseCount: 0,
+  };
+}
+
 function matchLineProduct(
   receiptName: string,
   productName: string,
@@ -143,6 +189,7 @@ export function billToView(bill: Bill, receiptID: number, imagePath: string, sta
       vatType: line.vatType,
       unitPrice: line.unitPrice,
       discount: line.discount,
+      ean: line.ean,
     });
   }
   return decorateView(view);
@@ -161,7 +208,7 @@ export function receiptToView(
     if (bill.storyId === 0) bill.storyId = matchStory(bill, stories);
     bill = hydrateBill(bill, products, aliases, storyChainID(bill.storyId, stories), defaults.pieceId, defaults.weightId);
   }
-  const view = billToView(bill, r.id, r.imagePath, r.status);
+  const view = billToView(bill, r.id, r.imagePath ?? '', r.status);
   view.storyId = knownStoryID(view.storyId, stories);
   if (view.boughtOn === '') {
     const now = new Date();
@@ -200,6 +247,7 @@ export function viewToRawJSON(view: ReceiptView): string {
       amount: line.amount,
       skip: !line.include,
       skipReason: '',
+      ean: line.ean,
     });
   }
   return marshalBill(bill);
@@ -235,7 +283,15 @@ export function parseReceiptForm(
     } catch (err) {
       return { inn: emptyImport(), view, msg: `Line ${i + 1}: amount ${(err as Error).message}.` };
     }
-    const item: BillLineInput = { quantity: qty, amount: amount, receiptName: line.receiptName, productId: 0, productName: '', unitId: 0 };
+    const item: BillLineInput = {
+      quantity: qty,
+      amount: amount,
+      receiptName: line.receiptName,
+      productId: 0,
+      productName: '',
+      unitId: 0,
+      ean: line.ean,
+    };
     if (line.productId > 0) {
       item.productId = line.productId;
     } else {
@@ -291,6 +347,7 @@ function parseReceiptView(get: (name: string) => string): ReceiptView {
       vatType: get('vat_type_' + p).trim(),
       unitPrice: get('unit_price_' + p).trim(),
       discount: get('discount_' + p).trim(),
+      ean: get('ean_' + p).trim(),
     });
   }
   return decorateView(view);

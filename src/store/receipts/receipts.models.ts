@@ -11,7 +11,7 @@ export const RECEIPT_SOURCE_BIEDRONKA = 'biedronka';
 
 export type Receipt = {
   id: number;
-  imagePath: string;
+  imagePath: string | null;
   rawResponse: string;
   status: string;
   errorMessage: string;
@@ -28,6 +28,7 @@ export type BillLineInput = {
   unitId: number;
   quantity: Decimal;
   amount: Decimal;
+  ean: string;
 };
 
 export type BillImport = {
