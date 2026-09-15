@@ -102,6 +102,7 @@ function runStoreSmoke(): void {
           unitId: kg.id,
           quantity: new Decimal(1),
           amount: new Decimal('4.50'),
+          ean: '',
         },
       ],
     }, '{}');
@@ -129,6 +130,7 @@ function runStoreSmoke(): void {
           unitId: kg.id,
           quantity: new Decimal(1),
           amount: new Decimal('5'),
+          ean: '',
         },
       ],
     }, '{}');

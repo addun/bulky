@@ -10,7 +10,7 @@ docker compose up --build
 
 The image includes Poppler so PDFs can be turned into page images for the vision model. Locally, install the same with `brew install poppler`.
 
-Published images from GitHub Releases go to the [GitHub Container Registry](https://ghcr.io) as `ghcr.io/<owner>/<repo>` (linux/amd64 and linux/arm64):
+Published images from GitHub Releases go to the [GitHub Container Registry](https://ghcr.io) as `ghcr.io/<owner>/<repo>` (linux/amd64):
 
 ```bash
 docker pull ghcr.io/addun/bulky:v1.0.0
