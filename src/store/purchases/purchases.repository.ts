@@ -5,7 +5,6 @@ import { DatabaseService } from '../../db/database.service';
 import { changesOf, countOf, lastId } from '../../db/query';
 import { products, purchases, units } from '../../db/schema';
 import { InvalidKindError, InvalidQuantityError, NotFoundError } from '../../domain/errors';
-import { normalizeBoughtOn } from '../../domain/bought-on';
 import { KIND_PRICE, KIND_PURCHASE, type Purchase, type PurchaseKind, type ReceiptPurchase } from './purchases.models';
 import { LocationsRepository } from '@app/store/locations';
 import { nowRFC3339 } from '@app/store/now';
@@ -96,7 +95,6 @@ export class PurchasesRepository {
     this.parsePurchaseKind(kind);
     const story = this.locations.optionalStory(storyId);
     this.validQuantity(quantity);
-    boughtOn = normalizeBoughtOn(boughtOn);
     const id = lastId(
       this.orm
         .insert(purchases)
@@ -126,7 +124,6 @@ export class PurchasesRepository {
     this.parsePurchaseKind(kind);
     const story = this.locations.optionalStory(storyId);
     this.validQuantity(quantity);
-    boughtOn = normalizeBoughtOn(boughtOn);
     const n = changesOf(
       this.orm
         .update(purchases)
@@ -202,7 +199,6 @@ export class PurchasesRepository {
     amount: Decimal,
   ): Purchase {
     this.validQuantity(quantity);
-    boughtOn = normalizeBoughtOn(boughtOn);
     const id = lastId(
       this.orm
         .insert(purchases)

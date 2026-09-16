@@ -6,10 +6,7 @@
 <form class="stack" method="post" action="/admin/receipts/{{receipt.id}}/edit">
   <fieldset class="form-group">
     <legend>When</legend>
-    <div class="form-row">
-      <label>Date <input type="date" name="bought_on" required value="{{dateValue boughtOn}}"></label>
-      <label>Hour <input type="time" name="bought_at" value="{{timeValue boughtOn}}"></label>
-    </div>
+    <label>Date and hour <input type="datetime-local" name="bought_on" required value="{{datetimeLocal boughtOn}}"></label>
   </fieldset>
 
   <fieldset class="form-group">

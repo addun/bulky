@@ -19,7 +19,7 @@ import {
   ReceiptMigratedError,
   ReceiptNotReadyError,
 } from '../domain/errors';
-import { boughtOnTime, joinBoughtOn, normalizeBoughtOn } from '../domain/bought-on';
+import { fromDatetimeLocal } from '../domain/bought-on';
 import { MaxImageBytes } from '../ocr/types';
 import { previewJPEG } from '../ocr/format';
 import { OcrService } from '../ocr/ocr.service';
@@ -167,7 +167,7 @@ export class ReceiptsController {
   @Post(':id/edit')
   updateReceiptVisit(
     @Param('id', { schema: id }) receiptId: number,
-    @Body({ schema: receiptVisitForm }) body: { bought_on: string; bought_at: string; story_id: number },
+    @Body({ schema: receiptVisitForm }) body: { bought_on: string; story_id: number },
     @Res() res: Response,
   ): void {
     let receipt: Receipt;
@@ -185,28 +185,25 @@ export class ReceiptsController {
       this.views.redirect(res, '/admin/receipts/' + String(receiptId));
       return;
     }
-    const joined = joinBoughtOn(body.bought_on, body.bought_at);
+    const joined = fromDatetimeLocal(body.bought_on);
     const { id: storyID, msg } = this.resolveStoryForm(body.story_id);
-    let boughtOn: string;
-    try {
-      boughtOn = normalizeBoughtOn(joined);
-    } catch {
+    if (joined === '') {
       this.renderReceiptEdit(res, 422, receipt, joined, storyID, 'Date must be a valid day.');
       return;
     }
     if (msg !== '') {
-      this.renderReceiptEdit(res, 422, receipt, boughtOn, storyID, msg);
+      this.renderReceiptEdit(res, 422, receipt, joined, storyID, msg);
       return;
     }
     try {
-      this.receiptsStore.updateReceiptVisit(receiptId, storyID, boughtOn);
+      this.receiptsStore.updateReceiptVisit(receiptId, storyID, joined);
     } catch (err) {
       if (err instanceof ReceiptNotReadyError) {
         this.views.redirect(res, '/admin/receipts/' + String(receiptId));
         return;
       }
       const errMsg = err instanceof InvalidStoryError ? 'Choose a store.' : 'Could not save the visit.';
-      this.renderReceiptEdit(res, 422, receipt, boughtOn, storyID, errMsg);
+      this.renderReceiptEdit(res, 422, receipt, joined, storyID, errMsg);
       return;
     }
     this.views.redirect(res, '/admin/receipts/' + String(receiptId));
@@ -564,15 +561,12 @@ export class ReceiptsController {
       this.views.text(res, 500, 'could not load stores');
       return;
     }
-    let { boughtOn, boughtAt, notes, story } = receiptVisitFacts(receipt, buys, stories);
-    if (boughtAt === '') boughtAt = boughtOnTime(boughtOn);
-    boughtOn = joinBoughtOn(boughtOn, boughtAt);
+    const { boughtOn, notes, story } = receiptVisitFacts(receipt, buys, stories);
     this.views.html(res, 'receipt_show', status, {
       page: this.views.adminPage('Receipt', '', errMsg),
       receipt: presentReceipt(receipt),
       purchases: buys,
       boughtOn: boughtOn,
-      boughtAt: boughtAt,
       notes: notes,
       story: presentStory(story),
       imported: imported,
@@ -601,22 +595,15 @@ export class ReceiptsController {
       this.views.text(res, 500, 'could not load stores');
       return;
     }
-    let boughtAt = '';
     if (boughtOn === '' && storyID === 0) {
       const facts = receiptVisitFacts(receipt, buys, stories);
       boughtOn = facts.boughtOn;
-      boughtAt = facts.boughtAt;
       storyID = facts.story.id;
-    } else {
-      boughtAt = receiptVisitFacts(receipt, buys, stories).boughtAt;
     }
-    if (boughtAt === '') boughtAt = boughtOnTime(boughtOn);
-    boughtOn = joinBoughtOn(boughtOn, boughtAt);
     this.views.html(res, 'receipt_edit', status, {
       page: this.views.adminPage('Edit visit', '', errMsg),
       receipt: presentReceipt(receipt),
       boughtOn: boughtOn,
-      boughtAt: boughtAt,
       story: presentStory(storyByID(stories, storyID)),
       stories: stories.map(presentStory),
     });

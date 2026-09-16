@@ -1,7 +1,7 @@
 import Decimal from 'decimal.js';
 import hbs from 'hbs';
 import { extraQuotes } from '../domain/price-stats';
-import { formatBoughtOn, boughtOnDate, boughtOnTime } from '../domain/bought-on';
+import { formatBoughtOn, toDatetimeLocal } from '../domain/bought-on';
 import { formatMoney, formatQuantity } from '../domain/format';
 import type { Product, ProductConversion } from '@app/store/products';
 import type { QuotedPrice } from '../domain/price-stats';
@@ -47,8 +47,7 @@ export function registerHandlebarsHelpers(): void {
   hbs.registerHelper('qty', (d: Decimal | undefined) => (d ? formatQuantity(asDecimal(d)) : ''));
   hbs.registerHelper('date', (iso: string) => (iso && iso.length >= 10 ? iso.slice(0, 10) : iso || ''));
   hbs.registerHelper('datetime', (iso: string) => formatBoughtOn(iso || ''));
-  hbs.registerHelper('dateValue', (iso: string) => boughtOnDate(iso || ''));
-  hbs.registerHelper('timeValue', (iso: string) => boughtOnTime(iso || ''));
+  hbs.registerHelper('datetimeLocal', (iso: string) => toDatetimeLocal(iso || ''));
   hbs.registerHelper('unitPrice', (amount: Decimal, quantity: Decimal) => {
     const q = asDecimal(quantity);
     if (q.isZero()) return '—';

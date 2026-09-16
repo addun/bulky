@@ -3,6 +3,7 @@ import { and, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { DatabaseService } from '../../db/database.service';
 import { changesOf, lastId } from '../../db/query';
 import { receipts } from '../../db/schema';
+import { boughtOnDate, boughtOnTime } from '../../domain/bought-on';
 import {
   AliasScopeError,
   DuplicateError,
@@ -11,7 +12,6 @@ import {
   ReceiptMigratedError,
   ReceiptNotReadyError,
 } from '../../domain/errors';
-import { normalizeBoughtOn } from '../../domain/bought-on';
 import {
   RECEIPT_FAILED,
   RECEIPT_MIGRATED,
@@ -212,7 +212,6 @@ export class ReceiptsRepository {
 
   updateReceiptVisit(id: number, storyId: number | null, boughtOn: string): void {
     const story = this.locations.optionalStory(storyId);
-    boughtOn = normalizeBoughtOn(boughtOn);
     this.db.immediate(() => {
       const r = this.getReceipt(id);
       if (r.status !== RECEIPT_MIGRATED) {
@@ -392,17 +391,9 @@ function mapReceipt(row: {
 function patchBillVisitJSON(raw: string, storyId: number | null, boughtOn: string): string {
   raw = raw.trim() || '{}';
   const bill = JSON.parse(raw) as Record<string, unknown>;
-  const { date, clock } = splitBoughtOnSafe(boughtOn);
-  bill.bought_on = date;
-  if (clock !== '') bill.bought_at = clock;
-  else delete bill.bought_at;
+  bill.bought_on = boughtOnDate(boughtOn);
+  bill.bought_at = boughtOnTime(boughtOn);
   if (storyId) bill.company_id = storyId;
   else delete bill.company_id;
   return JSON.stringify(bill);
-}
-
-function splitBoughtOnSafe(s: string): { date: string; clock: string } {
-  const t = s.trim().replaceAll('T', ' ').replaceAll('\u00a0', ' ');
-  const parts = t.split(/\s+/);
-  return { date: parts[0] ?? '', clock: parts[1]?.slice(0, 5) ?? '' };
 }
