@@ -1,16 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import { count, eq, sql } from 'drizzle-orm';
-import { DatabaseService } from '../../db/database.service';
-import { changesOf, countOf, lastId, nocaseEq, nocaseOrder } from '../../db/query';
-import { comparisonGroups, settings, units } from '../../db/schema';
-import { DuplicateError, InvalidUnitError, isUniqueErr, NotFoundError, UnitInUseError } from '../../domain/errors';
+import { DatabaseService } from '../../db/database.service.js';
+import { changesOf, countOf, lastId, nocaseEq, nocaseOrder } from '../../db/query.js';
+import { comparisonGroups, settings, units } from '../../db/schema.js';
+import { DuplicateError, InvalidUnitError, isUniqueErr, NotFoundError, UnitInUseError } from '../../domain/errors.js';
 import {
   SETTING_OCR_MODEL,
   SETTING_PIECE_UNIT_ID,
   SETTING_WEIGHT_UNIT_ID,
   type Unit,
   type UnitDefaults,
-} from './units.models';
+} from './units.models.js';
 
 const unitUseCount = sql<number>`cast((
   select count(*) from products p where p.unit_id = ${units.id}

@@ -1,3 +1,3 @@
-export { ComparisonGroupsModule } from './comparison-groups.module';
-export { ComparisonGroupsRepository } from './comparison-groups.repository';
-export * from './comparison-groups.models';
+export { ComparisonGroupsModule } from './comparison-groups.module.js';
+export { ComparisonGroupsRepository } from './comparison-groups.repository.js';
+export * from './comparison-groups.models.js';

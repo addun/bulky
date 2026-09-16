@@ -1,28 +1,28 @@
 import { Injectable } from '@nestjs/common';
 import { and, count, eq, ne, sql } from 'drizzle-orm';
 import { alias as tableAlias } from 'drizzle-orm/sqlite-core';
-import Decimal from 'decimal.js';
-import { DatabaseService } from '../../db/database.service';
-import { changesOf, countOf, lastId, nocaseOrder } from '../../db/query';
-import { comparisonGroupProducts, comparisonGroups, productUnitConversions, products, units } from '../../db/schema';
+import { Decimal } from 'decimal.js';
+import { DatabaseService } from '../../db/database.service.js';
+import { changesOf, countOf, lastId, nocaseOrder } from '../../db/query.js';
+import { comparisonGroupProducts, comparisonGroups, productUnitConversions, products, units } from '../../db/schema.js';
 import {
   DuplicateError,
   InvalidComparisonGroupError,
   InvalidUnitError,
   isUniqueErr,
   NotFoundError,
-} from '../../domain/errors';
-import { lastPricesByProduct, quotesByProduct } from '../../domain/price-stats';
+} from '../../domain/errors.js';
+import { lastPricesByProduct, quotesByProduct } from '../../domain/price-stats.js';
 import type {
   ComparisonGroup,
   ComparisonOffer,
   GroupComparison,
   RelatedProduct,
-} from './comparison-groups.models';
-import { mapProduct } from '@app/store/products/product-row';
-import { nowRFC3339 } from '@app/store/now';
-import { PurchasesRepository } from '@app/store/purchases';
-import { UnitsRepository } from '@app/store/units';
+} from './comparison-groups.models.js';
+import { mapProduct } from '#app/store/products/product-row';
+import { nowRFC3339 } from '#app/store/now';
+import { PurchasesRepository } from '#app/store/purchases';
+import { UnitsRepository } from '#app/store/units';
 
 const groupMemberCount = sql<number>`cast((
   select count(*) from comparison_group_products m where m.group_id = ${comparisonGroups.id}

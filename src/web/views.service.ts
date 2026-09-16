@@ -2,8 +2,8 @@ import { join } from 'node:path';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Response } from 'express';
-import { viewData } from './helpers';
-import { makePage, type Page } from './present';
+import { viewData } from './helpers.js';
+import { makePage, type Page } from './present.js';
 
 @Injectable()
 export class ViewsService {
@@ -36,6 +36,6 @@ export class ViewsService {
   }
 
   viewsDir(): string {
-    return join(__dirname, '..', '..', 'views');
+    return join(import.meta.dirname, '..', '..', 'views');
   }
 }

@@ -2,7 +2,7 @@ import { Body, Controller, Get, Param, Post, Query, Res, UploadedFile, UseInterc
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { memoryStorage } from 'multer';
-import Decimal from 'decimal.js';
+import { Decimal } from 'decimal.js';
 import {
   AliasScopeError,
   ConversionConflictError,
@@ -19,16 +19,16 @@ import {
   StoryInUseError,
   UnitInUseError,
   UnitMismatchError,
-} from '../domain/errors';
-import { parseDecimal } from '../domain/format';
-import { fromDatetimeLocal, nowBoughtOn } from '../domain/bought-on';
-import { AliasesRepository, type ProductAlias } from '@app/store/aliases';
-import { ComparisonGroupsRepository } from '@app/store/comparison-groups';
-import { LocationsRepository, type RetailChain, type Story } from '@app/store/locations';
-import { ProductsRepository, type Product, type ProductConversion } from '@app/store/products';
-import { KIND_PURCHASE, PurchasesRepository, type Purchase } from '@app/store/purchases';
-import { UnitsRepository } from '@app/store/units';
-import { ImagesService } from './images.service';
+} from '../domain/errors.js';
+import { parseDecimal } from '../domain/format.js';
+import { fromDatetimeLocal, nowBoughtOn } from '../domain/bought-on.js';
+import { AliasesRepository, type ProductAlias } from '#app/store/aliases';
+import { ComparisonGroupsRepository } from '#app/store/comparison-groups';
+import { LocationsRepository, type RetailChain, type Story } from '#app/store/locations';
+import { ProductsRepository, type Product, type ProductConversion } from '#app/store/products';
+import { KIND_PURCHASE, PurchasesRepository, type Purchase } from '#app/store/purchases';
+import { UnitsRepository } from '#app/store/units';
+import { ImagesService } from './images.service.js';
 import {
   presentAlias,
   presentChain,
@@ -37,8 +37,8 @@ import {
   presentPurchase,
   presentStory,
   storiesByID,
-} from './present';
-import { ViewsService } from './views.service';
+} from './present.js';
+import { ViewsService } from './views.service.js';
 import {
   adminIndexQuery,
   aliasFields,
@@ -70,7 +70,7 @@ import {
   type ProductFields,
   type PurchaseForm,
   type StoryFields,
-} from './schema';
+} from './schema.js';
 
 @Controller()
 export class CatalogController {

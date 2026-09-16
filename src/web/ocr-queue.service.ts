@@ -1,9 +1,9 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { NoLinesError, NoPDFTextError, NotABillError } from '../ocr/types';
-import { OcrService } from '../ocr/ocr.service';
-import { RECEIPT_PENDING, ReceiptsRepository } from '@app/store/receipts';
-import { UnitsRepository } from '@app/store/units';
-import { ReceiptImagesService } from './receipt-images';
+import { NoLinesError, NoPDFTextError, NotABillError } from '../ocr/types.js';
+import { OcrService } from '../ocr/ocr.service.js';
+import { RECEIPT_PENDING, ReceiptsRepository } from '#app/store/receipts';
+import { UnitsRepository } from '#app/store/units';
+import { ReceiptImagesService } from './receipt-images.js';
 
 const ocrJobBuffer = 32;
 

@@ -1,12 +1,11 @@
-import '../paths';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { ConfigService } from '@nestjs/config';
 import Database from 'better-sqlite3';
-import Decimal from 'decimal.js';
-import { DatabaseService } from '../db/database.service';
-import { DuplicateError, NotFoundError } from '../domain/errors';
+import { Decimal } from 'decimal.js';
+import { DatabaseService } from '../db/database.service.js';
+import { DuplicateError, NotFoundError } from '../domain/errors.js';
 import {
   AliasesRepository,
   ComparisonGroupsRepository,
@@ -16,7 +15,7 @@ import {
   PurchasesRepository,
   ReceiptsRepository,
   UnitsRepository,
-} from '@app/store';
+} from '#app/store';
 
 function createStore(db: DatabaseService) {
   const units = new UnitsRepository(db);
@@ -108,9 +107,21 @@ function runStoreSmoke(): void {
     store.units.setSetting('ocr_model', 'vision');
     if (store.units.ocrModel() !== 'vision') throw new Error('settings upsert');
 
+    const pending = store.receipts.createReceipt('pending.jpg');
+    const pendingRow = store.receipts.listReceipts().find((r) => r.id === pending.id);
+    if (!pendingRow || pendingRow.boughtOn !== '' || pendingRow.shopName !== '') throw new Error('pending list extras');
+    store.receipts.deleteReceipt(pending.id);
+
     const receipt = store.receipts.createReceipt('bill.jpg');
-    store.receipts.saveAIResponse(receipt.id, JSON.stringify({ bought_on: '2026-03-01' }));
+    store.receipts.saveAIResponse(
+      receipt.id,
+      JSON.stringify({ bought_on: '2026-03-01', company_name: 'Biedronka', company_id: story.id }),
+    );
     if (store.receipts.latestSourcedBoughtOn('ocr') !== '2026-03-01') throw new Error('json extract');
+    const receiptRow = store.receipts.listReceipts().find((r) => r.id === receipt.id);
+    if (!receiptRow) throw new Error('list missing receipt');
+    if (receiptRow.boughtOn !== '2026-03-01') throw new Error('list boughtOn');
+    if (receiptRow.shopName !== story.name) throw new Error('list shopName');
     store.receipts.deleteReceipt(receipt.id);
     try {
       store.receipts.getReceipt(receipt.id);
@@ -118,6 +129,14 @@ function runStoreSmoke(): void {
     } catch (err) {
       if (!(err instanceof NotFoundError)) throw err;
     }
+
+    const named = store.receipts.createReceipt('named.jpg');
+    store.receipts.saveAIResponse(named.id, JSON.stringify({ bought_on: '2026-03-02', company_name: 'Lidl' }));
+    const namedRow = store.receipts.listReceipts().find((r) => r.id === named.id);
+    if (!namedRow || namedRow.boughtOn !== '2026-03-02' || namedRow.shopName !== 'Lidl') {
+      throw new Error('list company_name');
+    }
+    store.receipts.deleteReceipt(named.id);
 
     const only = store.receipts.createReceipt('only.jpg');
     store.receipts.saveAIResponse(only.id, '{}');
@@ -224,7 +243,7 @@ function runDrizzleIdRepairSmoke(): void {
   }
 }
 
-if (require.main === module) {
+if (process.argv[1] && import.meta.filename === resolve(process.argv[1])) {
   runStoreSmoke();
   runDrizzleIdRepairSmoke();
   console.log('store smoke ok');

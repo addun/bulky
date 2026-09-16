@@ -1,6 +1,6 @@
-import Decimal from 'decimal.js';
-import type { QuotedPrice } from '../../domain/price-stats';
-import type { Product } from '../products/products.models';
+import { Decimal } from 'decimal.js';
+import type { QuotedPrice } from '../../domain/price-stats.js';
+import type { Product } from '../products/products.models.js';
 
 export type ComparisonGroup = {
   id: number;

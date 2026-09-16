@@ -1,4 +1,4 @@
-import type { Product } from './products.models';
+import type { Product } from './products.models.js';
 
 export type ProductRow = {
   id: number;

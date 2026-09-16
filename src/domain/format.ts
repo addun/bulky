@@ -1,4 +1,4 @@
-import Decimal from 'decimal.js';
+import { Decimal } from 'decimal.js';
 
 export function formatQuantity(d: Decimal): string {
   let s = d.toString();

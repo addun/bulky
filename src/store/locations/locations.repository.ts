@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { count, eq, sql } from 'drizzle-orm';
-import { DatabaseService } from '../../db/database.service';
-import { changesOf, countOf, emptyStr, lastId, nocaseOrder } from '../../db/query';
-import { purchases, retailChains, stories } from '../../db/schema';
+import { DatabaseService } from '../../db/database.service.js';
+import { changesOf, countOf, emptyStr, lastId, nocaseOrder } from '../../db/query.js';
+import { purchases, retailChains, stories } from '../../db/schema.js';
 import {
   DuplicateError,
   InvalidRetailChainError,
@@ -11,8 +11,8 @@ import {
   NotFoundError,
   RetailChainInUseError,
   StoryInUseError,
-} from '../../domain/errors';
-import type { RetailChain, Story } from './locations.models';
+} from '../../domain/errors.js';
+import type { RetailChain, Story } from './locations.models.js';
 
 const chainStoryCount = sql<number>`cast((
   select count(*) from stories s where s.retail_chain_id = ${retailChains.id}

@@ -1,3 +1,3 @@
-export { UnitsModule } from './units.module';
-export { UnitsRepository } from './units.repository';
-export * from './units.models';
+export { UnitsModule } from './units.module.js';
+export { UnitsRepository } from './units.repository.js';
+export * from './units.models.js';

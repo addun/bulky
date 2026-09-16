@@ -1,3 +1,3 @@
-export { ReceiptsModule } from './receipts.module';
-export { ReceiptsRepository } from './receipts.repository';
-export * from './receipts.models';
+export { ReceiptsModule } from './receipts.module.js';
+export { ReceiptsRepository } from './receipts.repository.js';
+export * from './receipts.models.js';

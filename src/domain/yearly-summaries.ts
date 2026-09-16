@@ -1,5 +1,5 @@
-import Decimal from 'decimal.js';
-import { KIND_PURCHASE, type Purchase } from '../store/purchases/purchases.models';
+import { Decimal } from 'decimal.js';
+import { KIND_PURCHASE, type Purchase } from '../store/purchases/purchases.models.js';
 
 export type YearSummary = {
   year: string;

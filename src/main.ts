@@ -1,4 +1,3 @@
-import './paths';
 import 'reflect-metadata';
 import { join } from 'node:path';
 import { NestFactory } from '@nestjs/core';
@@ -6,11 +5,11 @@ import { BadRequestException, StandardSchemaValidationPipe } from '@nestjs/commo
 import { NestExpressApplication } from '@nestjs/platform-express';
 import hbs from 'hbs';
 import { json, urlencoded } from 'express';
-import { AppModule } from './app.module';
-import { parseListenAddr } from './config/env';
-import { registerHandlebarsHelpers, setCurrencySymbol } from './web/helpers';
-import { HtmlExceptionFilter } from './web/html-exception.filter';
-import { DatabaseService } from './db/database.service';
+import { AppModule } from './app.module.js';
+import { parseListenAddr } from './config/env.js';
+import { registerHandlebarsHelpers, setCurrencySymbol } from './web/helpers.js';
+import { HtmlExceptionFilter } from './web/html-exception.filter.js';
+import { DatabaseService } from './db/database.service.js';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bodyParser: false });
@@ -24,8 +23,8 @@ async function bootstrap(): Promise<void> {
   );
   app.useGlobalFilters(new HtmlExceptionFilter());
 
-  const viewsDir = join(__dirname, '..', 'views');
-  const publicDir = join(__dirname, '..', 'public');
+  const viewsDir = join(import.meta.dirname, '..', 'views');
+  const publicDir = join(import.meta.dirname, '..', 'public');
 
   app.setBaseViewsDir(viewsDir);
   app.setViewEngine('hbs');

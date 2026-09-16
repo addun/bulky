@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Agent } from './agent';
-import { configured, type Bill, type Config } from './types';
+import { Agent } from './agent.js';
+import { configured, type Bill, type Config } from './types.js';
 
 @Injectable()
 export class OcrService {

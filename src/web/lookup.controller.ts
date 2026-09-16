@@ -1,14 +1,14 @@
 import { Controller, Get, Param, Query, Res } from '@nestjs/common';
 import type { Response } from 'express';
-import { ComparisonGroupsRepository } from '@app/store/comparison-groups';
-import { ProductsRepository } from '@app/store/products';
-import { PurchasesRepository } from '@app/store/purchases';
-import { formatMoneyPerUnit } from '../domain/format';
-import { bestRecentPrice, pricesBetween } from '../domain/price-stats';
-import { boughtOnDate } from '../domain/bought-on';
-import { ViewsService } from './views.service';
-import { presentProduct, presentQuote, presentRelated } from './present';
-import { id, qQuery } from './schema';
+import { ComparisonGroupsRepository } from '#app/store/comparison-groups';
+import { ProductsRepository } from '#app/store/products';
+import { PurchasesRepository } from '#app/store/purchases';
+import { formatMoneyPerUnit } from '../domain/format.js';
+import { bestRecentPrice, pricesBetween } from '../domain/price-stats.js';
+import { boughtOnDate } from '../domain/bought-on.js';
+import { ViewsService } from './views.service.js';
+import { presentProduct, presentQuote, presentRelated } from './present.js';
+import { id, qQuery } from './schema.js';
 
 const SUGGEST_LIMIT = 10;
 

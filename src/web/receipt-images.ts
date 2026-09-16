@@ -3,7 +3,7 @@ import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { Injectable } from '@nestjs/common';
-import { DatabaseService } from '../db/database.service';
+import { DatabaseService } from '../db/database.service.js';
 
 const receiptImageID = /^[a-f0-9]{32}$/;
 

@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { and, desc, eq, inArray, ne, sql } from 'drizzle-orm';
-import { DatabaseService } from '../../db/database.service';
-import { changesOf, lastId } from '../../db/query';
-import { receipts } from '../../db/schema';
-import { boughtOnDate, boughtOnTime } from '../../domain/bought-on';
+import { DatabaseService } from '../../db/database.service.js';
+import { changesOf, lastId } from '../../db/query.js';
+import { receipts, stories } from '../../db/schema.js';
+import { boughtOnDate, boughtOnTime } from '../../domain/bought-on.js';
 import {
   AliasScopeError,
   DuplicateError,
@@ -11,7 +11,7 @@ import {
   NotFoundError,
   ReceiptMigratedError,
   ReceiptNotReadyError,
-} from '../../domain/errors';
+} from '../../domain/errors.js';
 import {
   RECEIPT_FAILED,
   RECEIPT_MIGRATED,
@@ -22,12 +22,13 @@ import {
   type BillImportResult,
   type BillLineInput,
   type Receipt,
-} from './receipts.models';
-import { AliasesRepository } from '@app/store/aliases';
-import { LocationsRepository } from '@app/store/locations';
-import { nowRFC3339 } from '@app/store/now';
-import { ProductsRepository } from '@app/store/products';
-import { PurchasesRepository } from '@app/store/purchases';
+  type ReceiptListItem,
+} from './receipts.models.js';
+import { AliasesRepository } from '#app/store/aliases';
+import { LocationsRepository } from '#app/store/locations';
+import { nowRFC3339 } from '#app/store/now';
+import { ProductsRepository } from '#app/store/products';
+import { PurchasesRepository } from '#app/store/purchases';
 
 @Injectable()
 export class ReceiptsRepository {
@@ -92,7 +93,7 @@ export class ReceiptsRepository {
     return mapReceipt(row);
   }
 
-  listReceipts(): Receipt[] {
+  listReceipts(): ReceiptListItem[] {
     return this.orm
       .select({
         id: receipts.id,
@@ -100,19 +101,22 @@ export class ReceiptsRepository {
         status: receipts.status,
         errorMessage: receipts.errorMessage,
         createdAt: receipts.createdAt,
+        boughtOn: sql<string>`trim(coalesce(case when json_valid(${receipts.rawResponse}) then json_extract(${receipts.rawResponse}, '$.bought_on') end, ''))`,
+        shopName: sql<string>`trim(coalesce(${stories.name}, case when json_valid(${receipts.rawResponse}) then json_extract(${receipts.rawResponse}, '$.company_name') end, ''))`,
       })
       .from(receipts)
+      .leftJoin(
+        stories,
+        sql`${stories.id} = case when json_valid(${receipts.rawResponse}) then json_extract(${receipts.rawResponse}, '$.company_id') end`,
+      )
       .orderBy(desc(receipts.id))
       .all()
-      .map((r) =>
-        mapReceipt({
-          ...r,
-          rawResponse: '',
-          source: '',
-          externalId: '',
-          sourcePayload: '',
-        }),
-      );
+      .map((r) => ({
+        ...r,
+        imagePath: r.imagePath.trim() === '' ? null : r.imagePath,
+        boughtOn: (r.boughtOn ?? '').trim(),
+        shopName: (r.shopName ?? '').trim(),
+      }));
   }
 
   listPendingReceiptIDs(): number[] {

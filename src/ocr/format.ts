@@ -1,7 +1,7 @@
-import { sniffImage } from './image';
-import { prepareJPEG } from './image';
-import { previewPDF } from './pdf';
-import { MaxImageBytes, NoImageError } from './types';
+import { sniffImage } from './image.js';
+import { prepareJPEG } from './image.js';
+import { previewPDF } from './pdf.js';
+import { MaxImageBytes, NoImageError } from './types.js';
 
 export const fileUnknown = 0;
 export const fileImage = 1;

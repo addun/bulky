@@ -1,7 +1,7 @@
-import { isLast30Days as quoteIsLast30Days } from '../domain/price-stats';
-import type { QuotedPrice } from '../domain/price-stats';
-import { aliasScopeLabel, aliasScopeValue, type ProductAlias } from '@app/store/aliases';
-import { type RelatedProduct } from '@app/store/comparison-groups';
+import { isLast30Days as quoteIsLast30Days } from '../domain/price-stats.js';
+import type { QuotedPrice } from '../domain/price-stats.js';
+import { aliasScopeLabel, aliasScopeValue, type ProductAlias } from '#app/store/aliases';
+import { type RelatedProduct } from '#app/store/comparison-groups';
 import {
   chainLabel,
   storyAddressLine,
@@ -9,17 +9,17 @@ import {
   storyStreetLine,
   type RetailChain,
   type Story,
-} from '@app/store/locations';
+} from '#app/store/locations';
 import {
   conversionFor,
   packConversionsJSON,
   unitIdsAttr,
   type Product,
   type ProductListItem,
-} from '@app/store/products';
-import { yearlySummaries } from '../domain/yearly-summaries';
-import { KIND_PRICE, KIND_PURCHASE, type Purchase } from '@app/store/purchases';
-import { RECEIPT_PENDING, receiptStatusLabel, type Receipt } from '@app/store/receipts';
+} from '#app/store/products';
+import { yearlySummaries } from '../domain/yearly-summaries.js';
+import { KIND_PRICE, KIND_PURCHASE, type Purchase } from '#app/store/purchases';
+import { RECEIPT_PENDING, receiptStatusLabel, type Receipt, type ReceiptListItem } from '#app/store/receipts';
 
 export type Page = {
   title: string;
@@ -87,6 +87,16 @@ export function presentAlias(a: ProductAlias): ProductAlias & { scopeLabel: stri
 
 export function presentReceipt(r: Receipt): Receipt & { statusLabel: string; reading: boolean } {
   return { ...r, statusLabel: receiptStatusLabel(r), reading: r.status === RECEIPT_PENDING };
+}
+
+export function presentReceiptListItem(
+  r: ReceiptListItem,
+): ReceiptListItem & { statusLabel: string; displayDate: string } {
+  return {
+    ...r,
+    statusLabel: receiptStatusLabel(r),
+    displayDate: r.boughtOn.trim() || r.createdAt,
+  };
 }
 
 export function presentRelated(r: RelatedProduct): RelatedProduct & { quote: ReturnType<typeof presentQuote> } {

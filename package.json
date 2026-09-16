@@ -2,6 +2,49 @@
   "name": "bulkly",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
+  "imports": {
+    "#app/store": {
+      "types": "./src/store/index.ts",
+      "default": "./dist/store/index.js"
+    },
+    "#app/store/aliases": {
+      "types": "./src/store/aliases/index.ts",
+      "default": "./dist/store/aliases/index.js"
+    },
+    "#app/store/comparison-groups": {
+      "types": "./src/store/comparison-groups/index.ts",
+      "default": "./dist/store/comparison-groups/index.js"
+    },
+    "#app/store/locations": {
+      "types": "./src/store/locations/index.ts",
+      "default": "./dist/store/locations/index.js"
+    },
+    "#app/store/now": {
+      "types": "./src/store/now.ts",
+      "default": "./dist/store/now.js"
+    },
+    "#app/store/products": {
+      "types": "./src/store/products/index.ts",
+      "default": "./dist/store/products/index.js"
+    },
+    "#app/store/products/product-row": {
+      "types": "./src/store/products/product-row.ts",
+      "default": "./dist/store/products/product-row.js"
+    },
+    "#app/store/purchases": {
+      "types": "./src/store/purchases/index.ts",
+      "default": "./dist/store/purchases/index.js"
+    },
+    "#app/store/receipts": {
+      "types": "./src/store/receipts/index.ts",
+      "default": "./dist/store/receipts/index.js"
+    },
+    "#app/store/units": {
+      "types": "./src/store/units/index.ts",
+      "default": "./dist/store/units/index.js"
+    }
+  },
   "description": "A local log of products you buy in bulk",
   "license": "UNLICENSED",
   "scripts": {

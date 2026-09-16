@@ -3,7 +3,7 @@ import { unlinkSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { Injectable } from '@nestjs/common';
 import sharp from 'sharp';
-import { DatabaseService } from '../db/database.service';
+import { DatabaseService } from '../db/database.service.js';
 
 const MAX_IMAGE_BYTES = 5 << 20;
 const IMAGE_EDGE = 240;

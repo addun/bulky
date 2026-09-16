@@ -1,5 +1,5 @@
-import Decimal from 'decimal.js';
-import type { QuotedPrice } from '../../domain/price-stats';
+import { Decimal } from 'decimal.js';
+import type { QuotedPrice } from '../../domain/price-stats.js';
 
 export type ProductConversion = {
   unitId: number;

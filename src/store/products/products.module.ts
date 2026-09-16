@@ -1,11 +1,11 @@
 import { Module } from '@nestjs/common';
-import { DatabaseModule } from '../../db/database.module';
-import { AliasesModule } from '@app/store/aliases';
-import { ComparisonGroupsModule } from '@app/store/comparison-groups';
-import { LocationsModule } from '@app/store/locations';
-import { PurchasesModule } from '@app/store/purchases';
-import { UnitsModule } from '@app/store/units';
-import { ProductsRepository } from './products.repository';
+import { DatabaseModule } from '../../db/database.module.js';
+import { AliasesModule } from '#app/store/aliases';
+import { ComparisonGroupsModule } from '#app/store/comparison-groups';
+import { LocationsModule } from '#app/store/locations';
+import { PurchasesModule } from '#app/store/purchases';
+import { UnitsModule } from '#app/store/units';
+import { ProductsRepository } from './products.repository.js';
 
 @Module({
   imports: [DatabaseModule, UnitsModule, AliasesModule, PurchasesModule, ComparisonGroupsModule, LocationsModule],
