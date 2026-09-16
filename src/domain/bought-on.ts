@@ -1,63 +1,41 @@
-const BOUGHT_ON_DATE = /^\d{4}-\d{2}-\d{2}$/;
-const BOUGHT_ON_CLOCK = /^\d{2}:\d{2}$/;
-const MIDDAY = '12:00';
-
-export function joinBoughtOn(date: string, clock: string): string {
-  const split = splitBoughtOn(date);
-  let day = split.date;
-  clock = clock.trim();
-  if (clock === '') {
-    clock = split.clock;
-  } else {
-    const t = clockPart(clock);
-    if (t !== '') clock = t;
-  }
-  if (day === '') return '';
-  if (clock === '') clock = MIDDAY;
-  return `${day} ${clock}`;
-}
-
-export function splitBoughtOn(s: string): { date: string; clock: string } {
-  s = s.trim();
-  if (s === '') return { date: '', clock: '' };
-  s = s.replaceAll('T', ' ').replaceAll('\u00a0', ' ');
-  const parts = s.split(/\s+/);
-  const date = parts[0] ?? '';
-  const clock = parts.length >= 2 ? clockPart(parts[1] ?? '') : '';
-  return { date, clock };
-}
-
-export function normalizeBoughtOn(s: string): string {
-  const { date, clock: rawClock } = splitBoughtOn(s);
-  if (date === '') throw new Error('required');
-  if (!BOUGHT_ON_DATE.test(date) || Number.isNaN(Date.parse(`${date}T00:00:00`))) {
-    throw new Error('invalid date');
-  }
-  const clock = rawClock === '' ? MIDDAY : rawClock;
-  if (!BOUGHT_ON_CLOCK.test(clock)) throw new Error('invalid time');
-  return `${date} ${clock}`;
-}
+/** Stored and displayed as `YYYY-MM-DD HH:MM`. datetime-local uses a `T`. */
 
 export function boughtOnDate(s: string): string {
-  return splitBoughtOn(s).date;
+  const t = s.trim().replace('T', ' ');
+  return t.length >= 10 ? t.slice(0, 10) : '';
 }
 
 export function boughtOnTime(s: string): string {
-  return splitBoughtOn(s).clock;
+  const t = s.trim().replace('T', ' ');
+  return t.length >= 16 ? t.slice(11, 16) : '';
 }
 
 export function formatBoughtOn(s: string): string {
-  const { date, clock } = splitBoughtOn(s);
-  if (date === '') return s.trim();
-  if (clock === '') return date;
-  return `${date} ${clock}`;
+  const day = boughtOnDate(s);
+  const clock = boughtOnTime(s);
+  if (day === '') return s.trim();
+  if (clock === '') return day;
+  return `${day} ${clock}`;
 }
 
-function clockPart(s: string): string {
-  s = s.trim().replaceAll('.', ':');
-  const z = s.indexOf('Z');
-  if (z >= 0) s = s.slice(0, z);
-  if (s.length >= 8 && /^\d{2}:\d{2}:\d{2}/.test(s)) return s.slice(0, 5);
-  if (s.length >= 5 && /^\d{2}:\d{2}/.test(s)) return s.slice(0, 5);
-  return '';
+export function toDatetimeLocal(s: string): string {
+  const v = formatBoughtOn(s);
+  return v.length >= 16 ? `${v.slice(0, 10)}T${v.slice(11, 16)}` : '';
+}
+
+export function fromDatetimeLocal(s: string): string {
+  const v = formatBoughtOn(s);
+  return v.length >= 16 ? v : '';
+}
+
+export function combineBoughtOn(date: string, clock: string): string {
+  const already = fromDatetimeLocal(date);
+  if (already) return already;
+  return fromDatetimeLocal(`${date.trim()} ${clock.trim()}`);
+}
+
+export function nowBoughtOn(): string {
+  const n = new Date();
+  const p = (x: number) => String(x).padStart(2, '0');
+  return `${n.getFullYear()}-${p(n.getMonth() + 1)}-${p(n.getDate())} ${p(n.getHours())}:${p(n.getMinutes())}`;
 }

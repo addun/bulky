@@ -1,5 +1,5 @@
 import Decimal from 'decimal.js';
-import { boughtOnDate, boughtOnTime, joinBoughtOn, normalizeBoughtOn } from '../domain/bought-on';
+import { boughtOnDate, boughtOnTime, combineBoughtOn, fromDatetimeLocal, nowBoughtOn } from '../domain/bought-on';
 import { fold, matchProduct, type Label } from '../domain/match';
 import { type ProductAlias } from '@app/store/aliases';
 import { storyAddressLine, type Story } from '@app/store/locations';
@@ -100,7 +100,7 @@ export function hydrateBill(
 }
 
 export function billToImport(bill: Bill): BillImport {
-  const boughtOn = normalizeBoughtOn(joinBoughtOn(bill.boughtOn, bill.boughtAt));
+  const boughtOn = combineBoughtOn(bill.boughtOn, bill.boughtAt);
   const storyId = bill.storyId > 0 ? bill.storyId : null;
   const inn: BillImport = {
     boughtOn,
@@ -210,18 +210,18 @@ export function receiptToView(
   }
   const view = billToView(bill, r.id, r.imagePath ?? '', r.status);
   view.storyId = knownStoryID(view.storyId, stories);
-  if (view.boughtOn === '') {
-    const now = new Date();
-    view.boughtOn = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
-    view.boughtAt = `${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
-  }
+  const combined = combineBoughtOn(view.boughtOn, view.boughtAt);
+  if (combined !== '') view.boughtOn = combined;
+  else if (view.boughtOn === '' && view.boughtAt === '') view.boughtOn = nowBoughtOn();
+  else view.boughtOn = '';
+  view.boughtAt = boughtOnTime(view.boughtOn);
   return decorateView(view);
 }
 
 export function viewToRawJSON(view: ReceiptView): string {
   const bill = emptyBill();
-  bill.boughtOn = view.boughtOn;
-  bill.boughtAt = view.boughtAt;
+  bill.boughtOn = boughtOnDate(view.boughtOn);
+  bill.boughtAt = boughtOnTime(view.boughtOn);
   bill.notes = view.notes;
   bill.storyId = view.storyId;
   bill.storyName = view.storyName;
@@ -258,13 +258,11 @@ export function parseReceiptForm(
   _products: ProductListItem[],
 ): { inn: BillImport; view: ReceiptView; msg: string } {
   const view = parseReceiptView(get);
-  let boughtOn: string;
-  try {
-    boughtOn = normalizeBoughtOn(joinBoughtOn(view.boughtOn, view.boughtAt));
-  } catch {
+  const boughtOn = fromDatetimeLocal(view.boughtOn);
+  if (boughtOn === '') {
     return { inn: emptyImport(), view, msg: 'Date must be a valid day.' };
   }
-  view.boughtOn = boughtOnDate(boughtOn);
+  view.boughtOn = boughtOn;
   view.boughtAt = boughtOnTime(boughtOn);
 
   const inn: BillImport = { boughtOn: boughtOn, storyId: view.storyId || null, story: null, receiptId: null, lines: [] };
@@ -315,7 +313,7 @@ export function parseReceiptForm(
 function parseReceiptView(get: (name: string) => string): ReceiptView {
   const view = baseView(formInt(get('receipt_id')), get('image_path').trim(), '');
   view.boughtOn = get('bought_on').trim();
-  view.boughtAt = get('bought_at').trim();
+  view.boughtAt = '';
   view.notes = get('notes').trim();
   view.storyId = formInt(get('story_id'));
   view.storyName = get('story_name').trim();
@@ -441,7 +439,7 @@ export function receiptVisitFacts(
   r: Receipt,
   buys: ReceiptPurchase[],
   stories: Story[],
-): { boughtOn: string; boughtAt: string; notes: string; story: Story } {
+): { boughtOn: string; notes: string; story: Story } {
   let bill = emptyBill();
   if (r.rawResponse.trim() !== '') {
     try {
@@ -451,11 +449,10 @@ export function receiptVisitFacts(
     }
   }
   const notes = bill.notes;
-  const boughtAt = bill.boughtAt;
   if (buys.length > 0) {
-    return { boughtOn: buys[0]!.boughtOn, boughtAt, notes, story: storyByID(stories, buys[0]!.storyId) };
+    return { boughtOn: buys[0]!.boughtOn, notes, story: storyByID(stories, buys[0]!.storyId) };
   }
-  return { boughtOn: bill.boughtOn, boughtAt, notes, story: storyByID(stories, bill.storyId) };
+  return { boughtOn: combineBoughtOn(bill.boughtOn, bill.boughtAt), notes, story: storyByID(stories, bill.storyId) };
 }
 
 export function storyByID(stories: Story[], id: number | null): Story {
@@ -601,8 +598,4 @@ function decorateView(view: ReceiptView): ReceiptView {
 
 function emptyImport(): BillImport {
   return { storyId: null, story: null, receiptId: null, boughtOn: '', lines: [] };
-}
-
-function pad2(n: number): string {
-  return String(n).padStart(2, '0');
 }

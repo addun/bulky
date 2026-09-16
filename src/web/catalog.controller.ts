@@ -21,7 +21,7 @@ import {
   UnitMismatchError,
 } from '../domain/errors';
 import { parseDecimal } from '../domain/format';
-import { joinBoughtOn, normalizeBoughtOn } from '../domain/bought-on';
+import { fromDatetimeLocal, nowBoughtOn } from '../domain/bought-on';
 import { AliasesRepository, type ProductAlias } from '@app/store/aliases';
 import { ComparisonGroupsRepository } from '@app/store/comparison-groups';
 import { LocationsRepository, type RetailChain, type Story } from '@app/store/locations';
@@ -1391,16 +1391,16 @@ export class CatalogController {
   }
 
   private parsePurchase(body: PurchaseForm): { boughtOn: string; qty: Decimal; amount: Decimal; err: string } {
+    const when = fromDatetimeLocal(body.bought_on);
+    if (when === '') {
+      return { boughtOn: '', qty: new Decimal(0), amount: new Decimal(0), err: 'Date must be a valid day.' };
+    }
     try {
-      const when = normalizeBoughtOn(joinBoughtOn(body.bought_on, body.bought_at));
       const amount = parseDecimal(body.amount, 2, true);
       const qty = parseDecimal(body.quantity, 8, false);
       return { boughtOn: when, qty, amount, err: '' };
     } catch (err) {
       const msg = err instanceof Error ? err.message : '';
-      if (msg === 'required' || msg.includes('invalid date') || msg.includes('invalid time')) {
-        return { boughtOn: '', qty: new Decimal(0), amount: new Decimal(0), err: 'Date must be a valid day.' };
-      }
       if (body.amount !== '') {
         try {
           parseDecimal(body.amount, 2, true);
@@ -1591,16 +1591,9 @@ function purchaseFromForm(body: PurchaseForm): Purchase {
     storyId: body.story_id || null,
     kind: body.kind as Purchase['kind'],
     receiptId: null,
-    boughtOn: joinBoughtOn(body.bought_on, body.bought_at),
+    boughtOn: fromDatetimeLocal(body.bought_on),
     quantity: quantity,
     amount: amount,
     createdAt: '',
   };
-}
-
-function nowBoughtOn(): string {
-  const n = new Date();
-  const d = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
-  const t = `${String(n.getHours()).padStart(2, '0')}:${String(n.getMinutes()).padStart(2, '0')}`;
-  return `${d} ${t}`;
 }

@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ConfigService } from '@nestjs/config';
+import Database from 'better-sqlite3';
 import Decimal from 'decimal.js';
 import { DatabaseService } from '../db/database.service';
 import { DuplicateError, NotFoundError } from '../domain/errors';
@@ -28,11 +29,42 @@ function createStore(db: DatabaseService) {
   return { units, locations, aliases, purchases, groups, products, receipts };
 }
 
+function assertMigrationCleanup(db: DatabaseService): void {
+  const goose = db.sqlite
+    .prepare(`SELECT 1 AS ok FROM sqlite_master WHERE type='table' AND name='goose_db_version'`)
+    .get();
+  if (goose) throw new Error('goose_db_version should be dropped');
+
+  const idCol = (db.sqlite.prepare(`PRAGMA table_info("__drizzle_migrations")`).all() as Array<{ name: string; type: string }>).find(
+    (c) => c.name === 'id',
+  );
+  if (!idCol || idCol.type.toLowerCase() !== 'integer') throw new Error(`drizzle id type: ${idCol?.type}`);
+
+  const rows = db.sqlite.prepare(`SELECT id FROM "__drizzle_migrations" ORDER BY created_at`).all() as Array<{ id: number | null }>;
+  if (rows.length !== 2 || rows[0]!.id !== 1 || rows[1]!.id !== 2) {
+    throw new Error(`drizzle ids: ${JSON.stringify(rows)}`);
+  }
+}
+
 function runStoreSmoke(): void {
   const dir = mkdtempSync(join(tmpdir(), 'bulkly-drizzle-'));
+  const leftover = new Database(join(dir, 'bulkly.db'));
+  leftover.exec(`
+    CREATE TABLE goose_db_version (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      version_id INTEGER NOT NULL,
+      is_applied INTEGER NOT NULL,
+      tstamp TIMESTAMP DEFAULT (datetime('now'))
+    );
+    INSERT INTO goose_db_version (version_id, is_applied) VALUES (19, 1);
+  `);
+  leftover.close();
   const db = new DatabaseService(new ConfigService({ DATA_DIR: dir }));
   try {
+    assertMigrationCleanup(db);
     const store = createStore(db);
+    store.units.createUnit('kg');
+    store.units.createUnit('g');
     const kg = store.units.findUnitByName('KG');
     const g = store.units.findUnitByName('g');
     if (kg.name !== 'kg') throw new Error(`expected kg, got ${kg.name}`);
@@ -162,7 +194,38 @@ function runStoreSmoke(): void {
   }
 }
 
+function runDrizzleIdRepairSmoke(): void {
+  const dir = mkdtempSync(join(tmpdir(), 'bulkly-drizzle-repair-'));
+  const first = new DatabaseService(new ConfigService({ DATA_DIR: dir }));
+  first.onModuleDestroy();
+
+  const raw = new Database(join(dir, 'bulkly.db'));
+  raw.exec(`
+    CREATE TABLE "__drizzle_migrations_broken" (
+      id SERIAL PRIMARY KEY,
+      hash text NOT NULL,
+      created_at numeric
+    );
+    INSERT INTO "__drizzle_migrations_broken" (hash, created_at)
+    SELECT hash, created_at FROM "__drizzle_migrations";
+    DROP TABLE "__drizzle_migrations";
+    ALTER TABLE "__drizzle_migrations_broken" RENAME TO "__drizzle_migrations";
+  `);
+  const broken = raw.prepare(`SELECT id FROM "__drizzle_migrations"`).all() as Array<{ id: number | null }>;
+  if (broken.some((row) => row.id != null)) throw new Error(`expected null drizzle ids, got ${JSON.stringify(broken)}`);
+  raw.close();
+
+  const db = new DatabaseService(new ConfigService({ DATA_DIR: dir }));
+  try {
+    assertMigrationCleanup(db);
+  } finally {
+    db.onModuleDestroy();
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 if (require.main === module) {
   runStoreSmoke();
+  runDrizzleIdRepairSmoke();
   console.log('store smoke ok');
 }

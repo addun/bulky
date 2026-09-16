@@ -5,7 +5,6 @@ import { ConfigService } from '@nestjs/config';
 import Database from 'better-sqlite3';
 import { drizzle, BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
-import { readMigrationFiles } from 'drizzle-orm/migrator';
 import * as schema from '../db/schema';
 
 @Injectable()
@@ -29,8 +28,7 @@ export class DatabaseService implements OnModuleDestroy {
     this.sqlite.pragma('journal_mode = WAL');
     this.drizzle = drizzle(this.sqlite, { schema });
     this.applyMigrations();
-    this.ensureCompatibleColumns();
-    this.sqlite.exec(`INSERT OR IGNORE INTO units (name) VALUES ('kg'), ('g')`);
+    this.sqlite.exec(`DROP TABLE IF EXISTS goose_db_version`);
   }
 
   imagesDirPath(): string {
@@ -52,62 +50,49 @@ export class DatabaseService implements OnModuleDestroy {
 
   private applyMigrations(): void {
     const migrationsFolder = join(__dirname, 'migrations');
-    this.stampLegacySchema(migrationsFolder);
     this.sqlite.pragma('foreign_keys = OFF');
     try {
       migrate(this.drizzle, { migrationsFolder });
     } finally {
       this.sqlite.pragma('foreign_keys = ON');
     }
+    this.repairDrizzleMigrationsTable();
   }
 
-  /** Existing DBs already have tables; record the baseline as applied so later migrations still run. */
-  private stampLegacySchema(migrationsFolder: string): void {
-    if (!this.tableExists('units')) return;
-    if (this.migrationCount() > 0) return;
-    const first = readMigrationFiles({ migrationsFolder })[0];
-    if (!first) return;
-    this.sqlite.exec(
-      `CREATE TABLE IF NOT EXISTS "__drizzle_migrations" (
-        id SERIAL PRIMARY KEY,
-        hash text NOT NULL,
-        created_at numeric
-      )`,
-    );
-    this.sqlite
-      .prepare(`INSERT INTO "__drizzle_migrations" ("hash", "created_at") VALUES (?, ?)`)
-      .run(first.hash, first.folderMillis);
-  }
+  /**
+   * drizzle-orm 0.44 still creates this table with Postgres `SERIAL`, so SQLite
+   * stores id as NULL. Rebuild it as INTEGER PRIMARY KEY after migrate().
+   */
+  private repairDrizzleMigrationsTable(): void {
+    const exists = this.sqlite
+      .prepare(`SELECT 1 AS ok FROM sqlite_master WHERE type='table' AND name='__drizzle_migrations'`)
+      .get() as { ok: number } | undefined;
+    if (!exists) return;
 
-  private tableExists(name: string): boolean {
-    const row = this.sqlite.prepare(`SELECT 1 AS ok FROM sqlite_master WHERE type='table' AND name=?`).get(name) as
-      | { ok: number }
-      | undefined;
-    return Boolean(row);
-  }
+    const cols = this.sqlite.prepare(`PRAGMA table_info("__drizzle_migrations")`).all() as Array<{
+      name: string;
+      type: string;
+      pk: number;
+    }>;
+    const idCol = cols.find((c) => c.name === 'id');
+    const integerPk = Boolean(idCol && idCol.type.toLowerCase() === 'integer' && idCol.pk === 1);
+    const nullIds = (this.sqlite.prepare(`SELECT COUNT(*) AS n FROM "__drizzle_migrations" WHERE id IS NULL`).get() as { n: number })
+      .n;
+    if (integerPk && Number(nullIds) === 0) return;
 
-  private migrationCount(): number {
-    if (!this.tableExists('__drizzle_migrations')) return 0;
-    const row = this.sqlite.prepare(`SELECT COUNT(*) AS n FROM "__drizzle_migrations"`).get() as { n: number };
-    return Number(row.n);
-  }
-
-  /** Additive columns for DBs created before later Go migrations. Does not replay goose. */
-  private ensureCompatibleColumns(): void {
-    this.addColumnIfMissing('receipts', 'source', `TEXT NOT NULL DEFAULT ''`);
-    this.addColumnIfMissing('receipts', 'external_id', `TEXT NOT NULL DEFAULT ''`);
-    this.addColumnIfMissing('receipts', 'source_payload', `TEXT NOT NULL DEFAULT ''`);
-    this.addColumnIfMissing('products', 'ean', `TEXT NOT NULL DEFAULT ''`);
-    this.sqlite.exec(
-      `CREATE UNIQUE INDEX IF NOT EXISTS idx_receipts_source_external
-       ON receipts(source, external_id)
-       WHERE source != '' AND external_id != ''`,
-    );
-  }
-
-  private addColumnIfMissing(table: string, column: string, spec: string): void {
-    const cols = this.sqlite.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
-    if (cols.some((c) => c.name === column)) return;
-    this.sqlite.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${spec}`);
+    const rebuild = this.sqlite.transaction(() => {
+      this.sqlite.exec(`
+        CREATE TABLE "__drizzle_migrations_new" (
+          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+          hash text NOT NULL,
+          created_at numeric
+        );
+        INSERT INTO "__drizzle_migrations_new" (hash, created_at)
+        SELECT hash, created_at FROM "__drizzle_migrations" ORDER BY created_at ASC;
+        DROP TABLE "__drizzle_migrations";
+        ALTER TABLE "__drizzle_migrations_new" RENAME TO "__drizzle_migrations";
+      `);
+    });
+    rebuild();
   }
 }

@@ -21,10 +21,7 @@
 
     <fieldset class="form-group">
       <legend>Visit</legend>
-      <div class="form-row">
-        <label>Date <input type="date" name="bought_on" required value="{{dateValue view.boughtOn}}"></label>
-        <label>Hour <input type="time" name="bought_at" value="{{view.boughtAt}}"></label>
-      </div>
+      <label>Date and hour <input type="datetime-local" name="bought_on" required value="{{datetimeLocal view.boughtOn}}"></label>
       <label>
         Store
         <select name="story_id">

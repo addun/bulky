@@ -203,14 +203,12 @@ export const purchaseForm = z.object({
   story_id: optInt,
   kind: field,
   bought_on: field,
-  bought_at: field,
   amount: field,
   quantity: field,
 });
 
 export const receiptVisitForm = z.object({
   bought_on: field,
-  bought_at: field,
   story_id: optInt,
 });
 
