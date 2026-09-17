@@ -1,11 +1,24 @@
 {{> header}}
 <div class="lookup" data-product-search>
-  <form method="get" action="/">
-    <label class="sr" for="q">Find a product</label>
-    <input id="q" name="q" type="search" value="{{page.query}}" placeholder="Find a product" autocomplete="off" autofocus>
-  </form>
+  <div class="promo-hero">
+    <h1>Czy to promka?</h1>
+    <p class="lede">Szukaj produktu i sprawdź, czy dzisiejsza cena to prawdziwa Promocja</p>
+    <form class="promo-search" method="get" action="/">
+      <label class="sr" for="q">Szukaj produktu</label>
+      <span class="promo-search-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24">
+          <circle cx="11" cy="11" r="6.25" fill="none" stroke="currentColor" stroke-width="1.8"/>
+          <path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="m16.2 16.2 4.1 4.1"/>
+        </svg>
+      </span>
+      <input id="q" name="q" type="search" value="{{page.query}}" autocomplete="off" autofocus>
+    </form>
+  </div>
   <div data-suggest>
     {{> lookup_suggestions}}
   </div>
+  <template data-popular>
+    {{> lookup_suggestions mode="popular" products=popular}}
+  </template>
 </div>
 {{> footer}}
