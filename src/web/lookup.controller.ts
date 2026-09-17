@@ -7,7 +7,7 @@ import { formatMoneyPerUnit } from '../domain/format.js';
 import { bestRecentPrice, pricesBetween } from '../domain/price-stats.js';
 import { boughtOnDate } from '../domain/bought-on.js';
 import { ViewsService } from './views.service.js';
-import { presentProduct, presentPromoCard, presentQuote, presentRelated } from './present.js';
+import { presentProductPage, presentPromoCard } from './present.js';
 import { id, qQuery } from './schema.js';
 
 const SUGGEST_LIMIT = 10;
@@ -80,13 +80,14 @@ export class LookupController {
       const related = this.groups.relatedGroupProducts(productId, now);
       this.views.html(res, 'lookup_show', 200, {
         page: this.views.page(p.name, '', ''),
-        product: presentProduct(p),
-        quote: presentQuote(bestRecentPrice(purchases, now)),
+        ...presentProductPage(p, purchases, bestRecentPrice(purchases, now), points),
         chartJSON: JSON.stringify(rows),
         hasChart: points.length > 0,
         chartFrom: fmtDay(from365),
         chartTo: fmtDay(today),
-        related: related.map(presentRelated),
+        related: this.presentCards(
+          related.map((r) => ({ product: this.products.getProduct(r.id), quote: r.quote })),
+        ),
       });
     } catch (err) {
       if ((err as Error).name === 'NotFoundError') {

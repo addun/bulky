@@ -1,64 +1,67 @@
 {{> header}}
-<article class="product-head">
-  {{#if product.imagePath}}
-    <img class="hero" src="/images/{{product.imagePath}}" alt="">
-  {{else}}
-    <span class="hero hero-empty" aria-hidden="true"></span>
-  {{/if}}
-  <div>
-    <h1>{{product.name}}</h1>
-  </div>
-</article>
+<div class="lookup-show">
+  <a class="lookup-back" href="/">
+    <svg class="lookup-back-icon" viewBox="0 0 16 16" aria-hidden="true">
+      <path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M10.25 3.5 5.75 8l4.5 4.5"/>
+    </svg>
+    <span>Szukaj</span>
+  </a>
 
-<section class="price-stats">
-  <div>
-    {{#if quote}}
-      {{#if quote.isLast30Days}}
-        <p class="eyebrow">Lowest · 30 days</p>
-      {{else}}
-        <p class="eyebrow">Last recorded</p>
-      {{/if}}
-      <p class="price-stat">{{money quote.price}} / {{product.unitName}}</p>
-      {{#each (extraQuotes quote product)}}
-      <p class="price-extra">{{money this.price}} / {{this.unitName}}</p>
-      {{/each}}
-      <p class="meta">{{date quote.boughtOn}}</p>
+  <article class="product-head">
+    {{#if product.imagePath}}
+      <img class="product-photo" src="/images/{{product.imagePath}}" alt="">
     {{else}}
-      <p class="eyebrow">Lowest · 30 days</p>
+      <span class="promo-icon is-{{tint}}" aria-hidden="true">{{initial}}</span>
+    {{/if}}
+    <div>
+      <h1>{{product.name}}</h1>
+    </div>
+  </article>
+
+  <section class="price-stats">
+    {{#if quote}}
+      <p class="eyebrow">{{priceEyebrow}}</p>
+      <p class="price-stat">{{money quote.price}} / {{product.unitName}}</p>
+      {{#each extras}}
+      <p class="promo-alt">{{money this.price}} / {{this.unitName}}</p>
+      {{/each}}
+      {{#if priceNote}}<p class="price-when">{{priceNote}}</p>{{/if}}
+    {{else}}
+      <p class="eyebrow">Najlepsza cena, ostatnie 30 dni</p>
       <p class="price-stat">—</p>
     {{/if}}
-  </div>
-</section>
+  </section>
 
-<section>
-  <h2>Last 365 days</h2>
-  {{#if hasChart}}
-    <div class="price-chart" data-price-chart="{{chartJSON}}" data-chart-from="{{chartFrom}}" data-chart-to="{{chartTo}}" data-chart-symbol="{{page.symbol}}"></div>
-  {{else}}
-    <p class="empty">No prices in the last year.</p>
-  {{/if}}
-</section>
-
-{{#if related}}
-<section>
-  <h2>Check also</h2>
-  <ul class="ledger">
-    {{#each related}}
-    <li>
-      <a class="row" href="/products/{{this.id}}">
-        {{#if this.imagePath}}
-          <img class="thumb" src="/images/{{this.imagePath}}" alt="">
-        {{else}}
-          <span class="thumb thumb-empty" aria-hidden="true"></span>
-        {{/if}}
-        <span class="row-main">
-          <strong>{{this.name}}</strong>
-        </span>
-        <span class="row-amt">{{money this.quote.price}} / {{this.unitName}}</span>
-      </a>
-    </li>
+  {{#if stats}}
+  <section class="stat-table">
+    {{#each stats}}
+    <div class="stat-row">
+      <span class="stat-label">{{this.label}}</span>
+      <span class="stat-dots" aria-hidden="true"></span>
+      <span class="stat-value">{{#if this.money}}{{money this.money}}{{else}}{{this.text}}{{/if}}</span>
+    </div>
     {{/each}}
-  </ul>
-</section>
-{{/if}}
+  </section>
+  {{/if}}
+
+  <section class="chart-card">
+    <h2 class="promo-kicker">Historia cen</h2>
+    {{#if hasChart}}
+      <div class="price-chart" data-price-chart="{{chartJSON}}" data-chart-from="{{chartFrom}}" data-chart-to="{{chartTo}}" data-chart-symbol="{{page.symbol}}"></div>
+    {{else}}
+      <p class="empty">Brak cen z ostatniego roku.</p>
+    {{/if}}
+  </section>
+
+  {{#if related}}
+  <section>
+    <h2 class="promo-kicker">Podobne produkty</h2>
+    <ul class="promo-grid">
+      {{#each related}}
+      {{> promo_card}}
+      {{/each}}
+    </ul>
+  </section>
+  {{/if}}
+</div>
 {{> footer}}

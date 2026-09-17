@@ -1,15 +1,16 @@
+import { Decimal } from 'decimal.js';
 import {
   bestRecentPrice,
   extraQuotes,
   isLast30Days as quoteIsLast30Days,
+  lowestSince,
   promotionLabel,
   promotionQuote,
   WINDOW_LAST_RECORD,
 } from '../domain/price-stats.js';
-import type { QuotedPrice } from '../domain/price-stats.js';
+import type { PricePoint, QuotedPrice } from '../domain/price-stats.js';
 import { boughtOnDate } from '../domain/bought-on.js';
 import { aliasScopeLabel, aliasScopeValue, type ProductAlias } from '#app/store/aliases';
-import { type RelatedProduct } from '#app/store/comparison-groups';
 import {
   chainLabel,
   storyAddressLine,
@@ -92,7 +93,7 @@ export function presentPromoCard(
 } {
   const promo = promotionQuote(purchases);
   const shown = presentQuote(quote ?? bestRecentPrice(purchases, new Date()));
-  const initial = (product.name.trim().charAt(0) || '?').toUpperCase();
+  const initial = promoInitial(product.name);
   const current = shown?.price ?? promo.current ?? null;
   const extras = current
     ? extraQuotes({ price: current, boughtOn: shown?.boughtOn || '', window: WINDOW_LAST_RECORD }, product).filter(
@@ -110,11 +111,82 @@ export function presentPromoCard(
     was: promo.was,
     verdict: promo.verdict,
     verdictLabel: promotionLabel(promo.verdict),
-    tint: PROMO_TINTS[Math.abs(product.id) % PROMO_TINTS.length]!,
+    tint: promoTint(product.id),
     initial,
     extras,
     priceNote,
   };
+}
+
+export type ProductStatRow = {
+  label: string;
+  money?: Decimal;
+  text?: string;
+};
+
+export function presentProductPage(
+  product: Product,
+  purchases: Purchase[],
+  quote: QuotedPrice | null,
+  yearPoints: PricePoint[],
+): {
+  product: ReturnType<typeof presentProduct>;
+  quote: ReturnType<typeof presentQuote>;
+  extras: ReturnType<typeof extraQuotes>;
+  tint: (typeof PROMO_TINTS)[number];
+  initial: string;
+  priceEyebrow: string;
+  priceNote: string;
+  stats: ProductStatRow[];
+} {
+  const shown = presentQuote(quote);
+  const extras = shown
+    ? extraQuotes(shown, product).filter((q) => q.price.gte('0.01'))
+    : [];
+  const today = new Date();
+  const from30 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  from30.setDate(from30.getDate() - 30);
+  const low30 = lowestSince(purchases, from30);
+  const lowest = yearLowest(yearPoints);
+  const stats: ProductStatRow[] = [];
+  if (low30) stats.push({ label: 'Najniższa w ostatnich 30 dniach', money: low30.price });
+  if (lowest) stats.push({ label: 'Najniższa w ostatnich 365 dniach', money: lowest });
+
+  let priceEyebrow = 'Najlepsza cena, ostatnie 30 dni';
+  let priceNote = '';
+  if (shown?.isLast30Days) {
+    priceEyebrow = 'Najlepsza cena, ostatnie 30 dni';
+  } else if (shown) {
+    priceEyebrow = 'Ostatnia cena';
+    priceNote = daysAgoLabel(shown.boughtOn);
+  }
+
+  return {
+    product: presentProduct(product),
+    quote: shown,
+    extras,
+    tint: promoTint(product.id),
+    initial: promoInitial(product.name),
+    priceEyebrow,
+    priceNote,
+    stats,
+  };
+}
+
+function promoTint(id: number): (typeof PROMO_TINTS)[number] {
+  return PROMO_TINTS[Math.abs(id) % PROMO_TINTS.length]!;
+}
+
+function promoInitial(name: string): string {
+  return (name.trim().charAt(0) || '?').toUpperCase();
+}
+
+function yearLowest(points: PricePoint[]): Decimal | null {
+  let lowest: Decimal | null = null;
+  for (const pt of points) {
+    if (!lowest || pt.price.lt(lowest)) lowest = pt.price;
+  }
+  return lowest;
 }
 
 function daysAgoLabel(boughtOn: string): string {
@@ -162,10 +234,6 @@ export function presentReceiptListItem(
     statusLabel: receiptStatusLabel(r),
     displayDate: r.boughtOn.trim() || r.createdAt,
   };
-}
-
-export function presentRelated(r: RelatedProduct): RelatedProduct & { quote: ReturnType<typeof presentQuote> } {
-  return { ...r, quote: presentQuote(r.quote) };
 }
 
 export function presentListItem(it: ProductListItem): ProductListItem & { quote: ReturnType<typeof presentQuote> } {
