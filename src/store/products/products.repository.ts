@@ -52,6 +52,20 @@ export class ProductsRepository {
     return items.map((it) => ({ product: this.asProduct(it), quote: it.quote }));
   }
 
+  listPopularProductQuotes(now: Date, limit: number): ProductQuote[] {
+    const items = this.listProductsAt('', now, 0);
+    items.sort((a, b) => {
+      if (a.lastBought && b.lastBought && a.lastBought !== b.lastBought) {
+        return a.lastBought < b.lastBought ? 1 : -1;
+      }
+      if (a.lastBought && !b.lastBought) return -1;
+      if (!a.lastBought && b.lastBought) return 1;
+      return a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1;
+    });
+    const out = limit > 0 ? items.slice(0, limit) : items;
+    return out.map((it) => ({ product: this.asProduct(it), quote: it.quote }));
+  }
+
   getProduct(id: number): Product {
     const p = this.getProductRow(id);
     p.conversions = this.listProductConversions(id);

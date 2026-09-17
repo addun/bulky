@@ -1,5 +1,13 @@
-import { isLast30Days as quoteIsLast30Days } from '../domain/price-stats.js';
+import {
+  bestRecentPrice,
+  extraQuotes,
+  isLast30Days as quoteIsLast30Days,
+  promotionLabel,
+  promotionQuote,
+  WINDOW_LAST_RECORD,
+} from '../domain/price-stats.js';
 import type { QuotedPrice } from '../domain/price-stats.js';
+import { boughtOnDate } from '../domain/bought-on.js';
 import { aliasScopeLabel, aliasScopeValue, type ProductAlias } from '#app/store/aliases';
 import { type RelatedProduct } from '#app/store/comparison-groups';
 import {
@@ -62,6 +70,63 @@ export function presentProduct(p: Product): Product & { unitIdsAttr: string; pac
 export function presentQuote(q: QuotedPrice | null): (QuotedPrice & { isLast30Days: boolean }) | null {
   if (!q) return null;
   return { ...q, isLast30Days: quoteIsLast30Days(q) };
+}
+
+const PROMO_TINTS = ['sky', 'blush', 'peach', 'mint', 'sand', 'mist'] as const;
+
+export function presentPromoCard(
+  product: Product,
+  quote: QuotedPrice | null,
+  purchases: Purchase[],
+): {
+  product: ReturnType<typeof presentProduct>;
+  quote: ReturnType<typeof presentQuote>;
+  current: ReturnType<typeof promotionQuote>['current'];
+  was: ReturnType<typeof promotionQuote>['was'];
+  verdict: ReturnType<typeof promotionQuote>['verdict'];
+  verdictLabel: string;
+  tint: (typeof PROMO_TINTS)[number];
+  initial: string;
+  extras: ReturnType<typeof extraQuotes>;
+  priceNote: string;
+} {
+  const promo = promotionQuote(purchases);
+  const shown = presentQuote(quote ?? bestRecentPrice(purchases, new Date()));
+  const initial = (product.name.trim().charAt(0) || '?').toUpperCase();
+  const current = shown?.price ?? promo.current ?? null;
+  const extras = current
+    ? extraQuotes({ price: current, boughtOn: shown?.boughtOn || '', window: WINDOW_LAST_RECORD }, product).filter(
+        (q) => q.price.gte('0.01'),
+      )
+    : [];
+  let priceNote = '';
+  if (shown) {
+    priceNote = shown.isLast30Days ? 'najniższa cena z ostatnich 30 dni' : daysAgoLabel(shown.boughtOn);
+  }
+  return {
+    product: presentProduct(product),
+    quote: shown,
+    current,
+    was: promo.was,
+    verdict: promo.verdict,
+    verdictLabel: promotionLabel(promo.verdict),
+    tint: PROMO_TINTS[Math.abs(product.id) % PROMO_TINTS.length]!,
+    initial,
+    extras,
+    priceNote,
+  };
+}
+
+function daysAgoLabel(boughtOn: string): string {
+  const day = boughtOnDate(boughtOn);
+  if (!day) return '';
+  const then = new Date(`${day}T00:00:00`);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const days = Math.round((today.getTime() - then.getTime()) / 86400000);
+  if (days <= 0) return 'dzisiaj';
+  if (days === 1) return '1 dzień temu';
+  return `${days} dni temu`;
 }
 
 export function presentPurchase(p: Purchase): Purchase & { isPurchase: boolean; isPrice: boolean } {

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{#if page.admin}}en{{else}}pl{{/if}}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -7,9 +7,6 @@
   <meta http-equiv="refresh" content="{{page.refreshSeconds}}">
   {{/if}}
   <title>{{#if page.title}}{{page.title}} · {{/if}}Bulkly</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/app.css">
 </head>
 <body{{#if page.admin}} class="is-admin"{{/if}}>
@@ -23,9 +20,11 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M4 7h16M4 12h16M4 17h16"/></svg>
       </label>
       {{/if}}
+      {{#if page.admin}}
       <a class="wordmark" href="/">Bulkly</a>
+      {{/if}}
       {{#unless page.admin}}
-      <a class="topbar-admin" href="/admin">Admin</a>
+      <a class="topbar-admin" href="/admin">Panel</a>
       {{/unless}}
     </div>
   </header>

@@ -208,12 +208,14 @@
   if (searchRoot) {
     var searchInput = searchRoot.querySelector("input[type=search]");
     var searchList = searchRoot.querySelector("[data-suggest]");
+    var popularTmpl = searchRoot.querySelector("[data-popular]");
+    var popularHTML = popularTmpl ? popularTmpl.innerHTML : searchList.innerHTML;
     var searchTimer = 0;
     var searchAbort = null;
     var active = -1;
 
     function setActive(i) {
-      var links = searchList.querySelectorAll("a");
+      var links = searchList.querySelectorAll("a.promo-card");
       if (!links.length) {
         active = -1;
         return;
@@ -229,7 +231,7 @@
     function runSearch() {
       var q = (searchInput.value || "").trim();
       if (!q) {
-        searchList.innerHTML = "";
+        searchList.innerHTML = popularHTML;
         active = -1;
         return;
       }
@@ -258,7 +260,7 @@
         e.preventDefault();
         setActive(active - 1);
       } else if (e.key === "Enter" && active >= 0) {
-        var links = searchList.querySelectorAll("a");
+        var links = searchList.querySelectorAll("a.promo-card");
         if (links[active]) {
           e.preventDefault();
           location.href = links[active].href;

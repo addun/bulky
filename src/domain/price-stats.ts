@@ -39,6 +39,70 @@ export function extraQuotes(quote: QuotedPrice | null | undefined, p: Product): 
   return all.length <= 1 ? [] : all.slice(1);
 }
 
+export const VERDICT_DEAL = 'deal';
+export const VERDICT_FAKE = 'fake';
+export const VERDICT_NONE = 'none';
+export type PromotionVerdict = typeof VERDICT_DEAL | typeof VERDICT_FAKE | typeof VERDICT_NONE;
+
+export type PromotionQuote = {
+  current: Decimal | null;
+  was: Decimal | null;
+  verdict: PromotionVerdict;
+};
+
+const MARKDOWN = new Decimal('0.08');
+
+export function promotionLabel(verdict: PromotionVerdict): string {
+  if (verdict === VERDICT_DEAL) return 'Prawdziwa promka';
+  if (verdict === VERDICT_FAKE) return 'To nie promka';
+  return 'Brak promki';
+}
+
+export function promotionQuote(purchases: Purchase[]): PromotionQuote {
+  const prices: Decimal[] = [];
+  for (const p of purchases) {
+    const price = unitPriceOf(p);
+    if (price) prices.push(price);
+  }
+  const current = prices[0] ?? null;
+  if (!current) return { current: null, was: null, verdict: VERDICT_NONE };
+
+  const older = prices.slice(1);
+  const typical = medianPrice(older);
+  const was = advertisedWas(current, older);
+  if (!was) return { current, was: null, verdict: VERDICT_NONE };
+
+  const vsWas = cheaperBy(current, was, MARKDOWN);
+  const vsTypical = typical ? cheaperBy(current, typical, MARKDOWN) : vsWas;
+  if (vsWas && vsTypical) return { current, was, verdict: VERDICT_DEAL };
+  if (vsWas && !vsTypical) return { current, was, verdict: VERDICT_FAKE };
+  return { current, was, verdict: VERDICT_NONE };
+}
+
+function advertisedWas(current: Decimal, older: Decimal[]): Decimal | null {
+  for (const p of older) {
+    if (p.gt(current)) return p;
+  }
+  let high: Decimal | null = null;
+  for (const p of older) {
+    if (!high || p.gt(high)) high = p;
+  }
+  if (high && high.gt(current)) return high;
+  return null;
+}
+
+function medianPrice(values: Decimal[]): Decimal | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a.cmp(b));
+  const mid = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 1) return sorted[mid]!;
+  return sorted[mid - 1]!.plus(sorted[mid]!).div(2);
+}
+
+function cheaperBy(price: Decimal, ref: Decimal, ratio: Decimal): boolean {
+  return price.lte(ref.mul(new Decimal(1).minus(ratio)));
+}
+
 export function qtyIn(primaryQty: Decimal, conv: ProductConversion): Decimal {
   return primaryQty.mul(conv.factor);
 }

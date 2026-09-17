@@ -1,16 +1,17 @@
 import { Controller, Get, Param, Query, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { ComparisonGroupsRepository } from '#app/store/comparison-groups';
-import { ProductsRepository } from '#app/store/products';
-import { PurchasesRepository } from '#app/store/purchases';
+import { ProductsRepository, type ProductQuote } from '#app/store/products';
+import { PurchasesRepository, type Purchase } from '#app/store/purchases';
 import { formatMoneyPerUnit } from '../domain/format.js';
 import { bestRecentPrice, pricesBetween } from '../domain/price-stats.js';
 import { boughtOnDate } from '../domain/bought-on.js';
 import { ViewsService } from './views.service.js';
-import { presentProduct, presentQuote, presentRelated } from './present.js';
+import { presentProduct, presentPromoCard, presentQuote, presentRelated } from './present.js';
 import { id, qQuery } from './schema.js';
 
 const SUGGEST_LIMIT = 10;
+const POPULAR_LIMIT = 6;
 
 @Controller()
 export class LookupController {
@@ -25,14 +26,15 @@ export class LookupController {
   home(@Query({ schema: qQuery }) query: { q: string }, @Res() res: Response): void {
     const q = query.q;
     try {
-      const items = this.loadSuggestions(q);
+      const popularItems = this.loadPopular();
+      const popular = this.presentCards(popularItems);
+      const products = q ? this.presentCards(this.loadSuggestions(q)) : popular;
       this.views.html(res, 'lookup', 200, {
-        page: this.views.page('Find a product', q, ''),
+        page: this.views.page('Czy to promka', q, ''),
         query: q,
-        products: items.map((it) => ({
-          product: presentProduct(it.product),
-          quote: presentQuote(it.quote),
-        })),
+        mode: q ? 'search' : 'popular',
+        products,
+        popular,
       });
     } catch {
       this.views.text(res, 500, 'could not search products');
@@ -53,13 +55,11 @@ export class LookupController {
   suggestionsHTML(@Query({ schema: qQuery }) query: { q: string }, @Res() res: Response): void {
     const q = query.q;
     try {
-      const items = this.loadSuggestions(q);
+      const items = q ? this.loadSuggestions(q) : this.loadPopular();
       this.views.html(res, 'lookup_suggestions', 200, {
         query: q,
-        products: items.map((it) => ({
-          product: presentProduct(it.product),
-          quote: presentQuote(it.quote),
-        })),
+        mode: q ? 'search' : 'popular',
+        products: this.presentCards(items),
       });
     } catch {
       this.views.text(res, 500, 'could not search products');
@@ -101,6 +101,15 @@ export class LookupController {
     return this.products.searchProductQuotes(q, new Date(), SUGGEST_LIMIT);
   }
 
+  private loadPopular() {
+    return this.products.listPopularProductQuotes(new Date(), POPULAR_LIMIT);
+  }
+
+  private presentCards(items: ProductQuote[]) {
+    const byProduct = groupPurchases(this.purchases.listPurchasesForProductIDs(items.map((it) => it.product.id)));
+    return items.map((it) => presentPromoCard(it.product, it.quote, byProduct.get(it.product.id) ?? []));
+  }
+
   private toSuggestItems(items: ReturnType<ProductsRepository['searchProductQuotes']>) {
     return items.map((it) => {
       const img =
@@ -118,6 +127,16 @@ export class LookupController {
       };
     });
   }
+}
+
+function groupPurchases(buys: Purchase[]): Map<number, Purchase[]> {
+  const out = new Map<number, Purchase[]>();
+  for (const buy of buys) {
+    const list = out.get(buy.productId) ?? [];
+    list.push(buy);
+    out.set(buy.productId, list);
+  }
+  return out;
 }
 
 function fmtDay(d: Date): string {

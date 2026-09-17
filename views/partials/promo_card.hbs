@@ -1,0 +1,25 @@
+<li>
+  <a class="promo-card" href="/products/{{this.product.id}}">
+    <span class="promo-main">
+      {{#if this.product.imagePath}}
+        <img class="promo-thumb" src="/images/{{this.product.imagePath}}" alt="">
+      {{else}}
+        <span class="promo-icon is-{{this.tint}}" aria-hidden="true">{{this.initial}}</span>
+      {{/if}}
+      <span class="promo-body">
+        <strong class="promo-name">{{this.product.name}}</strong>
+        {{#if this.current}}
+        <span class="promo-now">{{money this.current}} / {{this.product.unitName}}</span>
+        {{#each this.extras}}
+        <span class="promo-alt">{{money this.price}} / {{this.unitName}}</span>
+        {{/each}}
+        {{else}}
+        <span class="promo-now">Brak ceny</span>
+        {{/if}}
+      </span>
+    </span>
+    {{#if this.priceNote}}
+    <span class="promo-note">{{this.priceNote}}</span>
+    {{/if}}
+  </a>
+</li>
