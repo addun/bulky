@@ -5,8 +5,8 @@ import { tmpdir } from 'node:os';
 import { basename, delimiter, extname, join } from 'node:path';
 import { promisify } from 'node:util';
 import sharp from 'sharp';
-import { flattenWhite, fitJPEG, maxPreparedBytes, prepareJPEG } from './image';
-import { NoPDFTextError } from './types';
+import { flattenWhite, fitJPEG, maxPreparedBytes, prepareJPEG } from './image.js';
+import { NoPDFTextError } from './types.js';
 
 const execFileAsync = promisify(execFile);
 

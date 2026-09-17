@@ -1,13 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { count, desc, eq, inArray } from 'drizzle-orm';
-import Decimal from 'decimal.js';
-import { DatabaseService } from '../../db/database.service';
-import { changesOf, countOf, lastId } from '../../db/query';
-import { products, purchases, units } from '../../db/schema';
-import { InvalidKindError, InvalidQuantityError, NotFoundError } from '../../domain/errors';
-import { KIND_PRICE, KIND_PURCHASE, type Purchase, type PurchaseKind, type ReceiptPurchase } from './purchases.models';
-import { LocationsRepository } from '@app/store/locations';
-import { nowRFC3339 } from '@app/store/now';
+import { Decimal } from 'decimal.js';
+import { DatabaseService } from '../../db/database.service.js';
+import { changesOf, countOf, lastId } from '../../db/query.js';
+import { products, purchases, units } from '../../db/schema.js';
+import { InvalidKindError, InvalidQuantityError, NotFoundError } from '../../domain/errors.js';
+import { KIND_PRICE, KIND_PURCHASE, type Purchase, type PurchaseKind, type ReceiptPurchase } from './purchases.models.js';
+import { LocationsRepository } from '#app/store/locations';
+import { nowRFC3339 } from '#app/store/now';
 
 type PurchaseRow = {
   id: number;

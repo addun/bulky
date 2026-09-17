@@ -1,9 +1,9 @@
 import OpenAI, { APIError } from 'openai';
-import { fileImage, filePDF, sniffFile } from './format';
-import { prepareJPEG } from './image';
-import { parseBill } from './parse';
-import { pdfPageJPEGs } from './pdf';
-import { imageUserPrompt, pageCaption, systemPrompt } from './prompt';
+import { fileImage, filePDF, sniffFile } from './format.js';
+import { prepareJPEG } from './image.js';
+import { parseBill } from './parse.js';
+import { pdfPageJPEGs } from './pdf.js';
+import { imageUserPrompt, pageCaption, systemPrompt } from './prompt.js';
 import {
   configured,
   DefaultBaseURL,
@@ -18,7 +18,7 @@ import {
   productLines,
   type Bill,
   type Config,
-} from './types';
+} from './types.js';
 
 export class Agent {
   private constructor(

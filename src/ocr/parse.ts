@@ -1,5 +1,5 @@
-import Decimal from 'decimal.js';
-import { emptyBill, emptyLine, type Bill, type Line } from './types';
+import { Decimal } from 'decimal.js';
+import { emptyBill, emptyLine, type Bill, type Line } from './types.js';
 
 export function parse(raw: Buffer | string): Bill {
   return parseBill(raw);

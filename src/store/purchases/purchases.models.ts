@@ -1,4 +1,4 @@
-import Decimal from 'decimal.js';
+import { Decimal } from 'decimal.js';
 
 export const KIND_PURCHASE = 'purchase';
 export const KIND_PRICE = 'price';

@@ -4,8 +4,8 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
-import { boughtOnDate } from '../domain/bought-on';
-import { ProductsRepository } from '@app/store/products';
+import { boughtOnDate } from '../domain/bought-on.js';
+import { ProductsRepository } from '#app/store/products';
 
 const matchLimit = 10;
 const noMatchHint =

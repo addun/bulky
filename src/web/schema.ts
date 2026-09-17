@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { biedronkaImportReceipt } from '../imports/biedronka.schema';
+import { biedronkaImportReceipt } from '../imports/biedronka.schema.js';
 
 /** One HTML/query field: missing, scalar, or first of a repeated field, then trimmed. */
 const field = z.preprocess((v) => {

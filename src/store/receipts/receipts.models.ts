@@ -1,5 +1,5 @@
-import Decimal from 'decimal.js';
-import type { Story } from '../locations/locations.models';
+import { Decimal } from 'decimal.js';
+import type { Story } from '../locations/locations.models.js';
 
 export const RECEIPT_PENDING = 'pending';
 export const RECEIPT_READY = 'ready';
@@ -19,6 +19,16 @@ export type Receipt = {
   source: string;
   externalId: string;
   sourcePayload: string;
+};
+
+export type ReceiptListItem = {
+  id: number;
+  imagePath: string | null;
+  status: string;
+  errorMessage: string;
+  createdAt: string;
+  boughtOn: string;
+  shopName: string;
 };
 
 export type BillLineInput = {
@@ -45,7 +55,7 @@ export type BillImportResult = {
   purchases: number;
 };
 
-export function receiptStatusLabel(r: Receipt): string {
+export function receiptStatusLabel(r: { status: string }): string {
   switch (r.status) {
     case RECEIPT_MIGRATED:
       return 'Saved';

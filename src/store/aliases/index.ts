@@ -1,3 +1,3 @@
-export { AliasesModule } from './aliases.module';
-export { AliasesRepository } from './aliases.repository';
-export * from './aliases.models';
+export { AliasesModule } from './aliases.module.js';
+export { AliasesRepository } from './aliases.repository.js';
+export * from './aliases.models.js';

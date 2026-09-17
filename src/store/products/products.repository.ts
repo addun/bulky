@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { and, count, eq, isNull } from 'drizzle-orm';
-import Decimal from 'decimal.js';
-import { DatabaseService } from '../../db/database.service';
-import { changesOf, countOf, lastId, nocaseEq, nocaseOrder } from '../../db/query';
-import { productAliases, productUnitConversions, products, purchases, units } from '../../db/schema';
+import { Decimal } from 'decimal.js';
+import { DatabaseService } from '../../db/database.service.js';
+import { changesOf, countOf, lastId, nocaseEq, nocaseOrder } from '../../db/query.js';
+import { productAliases, productUnitConversions, products, purchases, units } from '../../db/schema.js';
 import {
   ConversionConflictError,
   DuplicateError,
@@ -12,19 +12,19 @@ import {
   NotFoundError,
   SameProductError,
   UnitMismatchError,
-} from '../../domain/errors';
-import { search } from '../../domain/match';
-import { quotesByProduct } from '../../domain/price-stats';
-import type { ProductAlias } from '../aliases/aliases.models';
-import { KIND_PURCHASE } from '../purchases/purchases.models';
-import { type MergePlan, type Product, type ProductConversion, type ProductListItem, type ProductQuote } from './products.models';
-import { AliasesRepository } from '@app/store/aliases';
-import { ComparisonGroupsRepository } from '@app/store/comparison-groups';
-import { LocationsRepository } from '@app/store/locations';
-import { nowRFC3339 } from '@app/store/now';
-import { mapProduct } from './product-row';
-import { PurchasesRepository } from '@app/store/purchases';
-import { UnitsRepository } from '@app/store/units';
+} from '../../domain/errors.js';
+import { search } from '../../domain/match.js';
+import { quotesByProduct } from '../../domain/price-stats.js';
+import type { ProductAlias } from '../aliases/aliases.models.js';
+import { KIND_PURCHASE } from '../purchases/purchases.models.js';
+import { type MergePlan, type Product, type ProductConversion, type ProductListItem, type ProductQuote } from './products.models.js';
+import { AliasesRepository } from '#app/store/aliases';
+import { ComparisonGroupsRepository } from '#app/store/comparison-groups';
+import { LocationsRepository } from '#app/store/locations';
+import { nowRFC3339 } from '#app/store/now';
+import { mapProduct } from './product-row.js';
+import { PurchasesRepository } from '#app/store/purchases';
+import { UnitsRepository } from '#app/store/units';
 
 @Injectable()
 export class ProductsRepository {

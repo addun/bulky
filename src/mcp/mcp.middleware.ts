@@ -1,6 +1,6 @@
 import { Injectable, NestMiddleware } from '@nestjs/common';
 import type { NextFunction, Request, Response } from 'express';
-import { McpService } from './mcp.service';
+import { McpService } from './mcp.service.js';
 
 @Injectable()
 export class McpMiddleware implements NestMiddleware {

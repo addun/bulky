@@ -18,25 +18,26 @@ import {
   NotFoundError,
   ReceiptMigratedError,
   ReceiptNotReadyError,
-} from '../domain/errors';
-import { fromDatetimeLocal } from '../domain/bought-on';
-import { MaxImageBytes } from '../ocr/types';
-import { previewJPEG } from '../ocr/format';
-import { OcrService } from '../ocr/ocr.service';
-import { AliasesRepository } from '@app/store/aliases';
-import { LocationsRepository, type Story } from '@app/store/locations';
-import { ProductsRepository, type ProductListItem } from '@app/store/products';
-import { PurchasesRepository } from '@app/store/purchases';
+} from '../domain/errors.js';
+import { fromDatetimeLocal } from '../domain/bought-on.js';
+import { MaxImageBytes } from '../ocr/types.js';
+import { previewJPEG } from '../ocr/format.js';
+import { OcrService } from '../ocr/ocr.service.js';
+import { AliasesRepository } from '#app/store/aliases';
+import { LocationsRepository, type Story } from '#app/store/locations';
+import { ProductsRepository, type ProductListItem } from '#app/store/products';
+import { PurchasesRepository } from '#app/store/purchases';
 import {
   RECEIPT_FAILED,
   RECEIPT_MIGRATED,
   RECEIPT_PENDING,
   ReceiptsRepository,
   type Receipt,
-} from '@app/store/receipts';
-import { UnitsRepository, type Unit } from '@app/store/units';
-import { OcrQueueService } from './ocr-queue.service';
-import { presentReceipt, presentStory } from './present';
+  type ReceiptListItem,
+} from '#app/store/receipts';
+import { UnitsRepository, type Unit } from '#app/store/units';
+import { OcrQueueService } from './ocr-queue.service.js';
+import { presentReceipt, presentReceiptListItem, presentStory } from './present.js';
 import {
   knownStoryID,
   parseReceiptForm,
@@ -46,11 +47,11 @@ import {
   viewToRawJSON,
   decorateReceiptView,
   type ReceiptView,
-} from './receipt-form';
-import { ImagesService } from './images.service';
-import { ReceiptImagesService } from './receipt-images';
-import { ViewsService } from './views.service';
-import { field, flashQuery, formBody, id, optInt, receiptShowQuery, receiptVisitForm } from './schema';
+} from './receipt-form.js';
+import { ImagesService } from './images.service.js';
+import { ReceiptImagesService } from './receipt-images.js';
+import { ViewsService } from './views.service.js';
+import { field, flashQuery, formBody, id, optInt, receiptShowQuery, receiptVisitForm } from './schema.js';
 
 @Controller('admin/receipts')
 export class ReceiptsController {
@@ -498,7 +499,7 @@ export class ReceiptsController {
   }
 
   private renderReceipts(res: Response, status: number, errMsg: string): void {
-    let list: Receipt[];
+    let list: ReceiptListItem[];
     try {
       list = this.receiptsStore.listReceipts();
     } catch {
@@ -516,7 +517,7 @@ export class ReceiptsController {
       page: this.views.adminPage('Receipts', '', errMsg),
       configured: this.ocr.configured(),
       model: model,
-      receipts: list.map(presentReceipt),
+      receipts: list.map(presentReceiptListItem),
     });
   }
 

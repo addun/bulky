@@ -1,14 +1,14 @@
-import Decimal from 'decimal.js';
-import { boughtOnDate, boughtOnTime, combineBoughtOn, fromDatetimeLocal, nowBoughtOn } from '../domain/bought-on';
-import { fold, matchProduct, type Label } from '../domain/match';
-import { type ProductAlias } from '@app/store/aliases';
-import { storyAddressLine, type Story } from '@app/store/locations';
-import { type ProductListItem } from '@app/store/products';
-import { type ReceiptPurchase } from '@app/store/purchases';
-import { RECEIPT_MIGRATED, type BillImport, type BillLineInput, type Receipt } from '@app/store/receipts';
-import { type UnitDefaults } from '@app/store/units';
-import { parse as parseBill, stripStreetPrefix } from '../ocr/parse';
-import { emptyBill, productLines, type Bill, type Line, marshalBill } from '../ocr/types';
+import { Decimal } from 'decimal.js';
+import { boughtOnDate, boughtOnTime, combineBoughtOn, fromDatetimeLocal, nowBoughtOn } from '../domain/bought-on.js';
+import { fold, matchProduct, type Label } from '../domain/match.js';
+import { type ProductAlias } from '#app/store/aliases';
+import { storyAddressLine, type Story } from '#app/store/locations';
+import { type ProductListItem } from '#app/store/products';
+import { type ReceiptPurchase } from '#app/store/purchases';
+import { RECEIPT_MIGRATED, type BillImport, type BillLineInput, type Receipt } from '#app/store/receipts';
+import { type UnitDefaults } from '#app/store/units';
+import { parse as parseBill, stripStreetPrefix } from '../ocr/parse.js';
+import { emptyBill, productLines, type Bill, type Line, marshalBill } from '../ocr/types.js';
 
 export type ReceiptView = {
   receiptId: number;

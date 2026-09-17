@@ -1,11 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { and, count, eq, ne, sql } from 'drizzle-orm';
-import { DatabaseService } from '../../db/database.service';
-import { changesOf, countOf, emptyStr, lastId, nocaseEq, nocaseOrder } from '../../db/query';
-import { productAliases, products, retailChains, stories } from '../../db/schema';
-import { AliasScopeError, DuplicateError, isUniqueErr, NotFoundError } from '../../domain/errors';
-import type { ProductAlias } from './aliases.models';
-import { LocationsRepository } from '@app/store/locations';
+import { DatabaseService } from '../../db/database.service.js';
+import { changesOf, countOf, emptyStr, lastId, nocaseEq, nocaseOrder } from '../../db/query.js';
+import { productAliases, products, retailChains, stories } from '../../db/schema.js';
+import { AliasScopeError, DuplicateError, isUniqueErr, NotFoundError } from '../../domain/errors.js';
+import type { ProductAlias } from './aliases.models.js';
+import { LocationsRepository } from '#app/store/locations';
 
 @Injectable()
 export class AliasesRepository {

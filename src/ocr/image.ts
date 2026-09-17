@@ -1,5 +1,5 @@
 import sharp from 'sharp';
-import { MaxImageBytes, NoImageError } from './types';
+import { MaxImageBytes, NoImageError } from './types.js';
 
 export const maxPreparedBytes = 3 << 19; // 1.5 MiB
 const jpegQuality = 82;

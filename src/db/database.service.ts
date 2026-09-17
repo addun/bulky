@@ -5,7 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import Database from 'better-sqlite3';
 import { drizzle, BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
-import * as schema from '../db/schema';
+import * as schema from '../db/schema.js';
 
 @Injectable()
 export class DatabaseService implements OnModuleDestroy {
@@ -49,7 +49,7 @@ export class DatabaseService implements OnModuleDestroy {
   }
 
   private applyMigrations(): void {
-    const migrationsFolder = join(__dirname, 'migrations');
+    const migrationsFolder = join(import.meta.dirname, 'migrations');
     this.sqlite.pragma('foreign_keys = OFF');
     try {
       migrate(this.drizzle, { migrationsFolder });

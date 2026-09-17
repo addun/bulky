@@ -1,14 +1,13 @@
-import '../paths';
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { faker } from '@faker-js/faker';
-import Decimal from 'decimal.js';
-import { AppModule } from '../app.module';
-import { DatabaseService } from '../db/database.service';
-import { LocationsRepository } from '@app/store/locations';
-import { ProductsRepository } from '@app/store/products';
-import { KIND_PRICE, KIND_PURCHASE, PurchasesRepository } from '@app/store/purchases';
-import { UnitsRepository } from '@app/store/units';
+import { Decimal } from 'decimal.js';
+import { AppModule } from '../app.module.js';
+import { DatabaseService } from '../db/database.service.js';
+import { LocationsRepository } from '#app/store/locations';
+import { ProductsRepository } from '#app/store/products';
+import { KIND_PRICE, KIND_PURCHASE, PurchasesRepository } from '#app/store/purchases';
+import { UnitsRepository } from '#app/store/units';
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));

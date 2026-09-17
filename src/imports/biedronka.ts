@@ -1,12 +1,12 @@
-import Decimal from 'decimal.js';
-import { parseBill } from '../ocr/parse';
-import { emptyBill, NoLinesError, productLines, type Bill, type Line } from '../ocr/types';
+import { Decimal } from 'decimal.js';
+import { parseBill } from '../ocr/parse.js';
+import { emptyBill, NoLinesError, productLines, type Bill, type Line } from '../ocr/types.js';
 import {
   biedronkaReceipt,
   type BiedronkaReceipt,
   type BiedronkaReceiptItem,
   type BiedronkaTx,
-} from './biedronka.schema';
+} from './biedronka.schema.js';
 
 export type { BiedronkaTx };
 

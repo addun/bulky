@@ -1,10 +1,10 @@
-import Decimal from 'decimal.js';
+import { Decimal } from 'decimal.js';
 import hbs from 'hbs';
-import { extraQuotes } from '../domain/price-stats';
-import { formatBoughtOn, toDatetimeLocal } from '../domain/bought-on';
-import { formatMoney, formatQuantity } from '../domain/format';
-import type { Product, ProductConversion } from '@app/store/products';
-import type { QuotedPrice } from '../domain/price-stats';
+import { extraQuotes } from '../domain/price-stats.js';
+import { formatBoughtOn, toDatetimeLocal } from '../domain/bought-on.js';
+import { formatMoney, formatQuantity } from '../domain/format.js';
+import type { Product, ProductConversion } from '#app/store/products';
+import type { QuotedPrice } from '../domain/price-stats.js';
 
 let currencySymbol = 'zł';
 

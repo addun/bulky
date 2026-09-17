@@ -1,3 +1,3 @@
-export { LocationsModule } from './locations.module';
-export { LocationsRepository } from './locations.repository';
-export * from './locations.models';
+export { LocationsModule } from './locations.module.js';
+export { LocationsRepository } from './locations.repository.js';
+export * from './locations.models.js';
