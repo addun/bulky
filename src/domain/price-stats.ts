@@ -47,6 +47,7 @@ export type PromotionVerdict = typeof VERDICT_DEAL | typeof VERDICT_FAKE | typeo
 export type PromotionQuote = {
   current: Decimal | null;
   was: Decimal | null;
+  typical: Decimal | null;
   verdict: PromotionVerdict;
 };
 
@@ -65,18 +66,18 @@ export function promotionQuote(purchases: Purchase[]): PromotionQuote {
     if (price) prices.push(price);
   }
   const current = prices[0] ?? null;
-  if (!current) return { current: null, was: null, verdict: VERDICT_NONE };
+  if (!current) return { current: null, was: null, typical: null, verdict: VERDICT_NONE };
 
   const older = prices.slice(1);
   const typical = medianPrice(older);
   const was = advertisedWas(current, older);
-  if (!was) return { current, was: null, verdict: VERDICT_NONE };
+  if (!was) return { current, was: null, typical, verdict: VERDICT_NONE };
 
   const vsWas = cheaperBy(current, was, MARKDOWN);
   const vsTypical = typical ? cheaperBy(current, typical, MARKDOWN) : vsWas;
-  if (vsWas && vsTypical) return { current, was, verdict: VERDICT_DEAL };
-  if (vsWas && !vsTypical) return { current, was, verdict: VERDICT_FAKE };
-  return { current, was, verdict: VERDICT_NONE };
+  if (vsWas && vsTypical) return { current, was, typical, verdict: VERDICT_DEAL };
+  if (vsWas && !vsTypical) return { current, was, typical, verdict: VERDICT_FAKE };
+  return { current, was, typical, verdict: VERDICT_NONE };
 }
 
 function advertisedWas(current: Decimal, older: Decimal[]): Decimal | null {

@@ -358,7 +358,7 @@
       }
       function fmtMonth(ms) {
         var d = new Date(ms);
-        var names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        var names = ["sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paź", "lis", "gru"];
         var label = names[d.getUTCMonth()];
         if (d.getUTCMonth() === 0) {
           var y = d.getUTCFullYear() % 100;
