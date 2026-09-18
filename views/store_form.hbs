@@ -40,4 +40,9 @@
     <a href="{{#if next}}{{next}}{{else}}/admin/stores{{/if}}">Cancel</a>
   </div>
 </form>
+{{#unless new}}
+<p class="danger-zone">
+  <a class="danger" href="/admin/stores/{{store.id}}/merge-with">Merge</a>
+</p>
+{{/unless}}
 {{> footer}}

@@ -19,6 +19,7 @@
       <span class="meta">{{this.purchaseCount}} purchase{{#if (ne this.purchaseCount 1)}}s{{/if}}</span>
       <span class="tight">
         <a href="/admin/stores/{{this.id}}/edit">Edit</a>
+        <a class="danger" href="/admin/stores/{{this.id}}/merge-with">Merge</a>
         {{#if (eq this.purchaseCount 0)}}
           <a class="danger" href="/admin/stores/{{this.id}}/delete">Delete</a>
         {{/if}}

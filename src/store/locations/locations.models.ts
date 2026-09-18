@@ -37,6 +37,16 @@ export type StoreImportResult = {
   updated: number;
 };
 
+export type StoreMergePlan = {
+  into: Store;
+  from: Store;
+  history: number;
+  aliases: number;
+  takeCode: boolean;
+  takeCoords: boolean;
+  takeChain: boolean;
+};
+
 export function storeStreetLine(c: Store): string {
   let s = `${c.streetName} ${c.buildingNumber}`.trim();
   if (c.apartmentNumber !== '') s += `/${c.apartmentNumber}`;
