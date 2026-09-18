@@ -84,7 +84,7 @@ export const biedronkaTransaction = z.object({
   receipt_num: z.string(),
   is_e_receipt_available: z.boolean(),
   receipt: biedronkaReceipt.optional(),
-  source: z.enum(['details', 'e_receipt']).optional(),
+  source: z.enum(['details']).optional(),
   lines: z.array(biedronkaSellLine).optional(),
   receipt_error: z.string().optional(),
 });
@@ -98,8 +98,8 @@ export const biedronkaDump = z.object({
 });
 
 /**
- * POST /api/biedronka/import `receipt`: details object, or e-receipt till JSON
- * (array of sellLine rows, or a wrapper object).
+ * POST /api/biedronka/import `receipt`: transaction details object
+ * (or a wrapper / till JSON dump).
  */
 export const biedronkaImportReceipt = z.union([
   biedronkaReceipt.loose(),

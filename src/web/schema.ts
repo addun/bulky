@@ -249,12 +249,6 @@ export const biedronkaPageQuery = z.object({
     .pipe(z.number({ error: 'invalid page' }).int({ error: 'invalid page' }).positive('invalid page')),
 });
 
-export const biedronkaFormatQuery = z.object({
-  format: field
-    .transform((raw) => (raw === '' ? 'json' : raw.toLowerCase()))
-    .pipe(z.enum(['json', 'pdf'], { error: 'invalid format' })),
-});
-
 export const biedronkaImportBody = z.object({
   id: field.pipe(biedronkaTxId),
   date: field,

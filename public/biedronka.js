@@ -335,7 +335,7 @@
           tx.receipt = got.receipt;
           tx.source = got.source;
           tx.lines = sellLines(tx.receipt);
-          log(tx.id, "source=" + tx.source, "lines=" + (tx.lines && tx.lines.length || 0), "listed_e_receipt=" + !!tx.is_e_receipt_available);
+          log(tx.id, "source=" + tx.source, "lines=" + (tx.lines && tx.lines.length || 0));
           withReceipts++;
         } catch (err) {
           tx.receipt_error = String(err.message || err);
@@ -377,7 +377,7 @@
       addCell(tr, tx.receipt_num || tx.id || "");
       addCell(tr, formatMoney(tx.total_price));
       addCell(tr, lines === "" ? (tx.receipt_error || "") : String(lines));
-      addCell(tr, tx.source || (tx.is_e_receipt_available ? "e-receipt" : "list"));
+      addCell(tr, tx.source || "list");
       addCell(tr, bulklyLabel(tx));
       tableBody.appendChild(tr);
     });
@@ -602,17 +602,10 @@
 
   async function fetchTxReceipt(tx) {
     var id = encodeURIComponent(String(tx.id));
-    log(tx.id, "try e-receipt json (listed available=" + !!tx.is_e_receipt_available + ")");
-    try {
-      var receipt = await apiGet("transactions/" + id + "/e-receipt/", { format: "json" });
-      log(tx.id, "e-receipt json ok");
-      return { receipt: receipt, source: "e_receipt" };
-    } catch (err) {
-      log(tx.id, "e-receipt json failed:", String(err.message || err), "-> details");
-      var details = await apiGet("transactions/" + id + "/");
-      log(tx.id, "details ok");
-      return { receipt: details, source: "details" };
-    }
+    log(tx.id, "details");
+    var details = await apiGet("transactions/" + id + "/");
+    log(tx.id, "details ok");
+    return { receipt: details, source: "details" };
   }
 
   async function apiGet(path, query) {
