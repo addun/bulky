@@ -286,6 +286,12 @@ export const biedronkaTokenBody = z
     }
   });
 
+export const biedronkaShopsImportForm = z.object({
+  retail_chain_id: field
+    .transform((s) => Number.parseInt(s, 10))
+    .pipe(z.number().int().positive('Choose a retail chain.')),
+});
+
 export { field, optInt };
 
 export type QQuery = z.infer<typeof qQuery>;

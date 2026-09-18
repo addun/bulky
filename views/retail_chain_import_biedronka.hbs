@@ -1,0 +1,33 @@
+{{> header}}
+<div class="page-head">
+  <h1>Import Biedronka shops</h1>
+  <a href="/admin/retail-chains/imports">Imports</a>
+</div>
+<p class="lede">Loads every shop from moja.biedronka.pl, then creates or updates stores for the selected chain. Matching uses the Biedronka shop number. Existing postal codes and apartment numbers stay.</p>
+
+{{#if result}}
+  <p class="banner">Imported {{result.total}} shops: {{result.created}} created, {{result.updated}} updated{{#if result.skipped}}, {{result.skipped}} skipped{{/if}}. <a href="/admin/stores">View stores</a></p>
+{{/if}}
+
+<form class="stack" method="post" action="/admin/retail-chains/imports/biedronka">
+  <fieldset class="form-group">
+    <legend>Retail chain</legend>
+    <label>
+      Chain
+      <select name="retail_chain_id" required {{#unless retailChains}}disabled{{/unless}}>
+        <option value="">Choose a chain</option>
+        {{#each retailChains}}
+        <option value="{{this.id}}" {{#if (eq this.id ../retailChainId)}}selected{{/if}}>{{this.label}}</option>
+        {{/each}}
+      </select>
+    </label>
+    {{#unless retailChains}}
+      <p class="hint">No retail chains yet. <a href="/admin/retail-chains/new">Add a chain</a> first.</p>
+    {{/unless}}
+  </fieldset>
+  <div class="form-actions">
+    <button type="submit" class="btn btn-tag" {{#unless retailChains}}disabled{{/unless}}>Import shops</button>
+    <a href="/admin/retail-chains/imports">Cancel</a>
+  </div>
+</form>
+{{> footer}}

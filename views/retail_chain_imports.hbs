@@ -1,0 +1,21 @@
+{{> header}}
+<div class="page-head">
+  <h1>Imports</h1>
+  <a href="/admin/retail-chains">Retail chains</a>
+</div>
+<p class="lede">Fill stores from a chain’s public shop list. Each importer asks which retail chain to attach the shops to, then creates or updates matching stores.</p>
+
+<ul class="units">
+  {{#each importers}}
+  <li>
+    <span class="row-main">
+      <span class="unit-name">{{this.name}}</span>
+      <span class="meta">{{this.description}}</span>
+    </span>
+    <span class="tight">
+      <a href="{{this.href}}">Open</a>
+    </span>
+  </li>
+  {{/each}}
+</ul>
+{{> footer}}

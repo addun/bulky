@@ -22,6 +22,21 @@ export type RetailChain = {
   storeCount: number;
 };
 
+export type ImportedShop = {
+  name: string;
+  streetName: string;
+  buildingNumber: string;
+  city: string;
+  externalId: string;
+  lat: number | null;
+  lng: number | null;
+};
+
+export type StoreImportResult = {
+  created: number;
+  updated: number;
+};
+
 export function storeStreetLine(c: Store): string {
   let s = `${c.streetName} ${c.buildingNumber}`.trim();
   if (c.apartmentNumber !== '') s += `/${c.apartmentNumber}`;
