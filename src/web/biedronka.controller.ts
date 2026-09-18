@@ -11,7 +11,7 @@ import { RECEIPT_SOURCE_BIEDRONKA, ReceiptsRepository } from '#app/store/receipt
 import { UnitsRepository } from '#app/store/units';
 import { billToImport, hydrateBill, matchStore, storeChainID } from './receipt-form.js';
 import { ViewsService } from './views.service.js';
-import { biedronkaFormatQuery, biedronkaImportBody, biedronkaPageQuery, biedronkaTokenBody, biedronkaTxId, formIssue } from './schema.js';
+import { biedronkaImportBody, biedronkaPageQuery, biedronkaTokenBody, biedronkaTxId, formIssue } from './schema.js';
 
 const biedronkaAPIBase = 'https://api.prod.biedronka.cloud/api/v7';
 const biedronkaTokenURL = 'https://konto.biedronka.pl/realms/loyalty/protocol/openid-connect/token';
@@ -173,18 +173,6 @@ export class BiedronkaController {
     await this.proxyBiedronka(req, res, 'GET', this.biedronkaAPIURL('transactions/'), { page: String(query.page) }, null, null);
   }
 
-  @Get('api/biedronka/transactions/:id/e-receipt')
-  async biedronkaEReceipt(
-    @Param('id', { schema: biedronkaTxId }) id: string,
-    @Query({ schema: biedronkaFormatQuery }) query: { format: 'json' | 'pdf' },
-    @Req() req: Request,
-    @Res() res: Response,
-  ): Promise<void> {
-    const extra: Record<string, string> = { 'output-format': query.format };
-    if (query.format === 'pdf') extra.Accept = 'application/pdf';
-    await this.proxyBiedronka(req, res, 'GET', this.biedronkaAPIURL('transactions/' + id + '/e-receipt/'), null, extra, null);
-  }
-
   @Get('api/biedronka/transactions/:id')
   async biedronkaTransaction(
     @Param('id', { schema: biedronkaTxId }) id: string,
@@ -308,10 +296,7 @@ export class BiedronkaController {
     if (payload.length > biedronkaMaxBody) throw new Error('response too large');
     let ct = resp.headers.get('content-type') ?? '';
     if (ct === '') ct = 'application/json';
-    const format = extra?.['output-format'];
-    this.log.log(
-      `${method} ${parsed.pathname}${parsed.search}${format ? ` format=${format}` : ''} -> ${resp.status} ${payload.length}B`,
-    );
+    this.log.log(`${method} ${parsed.pathname}${parsed.search} -> ${resp.status} ${payload.length}B`);
     return { status: resp.status, contentType: ct, payload };
   }
 
