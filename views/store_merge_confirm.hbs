@@ -1,0 +1,33 @@
+{{> header}}
+<h1>Merge {{plan.from.name}}?</h1>
+<p class="lede">You are going to merge:</p>
+<ul class="merge-plan">
+  <li><strong>{{plan.from.name}}</strong> into <strong>{{plan.into.name}}</strong></li>
+  <li>{{plan.from.name}} will be removed</li>
+  {{#if plan.history}}
+  <li>{{plan.history}} purchase{{#if (ne plan.history 1)}}s{{/if}} will move to {{plan.into.name}}</li>
+  {{else}}
+  <li>Nothing in the history to move</li>
+  {{/if}}
+  {{#if plan.aliases}}
+  <li>{{plan.aliases}} alias{{#if (ne plan.aliases 1)}}es{{/if}} will move to {{plan.into.name}}</li>
+  {{else}}
+  <li>No aliases to move</li>
+  {{/if}}
+  {{#if plan.takeCode}}
+  <li>{{plan.from.name}}’s store code will be used ({{plan.into.name}} has none)</li>
+  {{/if}}
+  {{#if plan.takeCoords}}
+  <li>{{plan.from.name}}’s map location will be used ({{plan.into.name}} has none)</li>
+  {{/if}}
+  {{#if plan.takeChain}}
+  <li>{{plan.from.name}}’s retail chain will be used ({{plan.into.name}} has none)</li>
+  {{/if}}
+</ul>
+<form method="post" action="/admin/stores/{{plan.from.id}}/merge-with/{{plan.into.id}}/">
+  <div class="actions">
+    <button type="submit" class="btn btn-danger">Merge and delete this store</button>
+    <a href="/admin/stores/{{plan.from.id}}/merge-with?into_id={{plan.into.id}}">Back</a>
+  </div>
+</form>
+{{> footer}}

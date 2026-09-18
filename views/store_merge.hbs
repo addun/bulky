@@ -1,0 +1,23 @@
+{{> header}}
+<h1>Merge {{store.name}}?</h1>
+<p class="lede">Pick the store to keep. You will see a summary before anything is removed.</p>
+{{#unless targets}}
+  <p class="hint">There is no other store to merge into.</p>
+  <p><a href="/admin/stores">Cancel</a></p>
+{{else}}
+<form class="stack" method="post" action="/admin/stores/{{store.id}}/merge-with">
+  <label>Merge into
+    <select name="into_id" required>
+      <option value="">Select…</option>
+      {{#each targets}}
+      <option value="{{this.id}}" {{#if (eq this.id ../intoId)}}selected{{/if}}>{{this.label}}</option>
+      {{/each}}
+    </select>
+  </label>
+  <div class="actions">
+    <button type="submit" class="btn btn-tag">Continue</button>
+    <a href="/admin/stores">Cancel</a>
+  </div>
+</form>
+{{/unless}}
+{{> footer}}

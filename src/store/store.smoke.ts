@@ -364,6 +364,10 @@ function runStoreSmoke(): void {
     repos.aliases.createAlias(salt.id, dropShop.id, null, 'Sol Drop');
     const dropReceipt = repos.receipts.createReceipt('drop-shop.jpg');
     repos.receipts.saveAIResponse(dropReceipt.id, JSON.stringify({ bought_on: '2026-01-16', company_id: dropShop.id }));
+    const shopPlan = repos.locations.mergePlan(keepShop.id, dropShop.id);
+    if (shopPlan.history !== 1 || shopPlan.aliases !== 2 || !shopPlan.takeCode || !shopPlan.takeCoords) {
+      throw new Error('store merge plan');
+    }
     const mergedShop = repos.locations.mergeStores(keepShop.id, dropShop.id);
     if (mergedShop.keeper.id !== keepShop.id) throw new Error('store merge keeper');
     const keptShop = repos.locations.getStore(keepShop.id);

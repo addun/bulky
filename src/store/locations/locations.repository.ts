@@ -13,7 +13,7 @@ import {
   SameStoreError,
   StoreInUseError,
 } from '../../domain/errors.js';
-import type { ImportedShop, RetailChain, Store, StoreImportResult } from './locations.models.js';
+import type { ImportedShop, RetailChain, Store, StoreImportResult, StoreMergePlan } from './locations.models.js';
 
 const chainStoreCount = sql<number>`cast(count(${stores.id}) as integer)`.mapWith(Number);
 
@@ -149,14 +149,23 @@ export class LocationsRepository {
     if (n === 0) throw new NotFoundError();
   }
 
+  mergePlan(intoId: number, fromId: number): StoreMergePlan {
+    const { into, from } = this.mergePair(intoId, fromId);
+    const aliases = this.orm.select({ n: count() }).from(productAliases).where(eq(productAliases.storeId, from.id)).get();
+    return {
+      into,
+      from,
+      history: from.purchaseCount,
+      aliases: countOf(aliases?.n),
+      takeCode: into.externalId === '' && from.externalId !== '',
+      takeCoords: into.lat == null && into.lng == null && (from.lat != null || from.lng != null),
+      takeChain: into.retailChainId == null && from.retailChainId != null,
+    };
+  }
+
   mergeStores(intoId: number, fromId: number): { keeper: Store } {
-    if (intoId === fromId) throw new SameStoreError();
     return this.db.immediate(() => {
-      const into = this.getStore(intoId);
-      const from = this.getStore(fromId);
-      if (into.externalId !== '' && from.externalId !== '' && into.externalId.toLowerCase() !== from.externalId.toLowerCase()) {
-        throw new DuplicateError();
-      }
+      const { into, from } = this.mergePair(intoId, fromId);
       this.reassignPurchases(from.id, into.id);
       this.reassignAliases(from.id, into.id);
       this.reassignReceipts(from.id, into.id);
@@ -346,6 +355,16 @@ export class LocationsRepository {
 
   private normalizeTaxID(s: string): string {
     return [...s.trim()].filter((r) => /[\p{L}\p{N}]/u.test(r)).join('').toUpperCase();
+  }
+
+  private mergePair(intoId: number, fromId: number): { into: Store; from: Store } {
+    if (intoId === fromId) throw new SameStoreError();
+    const into = this.getStore(intoId);
+    const from = this.getStore(fromId);
+    if (into.externalId !== '' && from.externalId !== '' && into.externalId.toLowerCase() !== from.externalId.toLowerCase()) {
+      throw new DuplicateError();
+    }
+    return { into, from };
   }
 
   private reassignPurchases(fromId: number, intoId: number): void {

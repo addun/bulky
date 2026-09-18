@@ -215,6 +215,12 @@ export const mergeForm = z.object({
     .pipe(z.number().int().positive('Choose a product.')),
 });
 
+export const storeMergeForm = z.object({
+  into_id: field
+    .transform((s) => Number.parseInt(s, 10))
+    .pipe(z.number().int().positive('Choose a store.')),
+});
+
 export const purchaseForm = z.object({
   store_id: optInt,
   kind: field,

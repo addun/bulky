@@ -16,6 +16,7 @@ import {
   NotFoundError,
   RetailChainInUseError,
   SameProductError,
+  SameStoreError,
   StoreInUseError,
   UnitInUseError,
   UnitMismatchError,
@@ -63,6 +64,7 @@ import {
   settingsForm,
   storeFields,
   storeForm,
+  storeMergeForm,
   unitIdForm,
   type AliasFields,
   type AliasForm,
@@ -521,6 +523,115 @@ export class CatalogController {
       }
       this.views.text(res, 500, 'could not delete store');
     }
+  }
+
+  @Get('/admin/stores/:id/merge-with')
+  mergeStoreForm(
+    @Param('id', { schema: id }) storeId: number,
+    @Query({ schema: mergeQuery }) query: { into_id: number },
+    @Res() res: Response,
+  ): void {
+    try {
+      this.renderStoreMergeForm(res, 200, this.locations.getStore(storeId), query.into_id, '');
+    } catch (err) {
+      if (err instanceof NotFoundError) return this.views.text(res, 404, 'not found');
+      this.views.text(res, 500, 'could not load store');
+    }
+  }
+
+  @Post('/admin/stores/:id/merge-with')
+  mergeStoreRedirect(@Param('id', { schema: id }) storeId: number, @Body() raw: unknown, @Res() res: Response): void {
+    const parsed = storeMergeForm.safeParse(raw);
+    if (!parsed.success) {
+      try {
+        this.renderStoreMergeForm(res, 422, this.locations.getStore(storeId), 0, formIssue(parsed.error));
+      } catch (err) {
+        if (err instanceof NotFoundError) return this.views.text(res, 404, 'not found');
+        this.views.text(res, 500, 'could not load store');
+      }
+      return;
+    }
+    this.views.redirect(res, `/admin/stores/${storeId}/merge-with/${parsed.data.into_id}/`);
+  }
+
+  @Get(['/admin/stores/:id/merge-with/:into', '/admin/stores/:id/merge-with/:into/'])
+  mergeStoreConfirm(
+    @Param({ schema: mergeParams }) params: { id: number; into: number },
+    @Res() res: Response,
+  ): void {
+    const storeId = params.id;
+    const intoID = params.into;
+    try {
+      const store = this.locations.getStore(storeId);
+      if (!intoID) {
+        this.renderStoreMergeForm(res, 422, store, 0, 'Choose a store.');
+        return;
+      }
+      const plan = this.locations.mergePlan(intoID, storeId);
+      this.views.html(res, 'store_merge_confirm', 200, {
+        page: this.views.adminPage('Merge ' + plan.from.name, '', ''),
+        plan: { ...plan, into: presentStore(plan.into), from: presentStore(plan.from) },
+      });
+    } catch (err) {
+      if (err instanceof NotFoundError) {
+        try {
+          this.renderStoreMergeForm(res, 422, this.locations.getStore(storeId), intoID, storeMergeFormError(err));
+        } catch {
+          this.views.text(res, 404, 'not found');
+        }
+        return;
+      }
+      const msg = storeMergeFormError(err);
+      if (msg) {
+        try {
+          this.renderStoreMergeForm(res, 422, this.locations.getStore(storeId), intoID, msg);
+          return;
+        } catch {
+          /* fallthrough */
+        }
+      }
+      this.views.text(res, 500, 'could not load merge');
+    }
+  }
+
+  @Post(['/admin/stores/:id/merge-with/:into', '/admin/stores/:id/merge-with/:into/'])
+  mergeStore(
+    @Param({ schema: mergeParams }) params: { id: number; into: number },
+    @Res() res: Response,
+  ): void {
+    const storeId = params.id;
+    const intoID = params.into;
+    try {
+      const store = this.locations.getStore(storeId);
+      if (!intoID) {
+        this.renderStoreMergeForm(res, 422, store, 0, 'Choose a store.');
+        return;
+      }
+      this.locations.mergeStores(intoID, storeId);
+      this.views.redirect(res, '/admin/stores');
+    } catch (err) {
+      if (err instanceof NotFoundError) return this.views.text(res, 404, 'not found');
+      const msg = storeMergeFormError(err);
+      if (msg) {
+        try {
+          this.renderStoreMergeForm(res, 422, this.locations.getStore(storeId), intoID, msg);
+          return;
+        } catch {
+          /* fallthrough */
+        }
+      }
+      this.views.text(res, 500, 'could not merge');
+    }
+  }
+
+  private renderStoreMergeForm(res: Response, status: number, store: Store, intoID: number, errMsg: string): void {
+    const targets = this.locations.listStores().filter((s) => s.id !== store.id).map(presentStore);
+    this.views.html(res, 'store_merge', status, {
+      page: this.views.adminPage('Merge ' + store.name, '', errMsg),
+      store: presentStore(store),
+      targets,
+      intoId: intoID,
+    });
   }
 
   private renderStoreForm(res: Response, status: number, co: Store, isNew: boolean, errMsg: string, next: string): void {
@@ -1438,6 +1549,13 @@ function storeFormError(err: unknown): string {
   if (err instanceof InvalidStoreError) return 'Choose a store.';
   if (err instanceof InvalidRetailChainError) return 'Choose a retail chain.';
   if (err instanceof DuplicateError) return 'That store code is already used.';
+  return '';
+}
+
+function storeMergeFormError(err: unknown): string {
+  if (err instanceof SameStoreError) return 'Choose a different store.';
+  if (err instanceof NotFoundError) return 'Choose a store.';
+  if (err instanceof DuplicateError) return 'Those stores use different store codes.';
   return '';
 }
 
