@@ -12,11 +12,9 @@ import {
   RetailChainInUseError,
   StoreInUseError,
 } from '../../domain/errors.js';
-import type { RetailChain, Store } from './locations.models.js';
+import type { ImportedShop, RetailChain, Store, StoreImportResult } from './locations.models.js';
 
-const chainStoreCount = sql<number>`cast((
-  select count(*) from stores s where s.retail_chain_id = ${retailChains.id}
-) as integer)`.mapWith(Number);
+const chainStoreCount = sql<number>`cast(count(${stores.id}) as integer)`.mapWith(Number);
 
 @Injectable()
 export class LocationsRepository {
@@ -27,31 +25,11 @@ export class LocationsRepository {
   }
 
   listRetailChains(): RetailChain[] {
-    return this.orm
-      .select({
-        id: retailChains.id,
-        name: retailChains.name,
-        legalName: retailChains.legalName,
-        taxId: retailChains.taxId,
-        storeCount: chainStoreCount,
-      })
-      .from(retailChains)
-      .orderBy(nocaseOrder(retailChains.name), retailChains.id)
-      .all();
+    return this.chainQuery().groupBy(retailChains.id).orderBy(nocaseOrder(retailChains.name), retailChains.id).all();
   }
 
   getRetailChain(id: number): RetailChain {
-    const row = this.orm
-      .select({
-        id: retailChains.id,
-        name: retailChains.name,
-        legalName: retailChains.legalName,
-        taxId: retailChains.taxId,
-        storeCount: chainStoreCount,
-      })
-      .from(retailChains)
-      .where(eq(retailChains.id, id))
-      .get();
+    const row = this.chainQuery().where(eq(retailChains.id, id)).groupBy(retailChains.id).get();
     if (!row) throw new NotFoundError();
     return row;
   }
@@ -170,6 +148,65 @@ export class LocationsRepository {
     if (n === 0) throw new NotFoundError();
   }
 
+  upsertImportedStores(retailChainId: number, shops: ImportedShop[]): StoreImportResult {
+    this.optionalChain(retailChainId);
+    return this.db.immediate(() => {
+      const existing = this.listStores();
+      const byExt = new Map<string, Store>();
+      const byAddr = new Map<string, Store>();
+      for (const store of existing) {
+        if (store.externalId !== '') byExt.set(store.externalId.toLowerCase(), store);
+        if (store.retailChainId !== retailChainId || store.externalId !== '') continue;
+        const addr = storeAddrMatchKey(store);
+        if (addr !== '') byAddr.set(addr, store);
+      }
+      let created = 0;
+      let updated = 0;
+      for (const shop of shops) {
+        const ext = shop.externalId.trim();
+        if (ext === '') continue;
+        const extKey = ext.toLowerCase();
+        const addr = storeAddrMatchKey(shop);
+        const match = byExt.get(extKey) ?? (addr === '' ? undefined : byAddr.get(addr));
+        if (match) {
+          this.updateStore(
+            match.id,
+            shop.name,
+            shop.streetName,
+            shop.buildingNumber,
+            match.apartmentNumber,
+            match.postalCode,
+            shop.city,
+            ext,
+            retailChainId,
+            shop.lat,
+            shop.lng,
+          );
+          const next = this.getStore(match.id);
+          byExt.set(extKey, next);
+          if (addr !== '') byAddr.delete(addr);
+          updated += 1;
+          continue;
+        }
+        const next = this.createStore(
+          shop.name,
+          shop.streetName,
+          shop.buildingNumber,
+          '',
+          '',
+          shop.city,
+          ext,
+          retailChainId,
+          shop.lat,
+          shop.lng,
+        );
+        byExt.set(extKey, next);
+        created += 1;
+      }
+      return { created, updated };
+    });
+  }
+
   insertStore(c: Store, retailChainId: number | null): number {
     const chain = this.optionalChain(retailChainId);
     try {
@@ -266,6 +303,19 @@ export class LocationsRepository {
       .leftJoin(purchases, eq(purchases.storeId, stores.id));
   }
 
+  private chainQuery() {
+    return this.orm
+      .select({
+        id: retailChains.id,
+        name: retailChains.name,
+        legalName: retailChains.legalName,
+        taxId: retailChains.taxId,
+        storeCount: chainStoreCount,
+      })
+      .from(retailChains)
+      .leftJoin(stores, eq(stores.retailChainId, retailChains.id));
+  }
+
   private normalizeRetailChain(name: string, legalName: string, taxId: string): RetailChain {
     return {
       id: 0,
@@ -279,4 +329,11 @@ export class LocationsRepository {
   private normalizeTaxID(s: string): string {
     return [...s.trim()].filter((r) => /[\p{L}\p{N}]/u.test(r)).join('').toUpperCase();
   }
+}
+
+function storeAddrMatchKey(s: { streetName: string; buildingNumber: string; city: string }): string {
+  const street = s.streetName.trim().toLowerCase();
+  const city = s.city.trim().toLowerCase();
+  if (street === '' || city === '') return '';
+  return `${street}\0${s.buildingNumber.trim().toLowerCase()}\0${city}`;
 }

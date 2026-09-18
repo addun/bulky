@@ -116,3 +116,29 @@ export type BiedronkaSellLine = z.infer<typeof biedronkaSellLine>;
 export type BiedronkaTransaction = z.infer<typeof biedronkaTransaction>;
 export type BiedronkaDump = z.infer<typeof biedronkaDump>;
 export type BiedronkaTx = Pick<BiedronkaTransaction, 'id' | 'date' | 'store_name' | 'receipt_num' | 'total_price'>;
+
+const nullableText = z.string().nullable();
+const nullableCoord = z.number().finite().nullable();
+
+/** One shop from GET https://moja.biedronka.pl/sklepy */
+export const biedronkaShop = z.object({
+  name: z.string(),
+  searchName: z.string(),
+  city: nullableText,
+  street: nullableText,
+  streetNr: nullableText,
+  hours: nullableText,
+  hoursSat: nullableText,
+  hoursSun: nullableText,
+  lat: nullableCoord,
+  lng: nullableCoord,
+  shopNr: z.number().int(),
+});
+
+export const biedronkaShopsResponse = z.object({
+  success: z.boolean(),
+  data: z.array(biedronkaShop),
+});
+
+export type BiedronkaShop = z.infer<typeof biedronkaShop>;
+export type BiedronkaShopsResponse = z.infer<typeof biedronkaShopsResponse>;

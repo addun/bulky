@@ -6,6 +6,7 @@ import Database from 'better-sqlite3';
 import { Decimal } from 'decimal.js';
 import { DatabaseService } from '../db/database.service.js';
 import { DuplicateError, NotFoundError } from '../domain/errors.js';
+import { importedShopsFromBiedronka, shopsFromBiedronka } from '../imports/biedronka-shops.js';
 import {
   AliasesRepository,
   ComparisonGroupsRepository,
@@ -82,6 +83,7 @@ function runStoreSmoke(): void {
       18.688478,
     );
     if (store.retailChainName !== 'Biedronka') throw new Error('store chain join');
+    if (repos.locations.getRetailChain(chain.id).storeCount !== 1) throw new Error('chain store count');
     if (store.lat == null || store.lng == null || Math.abs(store.lat - 50.88258) > 1e-9 || Math.abs(store.lng - 18.688478) > 1e-9) {
       throw new Error(`store coords: ${store.lat}, ${store.lng}`);
     }
@@ -100,6 +102,111 @@ function runStoreSmoke(): void {
     );
     const cleared = repos.locations.getStore(store.id);
     if (cleared.lat !== null || cleared.lng !== null) throw new Error('store coords cleared');
+
+    try {
+      shopsFromBiedronka({ success: true, data: [{ name: 'X' }] });
+      throw new Error('invalid biedronka shops should fail');
+    } catch (err) {
+      if (!(err instanceof Error) || !err.message.includes('unexpected shape')) throw err;
+    }
+    const shops = shopsFromBiedronka({
+      success: true,
+      data: [
+        {
+          name: 'Rzeszów Hetmańska 56',
+          searchName: 'Rzeszów, Hetmańska 56',
+          city: 'Rzeszów',
+          street: 'Hetmańska',
+          streetNr: '56',
+          hours: '05:00-00:00',
+          hoursSat: '00:00-23:30',
+          hoursSun: '08:00-22:00',
+          lat: 50.0194847,
+          lng: 21.9941132,
+          shopNr: 2089,
+        },
+        {
+          name: '',
+          searchName: ',  ',
+          city: null,
+          street: null,
+          streetNr: null,
+          hours: 'Zamknięte',
+          hoursSat: 'Zamknięte',
+          hoursSun: 'Zamknięte',
+          lat: null,
+          lng: null,
+          shopNr: 1023,
+        },
+      ],
+    });
+    const imported = importedShopsFromBiedronka(shops);
+    if (imported.length !== 1 || imported[0]!.externalId !== '2089') throw new Error('biedronka shop skip');
+
+    const firstImport = repos.locations.upsertImportedStores(chain.id, [
+      {
+        name: 'Katowice',
+        streetName: 'Kosciuszki',
+        buildingNumber: '10',
+        city: 'Katowice',
+        externalId: '2615',
+        lat: 50.88258,
+        lng: 18.688478,
+      },
+      {
+        name: 'Rzeszów Hetmańska 56',
+        streetName: 'Hetmańska',
+        buildingNumber: '56',
+        city: 'Rzeszów',
+        externalId: '2089',
+        lat: 50.0194847,
+        lng: 21.9941132,
+      },
+    ]);
+    if (firstImport.created !== 1 || firstImport.updated !== 1) {
+      throw new Error(`store import counts: ${firstImport.created} ${firstImport.updated}`);
+    }
+    const updatedKatowice = repos.locations.getStore(store.id);
+    if (updatedKatowice.postalCode !== '40-001') throw new Error('import kept postal');
+    if (updatedKatowice.lat == null || Math.abs(updatedKatowice.lat - 50.88258) > 1e-9) throw new Error('import restored coords');
+    if (updatedKatowice.name !== 'Katowice') throw new Error('import kept name');
+    const rzeszow = repos.locations.listStores().find((s) => s.externalId === '2089');
+    if (!rzeszow || rzeszow.city !== 'Rzeszów') throw new Error('import created shop');
+    if (repos.locations.getRetailChain(chain.id).storeCount !== 2) throw new Error('chain store count after import');
+
+    const unnamed = repos.locations.createStore('Old Lidl', 'Hetmańska', '56', '2', '35-001', 'Rzeszów', '', chain.id);
+    const addrImport = repos.locations.upsertImportedStores(chain.id, [
+      {
+        name: 'Rzeszów Hetmańska 56',
+        streetName: 'Hetmańska',
+        buildingNumber: '56',
+        city: 'Rzeszów',
+        externalId: '2089',
+        lat: 50.0194847,
+        lng: 21.9941132,
+      },
+    ]);
+    if (addrImport.created !== 0 || addrImport.updated !== 1) throw new Error('import matched shop number first');
+    if (repos.locations.getStore(unnamed.id).externalId !== '') throw new Error('import must not steal addressed store with different shop number');
+
+    const orphan = repos.locations.createStore('Old Warsaw', 'Marszałkowska', '1', '', '00-001', 'Warszawa', '', chain.id);
+    const orphanImport = repos.locations.upsertImportedStores(chain.id, [
+      {
+        name: 'Warszawa Marszałkowska 1',
+        streetName: 'Marszałkowska',
+        buildingNumber: '1',
+        city: 'Warszawa',
+        externalId: '7777',
+        lat: 52.2297,
+        lng: 21.0122,
+      },
+    ]);
+    if (orphanImport.created !== 0 || orphanImport.updated !== 1) throw new Error('import matched empty shop number by address');
+    const linked = repos.locations.getStore(orphan.id);
+    if (linked.externalId !== '7777' || linked.postalCode !== '00-001' || linked.name !== 'Warszawa Marszałkowska 1') {
+      throw new Error('import address match');
+    }
+
 
     const flour = repos.products.createProduct(
       'Maka',

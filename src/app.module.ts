@@ -22,6 +22,7 @@ import { LookupController } from './web/lookup.controller.js';
 import { CatalogController } from './web/catalog.controller.js';
 import { ReceiptsController } from './web/receipts.controller.js';
 import { BiedronkaController } from './web/biedronka.controller.js';
+import { StoreImportsController } from './web/store-imports.controller.js';
 
 @Module({
   imports: [
@@ -38,7 +39,7 @@ import { BiedronkaController } from './web/biedronka.controller.js';
     ProductsModule,
     ReceiptsModule,
   ],
-  controllers: [LookupController, CatalogController, ReceiptsController, BiedronkaController],
+  controllers: [LookupController, CatalogController, ReceiptsController, BiedronkaController, StoreImportsController],
   providers: [
     OcrService,
     McpService,
