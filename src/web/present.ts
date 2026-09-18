@@ -13,11 +13,11 @@ import { boughtOnDate } from '../domain/bought-on.js';
 import { aliasScopeLabel, aliasScopeValue, type ProductAlias } from '#app/store/aliases';
 import {
   chainLabel,
-  storyAddressLine,
-  storyLabel,
-  storyStreetLine,
+  storeAddressLine,
+  storeLabel,
+  storeStreetLine,
   type RetailChain,
-  type Story,
+  type Store,
 } from '#app/store/locations';
 import {
   conversionFor,
@@ -205,12 +205,12 @@ export function presentPurchase(p: Purchase): Purchase & { isPurchase: boolean; 
   return { ...p, isPurchase: p.kind === KIND_PURCHASE, isPrice: p.kind === KIND_PRICE };
 }
 
-export function presentStory(s: Story): Story & { label: string; streetLine: string; addressLine: string } {
+export function presentStore(s: Store): Store & { label: string; streetLine: string; addressLine: string } {
   return {
     ...s,
-    label: storyLabel(s),
-    streetLine: storyStreetLine(s),
-    addressLine: storyAddressLine(s),
+    label: storeLabel(s),
+    streetLine: storeStreetLine(s),
+    addressLine: storeAddressLine(s),
   };
 }
 
@@ -240,9 +240,9 @@ export function presentListItem(it: ProductListItem): ProductListItem & { quote:
   return { ...it, quote: presentQuote(it.quote) };
 }
 
-export function storiesByID(stories: Story[]): Record<string, ReturnType<typeof presentStory>> {
-  const out: Record<string, ReturnType<typeof presentStory>> = {};
-  for (const s of stories) out[String(s.id)] = presentStory(s);
+export function storesByID(stores: Store[]): Record<string, ReturnType<typeof presentStore>> {
+  const out: Record<string, ReturnType<typeof presentStore>> = {};
+  for (const s of stores) out[String(s.id)] = presentStore(s);
   return out;
 }
 

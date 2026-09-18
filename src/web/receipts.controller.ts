@@ -13,7 +13,7 @@ import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { memoryStorage } from 'multer';
 import {
-  InvalidStoryError,
+  InvalidStoreError,
   InvalidUnitError,
   NotFoundError,
   ReceiptMigratedError,
@@ -24,7 +24,7 @@ import { MaxImageBytes } from '../ocr/types.js';
 import { previewJPEG } from '../ocr/format.js';
 import { OcrService } from '../ocr/ocr.service.js';
 import { AliasesRepository } from '#app/store/aliases';
-import { LocationsRepository, type Story } from '#app/store/locations';
+import { LocationsRepository, type Store } from '#app/store/locations';
 import { ProductsRepository, type ProductListItem } from '#app/store/products';
 import { PurchasesRepository } from '#app/store/purchases';
 import {
@@ -37,13 +37,13 @@ import {
 } from '#app/store/receipts';
 import { UnitsRepository, type Unit } from '#app/store/units';
 import { OcrQueueService } from './ocr-queue.service.js';
-import { presentReceipt, presentReceiptListItem, presentStory } from './present.js';
+import { presentReceipt, presentReceiptListItem, presentStore } from './present.js';
 import {
-  knownStoryID,
+  knownStoreID,
   parseReceiptForm,
   receiptToView,
   receiptVisitFacts,
-  storyByID,
+  storeByID,
   viewToRawJSON,
   decorateReceiptView,
   type ReceiptView,
@@ -168,7 +168,7 @@ export class ReceiptsController {
   @Post(':id/edit')
   updateReceiptVisit(
     @Param('id', { schema: id }) receiptId: number,
-    @Body({ schema: receiptVisitForm }) body: { bought_on: string; story_id: number },
+    @Body({ schema: receiptVisitForm }) body: { bought_on: string; store_id: number },
     @Res() res: Response,
   ): void {
     let receipt: Receipt;
@@ -187,24 +187,24 @@ export class ReceiptsController {
       return;
     }
     const joined = fromDatetimeLocal(body.bought_on);
-    const { id: storyID, msg } = this.resolveStoryForm(body.story_id);
+    const { id: storeID, msg } = this.resolveStoreForm(body.store_id);
     if (joined === '') {
-      this.renderReceiptEdit(res, 422, receipt, joined, storyID, 'Date must be a valid day.');
+      this.renderReceiptEdit(res, 422, receipt, joined, storeID, 'Date must be a valid day.');
       return;
     }
     if (msg !== '') {
-      this.renderReceiptEdit(res, 422, receipt, joined, storyID, msg);
+      this.renderReceiptEdit(res, 422, receipt, joined, storeID, msg);
       return;
     }
     try {
-      this.receiptsStore.updateReceiptVisit(receiptId, storyID, joined);
+      this.receiptsStore.updateReceiptVisit(receiptId, storeID, joined);
     } catch (err) {
       if (err instanceof ReceiptNotReadyError) {
         this.views.redirect(res, '/admin/receipts/' + String(receiptId));
         return;
       }
-      const errMsg = err instanceof InvalidStoryError ? 'Choose a store.' : 'Could not save the visit.';
-      this.renderReceiptEdit(res, 422, receipt, joined, storyID, errMsg);
+      const errMsg = err instanceof InvalidStoreError ? 'Choose a store.' : 'Could not save the visit.';
+      this.renderReceiptEdit(res, 422, receipt, joined, storeID, errMsg);
       return;
     }
     this.views.redirect(res, '/admin/receipts/' + String(receiptId));
@@ -357,9 +357,9 @@ export class ReceiptsController {
     }
     let products: ProductListItem[];
     let units: Unit[];
-    let stories: Story[];
+    let stores: Store[];
     try {
-      ({ products, units, stories } = this.receiptLookups());
+      ({ products, units, stores } = this.receiptLookups());
     } catch {
       this.views.text(res, 500, 'could not load the catalog');
       return;
@@ -380,12 +380,12 @@ export class ReceiptsController {
     }
     let view: ReceiptView;
     try {
-      view = receiptToView(receipt, products, stories, aliases, defaults);
+      view = receiptToView(receipt, products, stores, aliases, defaults);
     } catch {
       this.renderReceipts(res, 500, 'Could not read the saved AI response.');
       return;
     }
-    this.renderReceiptReview(res, 200, view, products, units, stories, query.error);
+    this.renderReceiptReview(res, 200, view, products, units, stores, query.error);
   }
 
   @Post(':id')
@@ -407,9 +407,9 @@ export class ReceiptsController {
     }
     let products: ProductListItem[];
     let units: Unit[];
-    let stories: Story[];
+    let stores: Store[];
     try {
-      ({ products, units, stories } = this.receiptLookups());
+      ({ products, units, stores } = this.receiptLookups());
     } catch {
       this.views.text(res, 500, 'could not load the catalog');
       return;
@@ -419,8 +419,8 @@ export class ReceiptsController {
     view.receiptId = receiptId;
     view.imagePath = receipt.imagePath ?? '';
     view.status = receipt.status;
-    view.storyId = knownStoryID(view.storyId, stories);
-    inn.storyId = view.storyId;
+    view.storeId = knownStoreID(view.storeId, stores);
+    inn.storeId = view.storeId;
     view = decorateReceiptView(view);
     let rawJSON = '';
     let jsonErr: unknown = null;
@@ -440,16 +440,16 @@ export class ReceiptsController {
       this.renderReceiptShow(res, 409, receipt, 'This bill is already saved as purchases.', 0);
       return;
     }
-    if (view.storyId === 0 && optInt.parse(body.story_id) > 0) {
-      this.renderReceiptReview(res, 422, view, products, units, stories, 'Choose a store.');
+    if (view.storeId === 0 && optInt.parse(body.store_id) > 0) {
+      this.renderReceiptReview(res, 422, view, products, units, stores, 'Choose a store.');
       return;
     }
     if (msg !== '') {
-      this.renderReceiptReview(res, 422, view, products, units, stories, msg);
+      this.renderReceiptReview(res, 422, view, products, units, stores, msg);
       return;
     }
     if (jsonErr !== null) {
-      this.renderReceiptReview(res, 500, view, products, units, stories, 'Could not save the product list.');
+      this.renderReceiptReview(res, 500, view, products, units, stores, 'Could not save the product list.');
       return;
     }
     try {
@@ -461,8 +461,8 @@ export class ReceiptsController {
       else if (err instanceof ReceiptNotReadyError) errMsg = 'This scan has no product list yet.';
       else if (err instanceof InvalidUnitError) errMsg = 'Choose a unit for each new product.';
       else if (err instanceof NotFoundError) errMsg = 'A selected product is gone. Refresh and try again.';
-      else if (err instanceof InvalidStoryError) errMsg = 'Choose a store.';
-      this.renderReceiptReview(res, 422, view, products, units, stories, errMsg);
+      else if (err instanceof InvalidStoreError) errMsg = 'Choose a store.';
+      this.renderReceiptReview(res, 422, view, products, units, stores, errMsg);
     }
   }
 
@@ -527,7 +527,7 @@ export class ReceiptsController {
     view: ReceiptView,
     products: ProductListItem[],
     units: Unit[],
-    stories: Story[],
+    stores: Store[],
     errMsg: string,
   ): void {
     this.views.html(res, 'receipt_review', status, {
@@ -535,7 +535,7 @@ export class ReceiptsController {
       view: view,
       products: products,
       units: units,
-      stories: stories.map(presentStory),
+      stores: stores.map(presentStore),
     });
   }
 
@@ -555,21 +555,21 @@ export class ReceiptsController {
       this.views.text(res, 500, 'could not load purchases');
       return;
     }
-    let stories: Story[];
+    let stores: Store[];
     try {
-      stories = this.locations.listStories();
+      stores = this.locations.listStores();
     } catch {
       this.views.text(res, 500, 'could not load stores');
       return;
     }
-    const { boughtOn, notes, story } = receiptVisitFacts(receipt, buys, stories);
+    const { boughtOn, notes, store } = receiptVisitFacts(receipt, buys, stores);
     this.views.html(res, 'receipt_show', status, {
       page: this.views.adminPage('Receipt', '', errMsg),
       receipt: presentReceipt(receipt),
       purchases: buys,
       boughtOn: boughtOn,
       notes: notes,
-      story: presentStory(story),
+      store: presentStore(store),
       imported: imported,
     });
   }
@@ -579,7 +579,7 @@ export class ReceiptsController {
     status: number,
     receipt: Receipt,
     boughtOn: string,
-    storyID: number,
+    storeID: number,
     errMsg: string,
   ): void {
     let buys;
@@ -589,40 +589,40 @@ export class ReceiptsController {
       this.views.text(res, 500, 'could not load purchases');
       return;
     }
-    let stories: Story[];
+    let stores: Store[];
     try {
-      stories = this.locations.listStories();
+      stores = this.locations.listStores();
     } catch {
       this.views.text(res, 500, 'could not load stores');
       return;
     }
-    if (boughtOn === '' && storyID === 0) {
-      const facts = receiptVisitFacts(receipt, buys, stories);
+    if (boughtOn === '' && storeID === 0) {
+      const facts = receiptVisitFacts(receipt, buys, stores);
       boughtOn = facts.boughtOn;
-      storyID = facts.story.id;
+      storeID = facts.store.id;
     }
     this.views.html(res, 'receipt_edit', status, {
       page: this.views.adminPage('Edit visit', '', errMsg),
       receipt: presentReceipt(receipt),
       boughtOn: boughtOn,
-      story: presentStory(storyByID(stories, storyID)),
-      stories: stories.map(presentStory),
+      store: presentStore(storeByID(stores, storeID)),
+      stores: stores.map(presentStore),
     });
   }
 
-  private receiptLookups(): { products: ProductListItem[]; units: Unit[]; stories: Story[] } {
+  private receiptLookups(): { products: ProductListItem[]; units: Unit[]; stores: Store[] } {
     return {
       products: this.products.listProducts(''),
       units: this.units.listUnits(),
-      stories: this.locations.listStories(),
+      stores: this.locations.listStores(),
     };
   }
 
-  private resolveStoryForm(storyId: number): { id: number; msg: string } {
-    if (storyId <= 0) return { id: 0, msg: '' };
+  private resolveStoreForm(storeId: number): { id: number; msg: string } {
+    if (storeId <= 0) return { id: 0, msg: '' };
     try {
-      this.locations.getStory(storyId);
-      return { id: storyId, msg: '' };
+      this.locations.getStore(storeId);
+      return { id: storeId, msg: '' };
     } catch (err) {
       if (err instanceof NotFoundError) return { id: 0, msg: 'Choose a store.' };
       return { id: 0, msg: 'Could not load the store.' };

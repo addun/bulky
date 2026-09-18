@@ -12,7 +12,7 @@ import { nowRFC3339 } from '#app/store/now';
 type PurchaseRow = {
   id: number;
   productId: number;
-  storyId: number | null;
+  storeId: number | null;
   kind: string;
   receiptId: number | null;
   boughtOn: string;
@@ -52,7 +52,7 @@ export class PurchasesRepository {
       .select({
         id: purchases.id,
         productId: purchases.productId,
-        storyId: purchases.storyId,
+        storeId: purchases.storeId,
         kind: purchases.kind,
         receiptId: purchases.receiptId,
         boughtOn: purchases.boughtOn,
@@ -85,7 +85,7 @@ export class PurchasesRepository {
 
   createPurchase(
     productId: number,
-    storyId: number | null,
+    storeId: number | null,
     boughtOn: string,
     quantity: Decimal,
     amount: Decimal,
@@ -93,14 +93,14 @@ export class PurchasesRepository {
   ): Purchase {
     this.requireProduct(productId);
     this.parsePurchaseKind(kind);
-    const story = this.locations.optionalStory(storyId);
+    const store = this.locations.optionalStore(storeId);
     this.validQuantity(quantity);
     const id = lastId(
       this.orm
         .insert(purchases)
         .values({
           productId,
-          storyId: story,
+          storeId: store,
           kind,
           receiptId: null,
           boughtOn,
@@ -115,20 +115,20 @@ export class PurchasesRepository {
 
   updatePurchase(
     id: number,
-    storyId: number | null,
+    storeId: number | null,
     boughtOn: string,
     quantity: Decimal,
     amount: Decimal,
     kind: PurchaseKind,
   ): void {
     this.parsePurchaseKind(kind);
-    const story = this.locations.optionalStory(storyId);
+    const store = this.locations.optionalStore(storeId);
     this.validQuantity(quantity);
     const n = changesOf(
       this.orm
         .update(purchases)
         .set({
-          storyId: story,
+          storeId: store,
           kind,
           boughtOn,
           quantity: quantity.toString(),
@@ -192,7 +192,7 @@ export class PurchasesRepository {
 
   insertImported(
     productId: number,
-    storyId: number | null,
+    storeId: number | null,
     receiptId: number | null,
     boughtOn: string,
     quantity: Decimal,
@@ -204,7 +204,7 @@ export class PurchasesRepository {
         .insert(purchases)
         .values({
           productId,
-          storyId,
+          storeId,
           kind: KIND_PURCHASE,
           receiptId,
           boughtOn,
@@ -217,8 +217,8 @@ export class PurchasesRepository {
     return this.getPurchase(id);
   }
 
-  updateReceiptVisit(receiptId: number, storyId: number | null, boughtOn: string): void {
-    this.orm.update(purchases).set({ storyId, boughtOn }).where(eq(purchases.receiptId, receiptId)).run();
+  updateReceiptVisit(receiptId: number, storeId: number | null, boughtOn: string): void {
+    this.orm.update(purchases).set({ storeId, boughtOn }).where(eq(purchases.receiptId, receiptId)).run();
   }
 
   private validQuantity(quantity: Decimal): void {

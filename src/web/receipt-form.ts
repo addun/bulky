@@ -2,7 +2,7 @@ import { Decimal } from 'decimal.js';
 import { boughtOnDate, boughtOnTime, combineBoughtOn, fromDatetimeLocal, nowBoughtOn } from '../domain/bought-on.js';
 import { fold, matchProduct, type Label } from '../domain/match.js';
 import { type ProductAlias } from '#app/store/aliases';
-import { storyAddressLine, type Story } from '#app/store/locations';
+import { storeAddressLine, type Store } from '#app/store/locations';
 import { type ProductListItem } from '#app/store/products';
 import { type ReceiptPurchase } from '#app/store/purchases';
 import { RECEIPT_MIGRATED, type BillImport, type BillLineInput, type Receipt } from '#app/store/receipts';
@@ -17,8 +17,8 @@ export type ReceiptView = {
   boughtOn: string;
   boughtAt: string;
   notes: string;
-  storyId: number;
-  storyName: string;
+  storeId: number;
+  storeName: string;
   externalId: string;
   streetName: string;
   buildingNumber: string;
@@ -28,7 +28,7 @@ export type ReceiptView = {
   lines: ReceiptLineView[];
   migrated: boolean;
   addressLine: string;
-  createStoryUrl: string;
+  createStoreUrl: string;
 };
 
 export type ReceiptLineView = {
@@ -64,8 +64,8 @@ export function hydrateBill(
   const global: Label[] = [];
   for (const a of aliases) {
     const lab: Label = { productID: a.productId, text: a.alias };
-    if (a.storyId) {
-      if (a.storyId === bill.storyId) shop.push(lab);
+    if (a.storeId) {
+      if (a.storeId === bill.storeId) shop.push(lab);
     } else if (a.retailChainId) {
       if (chainID && a.retailChainId === chainID) chain.push(lab);
     } else {
@@ -101,11 +101,11 @@ export function hydrateBill(
 
 export function billToImport(bill: Bill): BillImport {
   const boughtOn = combineBoughtOn(bill.boughtOn, bill.boughtAt);
-  const storyId = bill.storyId > 0 ? bill.storyId : null;
+  const storeId = bill.storeId > 0 ? bill.storeId : null;
   const inn: BillImport = {
     boughtOn,
-    storyId,
-    story: storyId ? null : storyFromBill(bill),
+    storeId,
+    store: storeId ? null : storeFromBill(bill),
     receiptId: null,
     lines: [],
   };
@@ -124,8 +124,8 @@ export function billToImport(bill: Bill): BillImport {
   return inn;
 }
 
-function storyFromBill(bill: Bill): Story | null {
-  const name = bill.storyName.trim();
+function storeFromBill(bill: Bill): Store | null {
+  const name = bill.storeName.trim();
   if (name === '' && bill.externalId.trim() === '' && bill.city.trim() === '' && bill.streetName.trim() === '') {
     return null;
   }
@@ -138,6 +138,8 @@ function storyFromBill(bill: Bill): Story | null {
     postalCode: bill.postalCode,
     city: bill.city,
     externalId: bill.externalId,
+    lat: null,
+    lng: null,
     retailChainId: null,
     retailChainName: '',
     purchaseCount: 0,
@@ -167,8 +169,8 @@ export function billToView(bill: Bill, receiptID: number, imagePath: string, sta
   view.boughtOn = bill.boughtOn;
   view.boughtAt = bill.boughtAt;
   view.notes = bill.notes;
-  view.storyId = bill.storyId;
-  view.storyName = bill.storyName;
+  view.storeId = bill.storeId;
+  view.storeName = bill.storeName;
   view.externalId = bill.externalId;
   view.streetName = bill.streetName;
   view.buildingNumber = bill.buildingNumber;
@@ -198,18 +200,18 @@ export function billToView(bill: Bill, receiptID: number, imagePath: string, sta
 export function receiptToView(
   r: Receipt,
   products: ProductListItem[],
-  stories: Story[],
+  stores: Store[],
   aliases: ProductAlias[],
   defaults: UnitDefaults,
 ): ReceiptView {
   let bill = emptyBill();
   if (r.rawResponse.trim() !== '') {
     bill = parseBill(r.rawResponse);
-    if (bill.storyId === 0) bill.storyId = matchStory(bill, stories);
-    bill = hydrateBill(bill, products, aliases, storyChainID(bill.storyId, stories), defaults.pieceId, defaults.weightId);
+    if (bill.storeId === 0) bill.storeId = matchStore(bill, stores);
+    bill = hydrateBill(bill, products, aliases, storeChainID(bill.storeId, stores), defaults.pieceId, defaults.weightId);
   }
   const view = billToView(bill, r.id, r.imagePath ?? '', r.status);
-  view.storyId = knownStoryID(view.storyId, stories);
+  view.storeId = knownStoreID(view.storeId, stores);
   const combined = combineBoughtOn(view.boughtOn, view.boughtAt);
   if (combined !== '') view.boughtOn = combined;
   else if (view.boughtOn === '' && view.boughtAt === '') view.boughtOn = nowBoughtOn();
@@ -223,8 +225,8 @@ export function viewToRawJSON(view: ReceiptView): string {
   bill.boughtOn = boughtOnDate(view.boughtOn);
   bill.boughtAt = boughtOnTime(view.boughtOn);
   bill.notes = view.notes;
-  bill.storyId = view.storyId;
-  bill.storyName = view.storyName;
+  bill.storeId = view.storeId;
+  bill.storeName = view.storeName;
   bill.externalId = view.externalId;
   bill.streetName = view.streetName;
   bill.buildingNumber = view.buildingNumber;
@@ -265,7 +267,7 @@ export function parseReceiptForm(
   view.boughtOn = boughtOn;
   view.boughtAt = boughtOnTime(boughtOn);
 
-  const inn: BillImport = { boughtOn: boughtOn, storyId: view.storyId || null, story: null, receiptId: null, lines: [] };
+  const inn: BillImport = { boughtOn: boughtOn, storeId: view.storeId || null, store: null, receiptId: null, lines: [] };
   for (let i = 0; i < view.lines.length; i++) {
     const line = view.lines[i]!;
     if (!line.include) continue;
@@ -315,8 +317,8 @@ function parseReceiptView(get: (name: string) => string): ReceiptView {
   view.boughtOn = get('bought_on').trim();
   view.boughtAt = '';
   view.notes = get('notes').trim();
-  view.storyId = formInt(get('story_id'));
-  view.storyName = get('story_name').trim();
+  view.storeId = formInt(get('store_id'));
+  view.storeName = get('store_name').trim();
   view.externalId = get('external_id').trim();
   view.streetName = get('street_name').trim();
   view.buildingNumber = get('building_number').trim();
@@ -356,35 +358,35 @@ function formInt(s: string): number {
   return Number.isFinite(v) ? v : 0;
 }
 
-export function knownStoryID(id: number, stories: Story[]): number {
+export function knownStoreID(id: number, stores: Store[]): number {
   if (id <= 0) return 0;
-  for (const c of stories) {
+  for (const c of stores) {
     if (c.id === id) return id;
   }
   return 0;
 }
 
-export function storyChainID(storyID: number, stories: Story[]): number | null {
-  if (storyID <= 0) return null;
-  for (const c of stories) {
-    if (c.id === storyID) return c.retailChainId;
+export function storeChainID(storeID: number, stores: Store[]): number | null {
+  if (storeID <= 0) return null;
+  for (const c of stores) {
+    if (c.id === storeID) return c.retailChainId;
   }
   return null;
 }
 
-export function matchStory(bill: Bill, stories: Story[]): number {
-  const byExt = matchStoryExternalID(bill, stories);
+export function matchStore(bill: Bill, stores: Store[]): number {
+  const byExt = matchStoreExternalID(bill, stores);
   if (byExt > 0) return byExt;
-  const byAddr = matchStoryAddress(bill, stories);
+  const byAddr = matchStoreAddress(bill, stores);
   if (byAddr > 0) return byAddr;
-  return matchStoryName(bill, stories);
+  return matchStoreName(bill, stores);
 }
 
-function matchStoryExternalID(bill: Bill, stories: Story[]): number {
+function matchStoreExternalID(bill: Bill, stores: Store[]): number {
   const want = bill.externalId.trim();
   if (want === '') return 0;
   let hit = 0;
-  for (const c of stories) {
+  for (const c of stores) {
     if (c.externalId === '' || c.externalId.toLowerCase() !== want.toLowerCase()) continue;
     if (hit !== 0 && hit !== c.id) return 0;
     hit = c.id;
@@ -392,24 +394,24 @@ function matchStoryExternalID(bill: Bill, stories: Story[]): number {
   return hit;
 }
 
-function matchStoryAddress(bill: Bill, stories: Story[]): number {
-  const want = storyAddrKey(bill.streetName, bill.buildingNumber, bill.postalCode, bill.city);
+function matchStoreAddress(bill: Bill, stores: Store[]): number {
+  const want = storeAddrKey(bill.streetName, bill.buildingNumber, bill.postalCode, bill.city);
   if (want === '') return 0;
   let hit = 0;
-  for (const c of stories) {
-    if (storyAddrKey(c.streetName, c.buildingNumber, c.postalCode, c.city) !== want) continue;
+  for (const c of stores) {
+    if (storeAddrKey(c.streetName, c.buildingNumber, c.postalCode, c.city) !== want) continue;
     if (hit !== 0 && hit !== c.id) return 0;
     hit = c.id;
   }
   return hit;
 }
 
-function matchStoryName(bill: Bill, stories: Story[]): number {
-  const name = fold(bill.storyName);
+function matchStoreName(bill: Bill, stores: Store[]): number {
+  const name = fold(bill.storeName);
   if (name === '') return 0;
   const city = fold(bill.city);
   let hit = 0;
-  for (const c of stories) {
+  for (const c of stores) {
     if (fold(c.name) !== name) continue;
     if (city !== '' && fold(c.city) !== city) continue;
     if (hit !== 0 && hit !== c.id) return 0;
@@ -418,7 +420,7 @@ function matchStoryName(bill: Bill, stories: Story[]): number {
   return hit;
 }
 
-function storyAddrKey(street: string, building: string, postal: string, city: string): string {
+function storeAddrKey(street: string, building: string, postal: string, city: string): string {
   street = fold(stripStreetPrefix(street));
   building = fold(building);
   postal = digitsOnly(postal);
@@ -438,8 +440,8 @@ function digitsOnly(s: string): string {
 export function receiptVisitFacts(
   r: Receipt,
   buys: ReceiptPurchase[],
-  stories: Story[],
-): { boughtOn: string; notes: string; story: Story } {
+  stores: Store[],
+): { boughtOn: string; notes: string; store: Store } {
   let bill = emptyBill();
   if (r.rawResponse.trim() !== '') {
     try {
@@ -450,20 +452,20 @@ export function receiptVisitFacts(
   }
   const notes = bill.notes;
   if (buys.length > 0) {
-    return { boughtOn: buys[0]!.boughtOn, notes, story: storyByID(stories, buys[0]!.storyId) };
+    return { boughtOn: buys[0]!.boughtOn, notes, store: storeByID(stores, buys[0]!.storeId) };
   }
-  return { boughtOn: combineBoughtOn(bill.boughtOn, bill.boughtAt), notes, story: storyByID(stories, bill.storyId) };
+  return { boughtOn: combineBoughtOn(bill.boughtOn, bill.boughtAt), notes, store: storeByID(stores, bill.storeId) };
 }
 
-export function storyByID(stories: Story[], id: number | null): Story {
-  if (!id) return emptyStory();
-  for (const c of stories) {
+export function storeByID(stores: Store[], id: number | null): Store {
+  if (!id) return emptyStore();
+  for (const c of stores) {
     if (c.id === id) return c;
   }
-  return emptyStory();
+  return emptyStore();
 }
 
-function emptyStory(): Story {
+function emptyStore(): Store {
   return {
     id: 0,
     name: '',
@@ -473,6 +475,8 @@ function emptyStory(): Story {
     postalCode: '',
     city: '',
     externalId: '',
+    lat: null,
+    lng: null,
     retailChainId: null,
     retailChainName: '',
     purchaseCount: 0,
@@ -523,7 +527,7 @@ function prefillQuery(field: string): string {
 }
 
 function addressLine(v: ReceiptView): string {
-  const addr = storyAddressLine({
+  const addr = storeAddressLine({
     id: 0,
     name: '',
     streetName: v.streetName,
@@ -532,18 +536,20 @@ function addressLine(v: ReceiptView): string {
     postalCode: v.postalCode,
     city: v.city,
     externalId: '',
+    lat: null,
+    lng: null,
     retailChainId: null,
     retailChainName: '',
     purchaseCount: 0,
   });
-  if (v.storyName === '') return addr;
-  if (addr === '') return v.storyName;
-  return v.storyName + ' — ' + addr;
+  if (v.storeName === '') return addr;
+  if (addr === '') return v.storeName;
+  return v.storeName + ' — ' + addr;
 }
 
-function createStoryURL(v: ReceiptView): string {
-  if (v.status === RECEIPT_MIGRATED || v.storyId !== 0 || v.receiptId <= 0) return '';
-  if (v.storyName.trim() === '' && v.streetName.trim() === '' && v.city.trim() === '' && v.externalId.trim() === '') {
+function createStoreURL(v: ReceiptView): string {
+  if (v.status === RECEIPT_MIGRATED || v.storeId !== 0 || v.receiptId <= 0) return '';
+  if (v.storeName.trim() === '' && v.streetName.trim() === '' && v.city.trim() === '' && v.externalId.trim() === '') {
     return '';
   }
   const q = new URLSearchParams();
@@ -551,7 +557,7 @@ function createStoryURL(v: ReceiptView): string {
     const s = val.trim();
     if (s !== '') q.set(prefillQuery(key), s);
   };
-  set('name', v.storyName);
+  set('name', v.storeName);
   set('external_id', v.externalId);
   set('street_name', v.streetName);
   set('building_number', v.buildingNumber);
@@ -559,7 +565,7 @@ function createStoryURL(v: ReceiptView): string {
   set('postal_code', v.postalCode);
   set('city', v.city);
   q.set('next', '/admin/receipts/' + String(v.receiptId));
-  return '/admin/stories/new?' + q.toString();
+  return '/admin/stores/new?' + q.toString();
 }
 
 function baseView(receiptID: number, imagePath: string, status: string): ReceiptView {
@@ -570,8 +576,8 @@ function baseView(receiptID: number, imagePath: string, status: string): Receipt
     boughtOn: '',
     boughtAt: '',
     notes: '',
-    storyId: 0,
-    storyName: '',
+    storeId: 0,
+    storeName: '',
     externalId: '',
     streetName: '',
     buildingNumber: '',
@@ -581,7 +587,7 @@ function baseView(receiptID: number, imagePath: string, status: string): Receipt
     lines: [],
     migrated: false,
     addressLine: '',
-    createStoryUrl: '',
+    createStoreUrl: '',
   };
 }
 
@@ -592,10 +598,10 @@ export function decorateReceiptView(view: ReceiptView): ReceiptView {
 function decorateView(view: ReceiptView): ReceiptView {
   view.migrated = view.status === RECEIPT_MIGRATED;
   view.addressLine = addressLine(view);
-  view.createStoryUrl = createStoryURL(view);
+  view.createStoreUrl = createStoreURL(view);
   return view;
 }
 
 function emptyImport(): BillImport {
-  return { storyId: null, story: null, receiptId: null, boughtOn: '', lines: [] };
+  return { storeId: null, store: null, receiptId: null, boughtOn: '', lines: [] };
 }

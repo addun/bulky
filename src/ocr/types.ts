@@ -69,8 +69,8 @@ export type Bill = {
   boughtAt: string;
   notes: string;
   notABill: boolean;
-  storyId: number;
-  storyName: string;
+  storeId: number;
+  storeName: string;
   externalId: string;
   streetName: string;
   buildingNumber: string;
@@ -104,8 +104,8 @@ export function emptyBill(): Bill {
     boughtAt: '',
     notes: '',
     notABill: false,
-    storyId: 0,
-    storyName: '',
+    storeId: 0,
+    storeName: '',
     externalId: '',
     streetName: '',
     buildingNumber: '',
@@ -148,8 +148,8 @@ export function marshalBill(bill: Bill): string {
     lines: bill.lines.map(marshalLine),
   };
   if (bill.boughtAt !== '') raw.bought_at = bill.boughtAt;
-  if (bill.storyId !== 0) raw.company_id = bill.storyId;
-  if (bill.storyName !== '') raw.company_name = bill.storyName;
+  if (bill.storeId !== 0) raw.company_id = bill.storeId;
+  if (bill.storeName !== '') raw.company_name = bill.storeName;
   if (bill.externalId !== '') raw.external_id = bill.externalId;
   if (bill.streetName !== '') raw.street_name = bill.streetName;
   if (bill.buildingNumber !== '') raw.building_number = bill.buildingNumber;

@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { and, count, eq, ne, sql } from 'drizzle-orm';
 import { DatabaseService } from '../../db/database.service.js';
 import { changesOf, countOf, emptyStr, lastId, nocaseEq, nocaseOrder } from '../../db/query.js';
-import { productAliases, products, retailChains, stories } from '../../db/schema.js';
+import { productAliases, products, retailChains, stores } from '../../db/schema.js';
 import { AliasScopeError, DuplicateError, isUniqueErr, NotFoundError } from '../../domain/errors.js';
 import type { ProductAlias } from './aliases.models.js';
 import { LocationsRepository } from '#app/store/locations';
@@ -22,7 +22,7 @@ export class AliasesRepository {
     return this.aliasQuery()
       .orderBy(
         nocaseOrder(products.name),
-        nocaseOrder(stories.name),
+        nocaseOrder(stores.name),
         nocaseOrder(retailChains.name),
         nocaseOrder(productAliases.alias),
         productAliases.id,
@@ -34,9 +34,9 @@ export class AliasesRepository {
     return this.aliasQuery()
       .where(eq(productAliases.productId, productId))
       .orderBy(
-        sql`${productAliases.storyId} is not null`,
+        sql`${productAliases.storeId} is not null`,
         sql`${productAliases.retailChainId} is not null`,
-        nocaseOrder(stories.name),
+        nocaseOrder(stores.name),
         nocaseOrder(retailChains.name),
         nocaseOrder(productAliases.alias),
         productAliases.id,
@@ -50,15 +50,15 @@ export class AliasesRepository {
     return row;
   }
 
-  createAlias(productId: number, storyId: number | null, chainId: number | null, alias: string): ProductAlias {
-    const params = this.prepareAlias(productId, storyId, chainId, alias);
+  createAlias(productId: number, storeId: number | null, chainId: number | null, alias: string): ProductAlias {
+    const params = this.prepareAlias(productId, storeId, chainId, alias);
     try {
       const id = lastId(
         this.orm
           .insert(productAliases)
           .values({
             productId: params.productId,
-            storyId: params.storyId,
+            storeId: params.storeId,
             retailChainId: params.chainId,
             alias: params.alias,
           })
@@ -71,16 +71,16 @@ export class AliasesRepository {
     }
   }
 
-  updateAlias(id: number, productId: number, storyId: number | null, chainId: number | null, alias: string): void {
+  updateAlias(id: number, productId: number, storeId: number | null, chainId: number | null, alias: string): void {
     this.getAlias(id);
-    const params = this.prepareAlias(productId, storyId, chainId, alias);
+    const params = this.prepareAlias(productId, storeId, chainId, alias);
     try {
       const n = changesOf(
         this.orm
           .update(productAliases)
           .set({
             productId: params.productId,
-            storyId: params.storyId,
+            storeId: params.storeId,
             retailChainId: params.chainId,
             alias: params.alias,
           })
@@ -120,8 +120,8 @@ export class AliasesRepository {
             WHERE k.product_id = ${intoId}
               AND k.alias = product_aliases.alias COLLATE NOCASE
               AND (
-                (k.story_id IS NULL AND product_aliases.story_id IS NULL)
-                OR k.story_id = product_aliases.story_id
+                (k.store_id IS NULL AND product_aliases.store_id IS NULL)
+                OR k.store_id = product_aliases.store_id
               )
           )
         )
@@ -135,23 +135,23 @@ export class AliasesRepository {
         id: productAliases.id,
         productId: productAliases.productId,
         productName: products.name,
-        storyId: productAliases.storyId,
-        storyName: emptyStr(stories.name),
+        storeId: productAliases.storeId,
+        storeName: emptyStr(stores.name),
         retailChainId: productAliases.retailChainId,
         retailChainName: emptyStr(retailChains.name),
         alias: productAliases.alias,
       })
       .from(productAliases)
       .innerJoin(products, eq(products.id, productAliases.productId))
-      .leftJoin(stories, eq(stories.id, productAliases.storyId))
+      .leftJoin(stores, eq(stores.id, productAliases.storeId))
       .leftJoin(retailChains, eq(retailChains.id, productAliases.retailChainId));
   }
 
-  private prepareAlias(productId: number, storyId: number | null, chainId: number | null, alias: string) {
-    if (storyId && chainId) throw new AliasScopeError();
+  private prepareAlias(productId: number, storeId: number | null, chainId: number | null, alias: string) {
+    if (storeId && chainId) throw new AliasScopeError();
     const n = this.orm.select({ n: count() }).from(products).where(eq(products.id, productId)).get();
     if (countOf(n?.n) === 0) throw new NotFoundError();
-    const story = this.locations.optionalStory(storyId);
+    const store = this.locations.optionalStore(storeId);
     const chain = this.locations.optionalChain(chainId);
     const clash = this.orm
       .select({ n: count() })
@@ -159,6 +159,6 @@ export class AliasesRepository {
       .where(and(nocaseEq(products.name, alias), ne(products.id, productId)))
       .get();
     if (countOf(clash?.n) > 0) throw new DuplicateError();
-    return { productId, storyId: story, chainId: chain, alias };
+    return { productId, storeId: store, chainId: chain, alias };
   }
 }

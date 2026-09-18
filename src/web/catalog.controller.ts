@@ -11,12 +11,12 @@ import {
   InvalidKindError,
   InvalidQuantityError,
   InvalidRetailChainError,
-  InvalidStoryError,
+  InvalidStoreError,
   InvalidUnitError,
   NotFoundError,
   RetailChainInUseError,
   SameProductError,
-  StoryInUseError,
+  StoreInUseError,
   UnitInUseError,
   UnitMismatchError,
 } from '../domain/errors.js';
@@ -24,7 +24,7 @@ import { parseDecimal } from '../domain/format.js';
 import { fromDatetimeLocal, nowBoughtOn } from '../domain/bought-on.js';
 import { AliasesRepository, type ProductAlias } from '#app/store/aliases';
 import { ComparisonGroupsRepository } from '#app/store/comparison-groups';
-import { LocationsRepository, type RetailChain, type Story } from '#app/store/locations';
+import { LocationsRepository, type RetailChain, type Store } from '#app/store/locations';
 import { ProductsRepository, type Product, type ProductConversion } from '#app/store/products';
 import { KIND_PURCHASE, PurchasesRepository, type Purchase } from '#app/store/purchases';
 import { UnitsRepository } from '#app/store/units';
@@ -35,8 +35,8 @@ import {
   presentListItem,
   presentProduct,
   presentPurchase,
-  presentStory,
-  storiesByID,
+  presentStore,
+  storesByID,
 } from './present.js';
 import { ViewsService } from './views.service.js';
 import {
@@ -53,7 +53,7 @@ import {
   mergeQuery,
   nameFields,
   nameForm,
-  newStoryQuery,
+  newStoreQuery,
   productFields,
   productForm,
   productRefQuery,
@@ -61,15 +61,15 @@ import {
   retailChainFields,
   retailChainForm,
   settingsForm,
-  storyFields,
-  storyForm,
+  storeFields,
+  storeForm,
   unitIdForm,
   type AliasFields,
   type AliasForm,
-  type NewStoryQuery,
+  type NewStoreQuery,
   type ProductFields,
   type PurchaseForm,
-  type StoryFields,
+  type StoreFields,
 } from './schema.js';
 
 @Controller()
@@ -270,13 +270,13 @@ export class CatalogController {
 
   @Get('/admin/retail-chains/new')
   newRetailChain(@Res() res: Response): void {
-    this.renderRetailChainForm(res, 200, { id: 0, name: '', legalName: '', taxId: '', storyCount: 0 }, true, '');
+    this.renderRetailChainForm(res, 200, { id: 0, name: '', legalName: '', taxId: '', storeCount: 0 }, true, '');
   }
 
   @Post('/admin/retail-chains')
   createRetailChain(@Body() raw: unknown, @Res() res: Response): void {
     const fields = retailChainFields.parse(raw);
-    const form = { id: 0, name: fields.name, legalName: fields.legal_name, taxId: fields.tax_id, storyCount: 0 };
+    const form = { id: 0, name: fields.name, legalName: fields.legal_name, taxId: fields.tax_id, storeCount: 0 };
     const parsed = retailChainForm.safeParse(raw);
     if (!parsed.success) {
       this.renderRetailChainForm(res, 422, form, true, formIssue(parsed.error));
@@ -309,7 +309,7 @@ export class CatalogController {
       this.renderRetailChainForm(
         res,
         422,
-        { id: chainId, name: fields.name, legalName: fields.legal_name, taxId: fields.tax_id, storyCount: 0 },
+        { id: chainId, name: fields.name, legalName: fields.legal_name, taxId: fields.tax_id, storeCount: 0 },
         false,
         formIssue(parsed.error),
       );
@@ -321,7 +321,7 @@ export class CatalogController {
     } catch (err) {
       if (err instanceof NotFoundError) return this.views.text(res, 404, 'not found');
       const msg = retailChainFormError(err) || 'Could not save the retail chain.';
-      this.renderRetailChainForm(res, 422, { id: chainId, name: fields.name, legalName: fields.legal_name, taxId: fields.tax_id, storyCount: 0 }, false, msg);
+      this.renderRetailChainForm(res, 422, { id: chainId, name: fields.name, legalName: fields.legal_name, taxId: fields.tax_id, storeCount: 0 }, false, msg);
     }
   }
 
@@ -329,7 +329,7 @@ export class CatalogController {
   confirmDeleteRetailChain(@Param('id', { schema: id }) chainId: number, @Res() res: Response): void {
     try {
       const c = this.locations.getRetailChain(chainId);
-      if (c.storyCount > 0) {
+      if (c.storeCount > 0) {
         this.views.redirect(
           res,
           '/admin/retail-chains?error=' + encodeURIComponent(`Cannot delete “${c.name}” while a store still uses it.`),
@@ -382,24 +382,24 @@ export class CatalogController {
     });
   }
 
-  // --- stories ---
+  // --- stores ---
 
-  @Get('/admin/stories')
-  stories(@Query({ schema: flashQuery }) query: { error: string }, @Res() res: Response): void {
+  @Get('/admin/stores')
+  stores(@Query({ schema: flashQuery }) query: { error: string }, @Res() res: Response): void {
     try {
-      this.views.html(res, 'stories', 200, {
+      this.views.html(res, 'stores', 200, {
         page: this.views.adminPage('Stores', '', query.error),
-        stories: this.locations.listStories().map(presentStory),
+        stores: this.locations.listStores().map(presentStore),
       });
     } catch {
       this.views.text(res, 500, 'could not load stores');
     }
   }
 
-  @Get('/admin/stories/new')
-  newStory(@Query({ schema: newStoryQuery }) query: NewStoryQuery, @Res() res: Response): void {
+  @Get('/admin/stores/new')
+  newStore(@Query({ schema: newStoreQuery }) query: NewStoreQuery, @Res() res: Response): void {
     const next = receiptReturnPath(query.next);
-    const form = emptyStory();
+    const form = emptyStore();
     form.name = query.name;
     form.streetName = query.street_name;
     form.buildingNumber = query.building_number;
@@ -407,21 +407,21 @@ export class CatalogController {
     form.postalCode = query.postal_code;
     form.city = query.city;
     form.externalId = query.external_id;
-    this.renderStoryForm(res, 200, form, true, '', next);
+    this.renderStoreForm(res, 200, form, true, '', next);
   }
 
-  @Post('/admin/stories')
-  createStory(@Body() raw: unknown, @Res() res: Response): void {
-    const fields = storyFields.parse(raw);
+  @Post('/admin/stores')
+  createStore(@Body() raw: unknown, @Res() res: Response): void {
+    const fields = storeFields.parse(raw);
     const next = receiptReturnPath(fields.next);
-    const parsed = storyForm.safeParse(raw);
+    const parsed = storeForm.safeParse(raw);
     if (!parsed.success) {
-      const form = { ...emptyStory(), ...storyFromFields(fields), retailChainId: fields.retail_chain_id };
-      this.renderStoryForm(res, 422, form, true, formIssue(parsed.error), next);
+      const form = { ...emptyStore(), ...storeFromFields(fields), retailChainId: fields.retail_chain_id };
+      this.renderStoreForm(res, 422, form, true, formIssue(parsed.error), next);
       return;
     }
     try {
-      this.locations.createStory(
+      this.locations.createStore(
         parsed.data.name,
         parsed.data.street_name,
         parsed.data.building_number,
@@ -430,37 +430,39 @@ export class CatalogController {
         parsed.data.city,
         parsed.data.external_id,
         parsed.data.retail_chain_id,
+        parsed.data.lat,
+        parsed.data.lng,
       );
-      this.views.redirect(res, next || '/admin/stories');
+      this.views.redirect(res, next || '/admin/stores');
     } catch (err) {
-      const form = { ...emptyStory(), ...storyFromFields(fields), retailChainId: fields.retail_chain_id };
-      const msg = storyFormError(err) || 'Could not save the store.';
-      this.renderStoryForm(res, 422, form, true, msg, next);
+      const form = { ...emptyStore(), ...storeFromFields(fields), retailChainId: fields.retail_chain_id };
+      const msg = storeFormError(err) || 'Could not save the store.';
+      this.renderStoreForm(res, 422, form, true, msg, next);
     }
   }
 
-  @Get('/admin/stories/:id/edit')
-  editStory(@Param('id', { schema: id }) storyId: number, @Res() res: Response): void {
+  @Get('/admin/stores/:id/edit')
+  editStore(@Param('id', { schema: id }) storeId: number, @Res() res: Response): void {
     try {
-      this.renderStoryForm(res, 200, this.locations.getStory(storyId), false, '', '');
+      this.renderStoreForm(res, 200, this.locations.getStore(storeId), false, '', '');
     } catch (err) {
       if (err instanceof NotFoundError) return this.views.text(res, 404, 'not found');
       this.views.text(res, 500, 'could not load store');
     }
   }
 
-  @Post('/admin/stories/:id')
-  updateStory(@Param('id', { schema: id }) storyId: number, @Body() raw: unknown, @Res() res: Response): void {
-    const fields = storyFields.parse(raw);
-    const parsed = storyForm.safeParse(raw);
+  @Post('/admin/stores/:id')
+  updateStore(@Param('id', { schema: id }) storeId: number, @Body() raw: unknown, @Res() res: Response): void {
+    const fields = storeFields.parse(raw);
+    const parsed = storeForm.safeParse(raw);
     if (!parsed.success) {
-      const form = { ...storyFromFields(fields), id: storyId, retailChainId: fields.retail_chain_id };
-      this.renderStoryForm(res, 422, form, false, formIssue(parsed.error), '');
+      const form = { ...storeFromFields(fields), id: storeId, retailChainId: fields.retail_chain_id };
+      this.renderStoreForm(res, 422, form, false, formIssue(parsed.error), '');
       return;
     }
     try {
-      this.locations.updateStory(
-        storyId,
+      this.locations.updateStore(
+        storeId,
         parsed.data.name,
         parsed.data.street_name,
         parsed.data.building_number,
@@ -469,24 +471,26 @@ export class CatalogController {
         parsed.data.city,
         parsed.data.external_id,
         parsed.data.retail_chain_id,
+        parsed.data.lat,
+        parsed.data.lng,
       );
-      this.views.redirect(res, '/admin/stories');
+      this.views.redirect(res, '/admin/stores');
     } catch (err) {
       if (err instanceof NotFoundError) return this.views.text(res, 404, 'not found');
-      const form = { ...storyFromFields(fields), id: storyId, retailChainId: fields.retail_chain_id };
-      const msg = storyFormError(err) || 'Could not save the store.';
-      this.renderStoryForm(res, 422, form, false, msg, '');
+      const form = { ...storeFromFields(fields), id: storeId, retailChainId: fields.retail_chain_id };
+      const msg = storeFormError(err) || 'Could not save the store.';
+      this.renderStoreForm(res, 422, form, false, msg, '');
     }
   }
 
-  @Get('/admin/stories/:id/delete')
-  confirmDeleteStory(@Param('id', { schema: id }) storyId: number, @Res() res: Response): void {
+  @Get('/admin/stores/:id/delete')
+  confirmDeleteStore(@Param('id', { schema: id }) storeId: number, @Res() res: Response): void {
     try {
-      const co = this.locations.getStory(storyId);
+      const co = this.locations.getStore(storeId);
       if (co.purchaseCount > 0) {
         this.views.redirect(
           res,
-          '/admin/stories?error=' + encodeURIComponent(`Cannot delete “${co.name}” while a purchase still uses it.`),
+          '/admin/stores?error=' + encodeURIComponent(`Cannot delete “${co.name}” while a purchase still uses it.`),
         );
         return;
       }
@@ -494,8 +498,8 @@ export class CatalogController {
         page: this.views.adminPage('Delete store', '', ''),
         title: `Delete store “${co.name}”?`,
         body: 'This only removes the store from the list. No purchases use it.',
-        action: `/admin/stories/${storyId}/delete`,
-        cancel: '/admin/stories',
+        action: `/admin/stores/${storeId}/delete`,
+        cancel: '/admin/stores',
         confirm: 'Delete store',
       });
     } catch (err) {
@@ -504,26 +508,26 @@ export class CatalogController {
     }
   }
 
-  @Post('/admin/stories/:id/delete')
-  deleteStory(@Param('id', { schema: id }) storyId: number, @Res() res: Response): void {
+  @Post('/admin/stores/:id/delete')
+  deleteStore(@Param('id', { schema: id }) storeId: number, @Res() res: Response): void {
     try {
-      this.locations.deleteStory(storyId);
-      this.views.redirect(res, '/admin/stories');
+      this.locations.deleteStore(storeId);
+      this.views.redirect(res, '/admin/stores');
     } catch (err) {
       if (err instanceof NotFoundError) return this.views.text(res, 404, 'not found');
-      if (err instanceof StoryInUseError) {
-        this.views.redirect(res, '/admin/stories?error=' + encodeURIComponent('Cannot delete a store while a purchase still uses it.'));
+      if (err instanceof StoreInUseError) {
+        this.views.redirect(res, '/admin/stores?error=' + encodeURIComponent('Cannot delete a store while a purchase still uses it.'));
         return;
       }
       this.views.text(res, 500, 'could not delete store');
     }
   }
 
-  private renderStoryForm(res: Response, status: number, co: Story, isNew: boolean, errMsg: string, next: string): void {
+  private renderStoreForm(res: Response, status: number, co: Store, isNew: boolean, errMsg: string, next: string): void {
     try {
-      this.views.html(res, 'story_form', status, {
+      this.views.html(res, 'store_form', status, {
         page: this.views.adminPage(isNew ? 'Add store' : 'Edit store', '', errMsg),
-        story: presentStory(co),
+        store: presentStore(co),
         retailChains: this.locations.listRetailChains().map(presentChain),
         new: isNew,
         next: next,
@@ -702,7 +706,7 @@ export class CatalogController {
   private aliasLookups() {
     return {
       products: this.products.listProducts(''),
-      stories: this.locations.listStories(),
+      stores: this.locations.listStores(),
       chains: this.locations.listRetailChains(),
     };
   }
@@ -721,7 +725,7 @@ export class CatalogController {
       page: this.views.adminPage(isNew ? 'Add alias' : 'Edit alias', '', errMsg),
       alias: presentAlias(a),
       products: lookups.products,
-      stories: lookups.stories.map(presentStory),
+      stores: lookups.stores.map(presentStore),
       chains: lookups.chains.map(presentChain),
       fromProduct: from,
       lockedProduct: locked,
@@ -731,9 +735,9 @@ export class CatalogController {
   }
 
   private saveAliasFromForm(body: AliasForm, aliasId: number): void {
-    const { storyID, chainID } = parseAliasScope(body.scope);
-    if (aliasId === 0) this.aliasesStore.createAlias(body.product_id, storyID, chainID, body.alias);
-    else this.aliasesStore.updateAlias(aliasId, body.product_id, storyID, chainID, body.alias);
+    const { storeID, chainID } = parseAliasScope(body.scope);
+    if (aliasId === 0) this.aliasesStore.createAlias(body.product_id, storeID, chainID, body.alias);
+    else this.aliasesStore.updateAlias(aliasId, body.product_id, storeID, chainID, body.alias);
   }
 
   // --- comparison groups ---
@@ -898,13 +902,13 @@ export class CatalogController {
     try {
       const p = this.products.getProduct(productId);
       const purchases = this.purchases.listPurchases(productId);
-      const stories = this.locations.listStories();
+      const stores = this.locations.listStores();
       const groups = this.groups.listComparisonGroupsForProduct(productId);
       this.views.html(res, 'product_show', 200, {
         page: this.views.adminPage(p.name, '', query.error),
         product: presentProduct(p),
         purchases: purchases.map(presentPurchase),
-        storyById: storiesByID(stories),
+        storeById: storesByID(stores),
         groups: groups,
       });
     } catch (err) {
@@ -1246,7 +1250,7 @@ export class CatalogController {
     const draft: Purchase = {
       id: 0,
       productId: ctx.prod.id,
-      storyId: null,
+      storeId: null,
       kind: KIND_PURCHASE,
       receiptId: null,
       boughtOn: nowBoughtOn(),
@@ -1254,7 +1258,7 @@ export class CatalogController {
       amount: new Decimal(0),
       createdAt: '',
     };
-    this.renderPurchaseForm(res, 200, ctx.prod, draft, ctx.stories, true, query.error);
+    this.renderPurchaseForm(res, 200, ctx.prod, draft, ctx.stores, true, query.error);
   }
 
   @Post('/admin/products/:id/purchases')
@@ -1269,16 +1273,16 @@ export class CatalogController {
     const form = purchaseFromForm(body);
     const parsed = this.parsePurchase(body);
     if (parsed.err) {
-      this.renderPurchaseForm(res, 422, ctx.prod, form, ctx.stories, true, parsed.err);
+      this.renderPurchaseForm(res, 422, ctx.prod, form, ctx.stores, true, parsed.err);
       return;
     }
     try {
       const kind = this.purchases.parsePurchaseKind(body.kind);
-      const storyID = this.resolveStoryForm(body.story_id);
-      this.purchases.createPurchase(ctx.prod.id, storyID, parsed.boughtOn, parsed.qty, parsed.amount, kind);
+      const storeID = this.resolveStoreForm(body.store_id);
+      this.purchases.createPurchase(ctx.prod.id, storeID, parsed.boughtOn, parsed.qty, parsed.amount, kind);
       this.views.redirect(res, '/admin/products/' + ctx.prod.id);
     } catch (err) {
-      this.renderPurchaseForm(res, 422, ctx.prod, form, ctx.stories, true, purchaseSaveError(err));
+      this.renderPurchaseForm(res, 422, ctx.prod, form, ctx.stores, true, purchaseSaveError(err));
     }
   }
 
@@ -1287,8 +1291,8 @@ export class CatalogController {
     try {
       const p = this.purchases.getPurchase(purchaseId);
       const prod = this.products.getProduct(p.productId);
-      const stories = this.locations.listStories();
-      this.renderPurchaseForm(res, 200, prod, p, stories, false, '');
+      const stores = this.locations.listStores();
+      this.renderPurchaseForm(res, 200, prod, p, stores, false, '');
     } catch (err) {
       if (err instanceof NotFoundError) return this.views.text(res, 404, 'not found');
       this.views.text(res, 500, 'could not load purchase');
@@ -1304,19 +1308,19 @@ export class CatalogController {
     try {
       const p = this.purchases.getPurchase(purchaseId);
       const prod = this.products.getProduct(p.productId);
-      const stories = this.locations.listStories();
+      const stores = this.locations.listStores();
       const body = purchaseForm.parse(raw);
       const form = purchaseFromForm(body);
       form.id = p.id;
       form.receiptId = p.receiptId;
       const parsed = this.parsePurchase(body);
       if (parsed.err) {
-        this.renderPurchaseForm(res, 422, prod, form, stories, false, parsed.err);
+        this.renderPurchaseForm(res, 422, prod, form, stores, false, parsed.err);
         return;
       }
       const kind = this.purchases.parsePurchaseKind(body.kind);
-      const storyID = this.resolveStoryForm(body.story_id);
-      this.purchases.updatePurchase(purchaseId, storyID, parsed.boughtOn, parsed.qty, parsed.amount, kind);
+      const storeID = this.resolveStoreForm(body.store_id);
+      this.purchases.updatePurchase(purchaseId, storeID, parsed.boughtOn, parsed.qty, parsed.amount, kind);
       this.views.redirect(res, '/admin/products/' + p.productId);
     } catch (err) {
       if (err instanceof NotFoundError) return this.views.text(res, 404, 'not found');
@@ -1360,9 +1364,9 @@ export class CatalogController {
     }
   }
 
-  private purchaseProduct(productId: number, res: Response): { prod: Product; stories: Story[] } | null {
+  private purchaseProduct(productId: number, res: Response): { prod: Product; stores: Store[] } | null {
     try {
-      return { prod: this.products.getProduct(productId), stories: this.locations.listStories() };
+      return { prod: this.products.getProduct(productId), stores: this.locations.listStores() };
     } catch (err) {
       if (err instanceof NotFoundError) this.views.text(res, 404, 'not found');
       else this.views.text(res, 500, 'could not load product');
@@ -1375,7 +1379,7 @@ export class CatalogController {
     status: number,
     prod: Product,
     p: Purchase,
-    stories: Story[],
+    stores: Store[],
     isNew: boolean,
     errMsg: string,
   ): void {
@@ -1385,7 +1389,7 @@ export class CatalogController {
       page: this.views.adminPage(title, '', errMsg),
       product: presentProduct(prod),
       purchase: presentPurchase(p),
-      stories: stories.map(presentStory),
+      stores: stores.map(presentStore),
       new: isNew,
     });
   }
@@ -1412,10 +1416,10 @@ export class CatalogController {
     }
   }
 
-  private resolveStoryForm(storyId: number): number {
-    if (storyId <= 0) return 0;
-    this.locations.getStory(storyId);
-    return storyId;
+  private resolveStoreForm(storeId: number): number {
+    if (storeId <= 0) return 0;
+    this.locations.getStore(storeId);
+    return storeId;
   }
 
   private comparisonGroupOptions(selected: number[]) {
@@ -1430,8 +1434,8 @@ function retailChainFormError(err: unknown): string {
   return '';
 }
 
-function storyFormError(err: unknown): string {
-  if (err instanceof InvalidStoryError) return 'Choose a store.';
+function storeFormError(err: unknown): string {
+  if (err instanceof InvalidStoreError) return 'Choose a store.';
   if (err instanceof InvalidRetailChainError) return 'Choose a retail chain.';
   if (err instanceof DuplicateError) return 'That store code is already used.';
   return '';
@@ -1439,7 +1443,7 @@ function storyFormError(err: unknown): string {
 
 function aliasFormError(err: unknown): string {
   if (err instanceof NotFoundError) return 'Choose a product.';
-  if (err instanceof InvalidStoryError) return 'Choose a store.';
+  if (err instanceof InvalidStoreError) return 'Choose a store.';
   if (err instanceof InvalidRetailChainError) return 'Choose a retail chain.';
   if (err instanceof AliasScopeError) return 'Choose either a chain or a store, not both.';
   if (err instanceof DuplicateError) return 'That alias already exists for this scope, or matches another product\'s name.';
@@ -1464,25 +1468,25 @@ function mergeFormError(err: unknown): string {
 function purchaseSaveError(err: unknown): string {
   if (err instanceof InvalidQuantityError) return 'Quantity must be greater than zero.';
   if (err instanceof InvalidKindError) return 'Choose purchase or price.';
-  if (err instanceof InvalidStoryError) return 'Choose a store.';
+  if (err instanceof InvalidStoreError) return 'Choose a store.';
   if (err instanceof NotFoundError) return 'Choose a store.';
   return 'Could not save the purchase.';
 }
 
-function parseAliasScope(raw: string): { storyID: number; chainID: number } {
+function parseAliasScope(raw: string): { storeID: number; chainID: number } {
   raw = raw.trim();
-  if (raw === '') return { storyID: 0, chainID: 0 };
+  if (raw === '') return { storeID: 0, chainID: 0 };
   const i = raw.indexOf(':');
-  if (i < 0) throw new InvalidStoryError();
+  if (i < 0) throw new InvalidStoreError();
   const kind = raw.slice(0, i);
   const n = Number.parseInt(raw.slice(i + 1), 10);
   if (!Number.isFinite(n) || n <= 0) {
     if (kind === 'chain') throw new InvalidRetailChainError();
-    throw new InvalidStoryError();
+    throw new InvalidStoreError();
   }
-  if (kind === 'story') return { storyID: n, chainID: 0 };
-  if (kind === 'chain') return { storyID: 0, chainID: n };
-  throw new InvalidStoryError();
+  if (kind === 'store') return { storeID: n, chainID: 0 };
+  if (kind === 'chain') return { storeID: 0, chainID: n };
+  throw new InvalidStoreError();
 }
 
 function aliasesPath(productID: number): string {
@@ -1509,23 +1513,41 @@ function receiptReturnPath(s: string): string {
   }
 }
 
-function storyFromFields(f: StoryFields): Story {
-  return { ...emptyStory(), name: f.name, streetName: f.street_name, buildingNumber: f.building_number, apartmentNumber: f.apartment_number, postalCode: f.postal_code, city: f.city, externalId: f.external_id };
+function storeFromFields(f: StoreFields): Store {
+  return {
+    ...emptyStore(),
+    name: f.name,
+    streetName: f.street_name,
+    buildingNumber: f.building_number,
+    apartmentNumber: f.apartment_number,
+    postalCode: f.postal_code,
+    city: f.city,
+    externalId: f.external_id,
+    lat: parseCoordField(f.lat),
+    lng: parseCoordField(f.lng),
+  };
 }
 
-function emptyStory(): Story {
+function parseCoordField(s: string): number | null {
+  const t = s.trim().replace(',', '.');
+  if (t === '') return null;
+  const n = Number.parseFloat(t);
+  return Number.isFinite(n) ? n : null;
+}
+
+function emptyStore(): Store {
   return {
     id: 0, name: '', streetName: '', buildingNumber: '', apartmentNumber: '', postalCode: '', city: '',
-    externalId: '', retailChainId: null, retailChainName: '', purchaseCount: 0,
+    externalId: '', lat: null, lng: null, retailChainId: null, retailChainName: '', purchaseCount: 0,
   };
 }
 
 function aliasFormFromPost(body: AliasFields): ProductAlias {
-  let storyID = 0;
+  let storeID = 0;
   let chainID = 0;
   try {
     const scope = parseAliasScope(body.scope);
-    storyID = scope.storyID;
+    storeID = scope.storeID;
     chainID = scope.chainID;
   } catch {
     /* keep 0 */
@@ -1533,14 +1555,14 @@ function aliasFormFromPost(body: AliasFields): ProductAlias {
   return {
     ...emptyAlias(),
     productId: body.product_id,
-    storyId: storyID || null,
+    storeId: storeID || null,
     retailChainId: chainID || null,
     alias: body.alias,
   };
 }
 
 function emptyAlias(): ProductAlias {
-  return { id: 0, productId: 0, productName: '', storyId: null, storyName: '', retailChainId: null, retailChainName: '', alias: '' };
+  return { id: 0, productId: 0, productName: '', storeId: null, storeName: '', retailChainId: null, retailChainName: '', alias: '' };
 }
 
 function emptyProduct(): Product {
@@ -1588,7 +1610,7 @@ function purchaseFromForm(body: PurchaseForm): Purchase {
   return {
     id: 0,
     productId: 0,
-    storyId: body.story_id || null,
+    storeId: body.store_id || null,
     kind: body.kind as Purchase['kind'],
     receiptId: null,
     boughtOn: fromDatetimeLocal(body.bought_on),

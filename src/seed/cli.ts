@@ -29,18 +29,18 @@ async function main(): Promise<void> {
   else console.log('faker seed: (random)');
 
   const chains: ReturnType<LocationsRepository['createRetailChain']>[] = [];
-  if (args.stories > 0) {
+  if (args.stores > 0) {
     for (let i = 0; i < 3; i++) {
       const name = `${faker.company.name()} ${i + 1}`;
       chains.push(locations.createRetailChain(name, `${name} Sp. z o.o.`, faker.string.numeric(10)));
     }
   }
-  const stories: ReturnType<LocationsRepository['createStory']>[] = [];
-  for (let i = 0; i < args.stories; i++) {
+  const stores: ReturnType<LocationsRepository['createStore']>[] = [];
+  for (let i = 0; i < args.stores; i++) {
     const apt = Math.random() < 0.5 ? faker.string.numeric(2) : '';
     const chainID = chains.length && Math.random() < 0.8 ? chains[Math.floor(Math.random() * chains.length)]!.id : null;
-    stories.push(
-      locations.createStory(
+    stores.push(
+      locations.createStore(
         faker.company.name(),
         faker.location.street(),
         faker.location.buildingNumber(),
@@ -76,7 +76,7 @@ async function main(): Promise<void> {
       let price = 1 + Math.random() * 99;
       for (let n = 0; n < args.history; n++) {
         const kind = Math.random() < 0.12 ? KIND_PRICE : KIND_PURCHASE;
-        const storyID = stories.length && Math.random() < 0.8 ? stories[Math.floor(Math.random() * stories.length)]!.id : null;
+        const storeID = stores.length && Math.random() < 0.8 ? stores[Math.floor(Math.random() * stores.length)]!.id : null;
         const when = args.history > 1 ? new Date(start.getTime() + (n * span) / (args.history - 1)) : start;
         const jitterH = Math.floor(Math.random() * 37);
         const bought = new Date(when.getTime() + jitterH * 3600_000);
@@ -84,12 +84,12 @@ async function main(): Promise<void> {
         price = Math.min(100, Math.max(1, price * (0.93 + Math.random() * 0.15)));
         const qty = p.unitName === 'kg' || p.unitName === 'g' ? new Decimal((0.4 + Math.random() * 11.6).toFixed(3)) : new Decimal(1 + Math.floor(Math.random() * 8));
         const amount = qty.mul(price).toDecimalPlaces(2);
-        purchasesSvc.createPurchase(p.id, storyID, boughtOn, qty, amount, kind);
+        purchasesSvc.createPurchase(p.id, storeID, boughtOn, qty, amount, kind);
         purchases++;
       }
     }
   });
-  console.log(`inserted ${stories.length} stores, ${products.length} products, ${purchases} purchases into ${db.dataDirPath()}`);
+  console.log(`inserted ${stores.length} stores, ${products.length} products, ${purchases} purchases into ${db.dataDirPath()}`);
   await app.close();
 }
 
@@ -131,14 +131,14 @@ function rescalePurchases(purchasesSvc: PurchasesRepository, rows: ReturnType<Pu
   for (const pt of pts) {
     const newPrice = span.isZero() ? mid : minP.add(pt.price.sub(lo).div(span).mul(maxP.sub(minP)));
     const amount = newPrice.mul(pt.row.quantity).toDecimalPlaces(2);
-    purchasesSvc.updatePurchase(pt.row.id, pt.row.storyId, pt.row.boughtOn, pt.row.quantity, amount, pt.row.kind);
+    purchasesSvc.updatePurchase(pt.row.id, pt.row.storeId, pt.row.boughtOn, pt.row.quantity, amount, pt.row.kind);
     n++;
   }
   return n;
 }
 
 function parseArgs(argv: string[]) {
-  const out = { dataDir: process.env.DATA_DIR || './data', seed: 0, stories: 16, products: 100, history: 250, clamp: false };
+  const out = { dataDir: process.env.DATA_DIR || './data', seed: 0, stores: 16, products: 100, history: 250, clamp: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]!;
     const next = argv[i + 1];
@@ -149,8 +149,8 @@ function parseArgs(argv: string[]) {
     } else if (a === '--seed' && next) {
       out.seed = Number(next);
       i++;
-    } else if (a === '--stories' && next) {
-      out.stories = Number(next);
+    } else if (a === '--stores' && next) {
+      out.stores = Number(next);
       i++;
     } else if (a === '--products' && next) {
       out.products = Number(next);

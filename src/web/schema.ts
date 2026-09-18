@@ -53,7 +53,7 @@ export const mergeParams = z.object({
   into: optInt,
 });
 
-export const newStoryQuery = z
+export const newStoreQuery = z
   .object({ next: field })
   .catchall(z.unknown())
   .transform((q) => {
@@ -111,7 +111,19 @@ export const retailChainForm = z.object({
   ),
 });
 
-export const storyFields = z.object({
+const optCoord = (label: string, min: number, max: number) =>
+  field.superRefine((s, ctx) => {
+    if (s === '') return;
+    const n = Number.parseFloat(s.replace(',', '.'));
+    if (!Number.isFinite(n) || n < min || n > max) {
+      ctx.addIssue({ code: 'custom', message: `${label} must be a number between ${min} and ${max}.` });
+    }
+  }).transform((s): number | null => {
+    if (s === '') return null;
+    return Number.parseFloat(s.replace(',', '.'));
+  });
+
+export const storeFields = z.object({
   name: field,
   street_name: field,
   building_number: field,
@@ -119,11 +131,13 @@ export const storyFields = z.object({
   postal_code: field,
   city: field,
   external_id: field,
+  lat: field,
+  lng: field,
   next: field,
   retail_chain_id: optInt,
 });
 
-export const storyForm = z.object({
+export const storeForm = z.object({
   name: field.pipe(z.string().min(1, 'Name is required.')),
   street_name: field.pipe(z.string().min(1, 'Street name is required.')),
   building_number: field.pipe(z.string().min(1, 'Building number is required.')),
@@ -131,6 +145,8 @@ export const storyForm = z.object({
   postal_code: field.pipe(z.string().min(1, 'Postal code is required.')),
   city: field.pipe(z.string().min(1, 'City is required.')),
   external_id: field,
+  lat: optCoord('Latitude', -90, 90),
+  lng: optCoord('Longitude', -180, 180),
   next: field,
   retail_chain_id: optInt,
 });
@@ -200,7 +216,7 @@ export const mergeForm = z.object({
 });
 
 export const purchaseForm = z.object({
-  story_id: optInt,
+  store_id: optInt,
   kind: field,
   bought_on: field,
   amount: field,
@@ -209,7 +225,7 @@ export const purchaseForm = z.object({
 
 export const receiptVisitForm = z.object({
   bought_on: field,
-  story_id: optInt,
+  store_id: optInt,
 });
 
 export const formBody = z.preprocess((v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {}), z.record(z.string(), z.unknown()));
@@ -276,8 +292,8 @@ export type QQuery = z.infer<typeof qQuery>;
 export type NameForm = z.infer<typeof nameForm>;
 export type SettingsForm = z.infer<typeof settingsForm>;
 export type RetailChainForm = z.infer<typeof retailChainForm>;
-export type StoryForm = z.infer<typeof storyForm>;
-export type StoryFields = z.infer<typeof storyFields>;
+export type StoreForm = z.infer<typeof storeForm>;
+export type StoreFields = z.infer<typeof storeFields>;
 export type AliasForm = z.infer<typeof aliasForm>;
 export type AliasFields = z.infer<typeof aliasFields>;
 export type ComparisonGroupForm = z.infer<typeof comparisonGroupForm>;
@@ -286,4 +302,4 @@ export type ProductFields = z.infer<typeof productFields>;
 export type PurchaseForm = z.infer<typeof purchaseForm>;
 export type ReceiptVisitForm = z.infer<typeof receiptVisitForm>;
 export type MergeParams = z.infer<typeof mergeParams>;
-export type NewStoryQuery = z.infer<typeof newStoryQuery>;
+export type NewStoreQuery = z.infer<typeof newStoreQuery>;

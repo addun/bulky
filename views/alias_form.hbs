@@ -27,10 +27,10 @@
           {{/each}}
         </optgroup>
         {{/if}}
-        {{#if stories}}
+        {{#if stores}}
         <optgroup label="Stores">
-          {{#each stories}}
-          <option value="story:{{this.id}}" {{#if (eq ../alias.scopeValue (print "story:" this.id))}}selected{{/if}}>{{this.label}}</option>
+          {{#each stores}}
+          <option value="store:{{this.id}}" {{#if (eq ../alias.scopeValue (print "store:" this.id))}}selected{{/if}}>{{this.label}}</option>
           {{/each}}
         </optgroup>
         {{/if}}

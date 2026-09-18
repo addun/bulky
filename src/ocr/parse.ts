@@ -15,7 +15,7 @@ export function parseBill(raw: Buffer | string): Bill {
   }
   const bill = unmarshalBill(parsed);
   bill.notes = bill.notes.trim();
-  bill.storyName = bill.storyName.trim();
+  bill.storeName = bill.storeName.trim();
   bill.externalId = bill.externalId.trim();
   if (bill.buildingNumber.trim() === '') {
     const parts = splitStreetAndBuilding(bill.streetName);
@@ -52,8 +52,8 @@ function unmarshalBill(parsed: unknown): Bill {
   bill.boughtAt = asStringField(raw.bought_at);
   bill.notes = asStringField(raw.notes);
   bill.notABill = asBoolField(raw.not_a_bill);
-  bill.storyId = flexInt(raw.company_id);
-  bill.storyName = asStringField(raw.company_name);
+  bill.storeId = flexInt(raw.company_id);
+  bill.storeName = asStringField(raw.company_name);
   bill.externalId = asStringField(raw.external_id);
   bill.streetName = asStringField(raw.street_name);
   bill.buildingNumber = asStringField(raw.building_number);

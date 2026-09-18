@@ -13,14 +13,14 @@
     <legend>Store</legend>
     <label>
       Store
-      <select name="story_id">
+      <select name="store_id">
         <option value="">None</option>
-        {{#each stories}}
-        <option value="{{this.id}}" {{#if (eq this.id ../story.id)}}selected{{/if}}>{{this.label}}</option>
+        {{#each stores}}
+        <option value="{{this.id}}" {{#if (eq this.id ../store.id)}}selected{{/if}}>{{this.label}}</option>
         {{/each}}
       </select>
     </label>
-    {{#unless stories}}<p class="hint">No stores yet. You can still save, or <a href="/admin/stories/new">add a store</a> first.</p>{{/unless}}
+    {{#unless stores}}<p class="hint">No stores yet. You can still save, or <a href="/admin/stores/new">add a store</a> first.</p>{{/unless}}
   </fieldset>
 
   <div class="actions">
