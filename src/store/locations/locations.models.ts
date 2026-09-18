@@ -1,4 +1,4 @@
-export type Story = {
+export type Store = {
   id: number;
   name: string;
   streetName: string;
@@ -7,6 +7,8 @@ export type Story = {
   postalCode: string;
   city: string;
   externalId: string;
+  lat: number | null;
+  lng: number | null;
   retailChainId: number | null;
   retailChainName: string;
   purchaseCount: number;
@@ -17,25 +19,25 @@ export type RetailChain = {
   name: string;
   legalName: string;
   taxId: string;
-  storyCount: number;
+  storeCount: number;
 };
 
-export function storyStreetLine(c: Story): string {
+export function storeStreetLine(c: Store): string {
   let s = `${c.streetName} ${c.buildingNumber}`.trim();
   if (c.apartmentNumber !== '') s += `/${c.apartmentNumber}`;
   return s;
 }
 
-export function storyAddressLine(c: Story): string {
-  const street = storyStreetLine(c);
+export function storeAddressLine(c: Store): string {
+  const street = storeStreetLine(c);
   const loc = `${c.postalCode} ${c.city}`.trim();
   if (street !== '' && loc !== '') return `${street}, ${loc}`;
   if (street !== '') return street;
   return loc;
 }
 
-export function storyLabel(c: Story): string {
-  const addr = storyAddressLine(c);
+export function storeLabel(c: Store): string {
+  const addr = storeAddressLine(c);
   return addr === '' ? c.name : `${c.name} — ${addr}`;
 }
 

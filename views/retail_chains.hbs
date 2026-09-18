@@ -14,10 +14,10 @@
         <span class="unit-name">{{this.name}}</span>
         <span class="meta">{{this.legalName}} · {{this.taxId}}</span>
       </span>
-      <span class="meta">{{this.storyCount}} store{{#if (ne this.storyCount 1)}}s{{/if}}</span>
+      <span class="meta">{{this.storeCount}} store{{#if (ne this.storeCount 1)}}s{{/if}}</span>
       <span class="tight">
         <a href="/admin/retail-chains/{{this.id}}/edit">Edit</a>
-        {{#if (eq this.storyCount 0)}}
+        {{#if (eq this.storeCount 0)}}
           <a class="danger" href="/admin/retail-chains/{{this.id}}/delete">Delete</a>
         {{/if}}
       </span>

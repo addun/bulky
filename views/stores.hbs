@@ -1,26 +1,26 @@
 {{> header}}
 <div class="page-head">
   <h1>Stores</h1>
-  <a class="btn btn-tag" href="/admin/stories/new">Add store</a>
+  <a class="btn btn-tag" href="/admin/stores/new">Add store</a>
 </div>
 
-{{#unless stories}}
+{{#unless stores}}
   <p class="empty">No stores yet.</p>
 {{else}}
-  <ul class="units stories">
-    {{#each stories}}
+  <ul class="units stores">
+    {{#each stores}}
     <li>
       <span class="row-main">
         <span class="unit-name">{{this.name}}</span>
         {{#if this.retailChainName}}<span class="meta">{{this.retailChainName}}</span>{{/if}}
         {{#if this.externalId}}<span class="meta">{{this.externalId}}</span>{{/if}}
-        <span class="meta story-addr">{{this.addressLine}}</span>
+        <span class="meta store-addr">{{this.addressLine}}</span>
       </span>
       <span class="meta">{{this.purchaseCount}} purchase{{#if (ne this.purchaseCount 1)}}s{{/if}}</span>
       <span class="tight">
-        <a href="/admin/stories/{{this.id}}/edit">Edit</a>
+        <a href="/admin/stores/{{this.id}}/edit">Edit</a>
         {{#if (eq this.purchaseCount 0)}}
-          <a class="danger" href="/admin/stories/{{this.id}}/delete">Delete</a>
+          <a class="danger" href="/admin/stores/{{this.id}}/delete">Delete</a>
         {{/if}}
       </span>
     </li>

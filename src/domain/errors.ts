@@ -23,9 +23,9 @@ export class UnitInUseError extends AppError {
   }
 }
 
-export class StoryInUseError extends AppError {
+export class StoreInUseError extends AppError {
   constructor() {
-    super('story is in use');
+    super('store is in use');
   }
 }
 
@@ -35,9 +35,9 @@ export class InvalidUnitError extends AppError {
   }
 }
 
-export class InvalidStoryError extends AppError {
+export class InvalidStoreError extends AppError {
   constructor() {
-    super('invalid story');
+    super('invalid store');
   }
 }
 
@@ -55,7 +55,7 @@ export class InvalidQuantityError extends AppError {
 
 export class AliasScopeError extends AppError {
   constructor() {
-    super('alias cannot be both story and chain');
+    super('alias cannot be both store and chain');
   }
 }
 

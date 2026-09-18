@@ -7,7 +7,7 @@ export type PurchaseKind = typeof KIND_PURCHASE | typeof KIND_PRICE;
 export type Purchase = {
   id: number;
   productId: number;
-  storyId: number | null;
+  storeId: number | null;
   kind: PurchaseKind;
   receiptId: number | null;
   boughtOn: string;

@@ -2,20 +2,20 @@ import { Injectable } from '@nestjs/common';
 import { count, eq, sql } from 'drizzle-orm';
 import { DatabaseService } from '../../db/database.service.js';
 import { changesOf, countOf, emptyStr, lastId, nocaseOrder } from '../../db/query.js';
-import { purchases, retailChains, stories } from '../../db/schema.js';
+import { purchases, retailChains, stores } from '../../db/schema.js';
 import {
   DuplicateError,
   InvalidRetailChainError,
-  InvalidStoryError,
+  InvalidStoreError,
   isUniqueErr,
   NotFoundError,
   RetailChainInUseError,
-  StoryInUseError,
+  StoreInUseError,
 } from '../../domain/errors.js';
-import type { RetailChain, Story } from './locations.models.js';
+import type { RetailChain, Store } from './locations.models.js';
 
-const chainStoryCount = sql<number>`cast((
-  select count(*) from stories s where s.retail_chain_id = ${retailChains.id}
+const chainStoreCount = sql<number>`cast((
+  select count(*) from stores s where s.retail_chain_id = ${retailChains.id}
 ) as integer)`.mapWith(Number);
 
 @Injectable()
@@ -33,7 +33,7 @@ export class LocationsRepository {
         name: retailChains.name,
         legalName: retailChains.legalName,
         taxId: retailChains.taxId,
-        storyCount: chainStoryCount,
+        storeCount: chainStoreCount,
       })
       .from(retailChains)
       .orderBy(nocaseOrder(retailChains.name), retailChains.id)
@@ -47,7 +47,7 @@ export class LocationsRepository {
         name: retailChains.name,
         legalName: retailChains.legalName,
         taxId: retailChains.taxId,
-        storyCount: chainStoryCount,
+        storeCount: chainStoreCount,
       })
       .from(retailChains)
       .where(eq(retailChains.id, id))
@@ -89,22 +89,22 @@ export class LocationsRepository {
 
   deleteRetailChain(id: number): void {
     const c = this.getRetailChain(id);
-    if (c.storyCount > 0) throw new RetailChainInUseError();
+    if (c.storeCount > 0) throw new RetailChainInUseError();
     const n = changesOf(this.orm.delete(retailChains).where(eq(retailChains.id, id)).run());
     if (n === 0) throw new NotFoundError();
   }
 
-  listStories(): Story[] {
-    return this.storyQuery().groupBy(stories.id).orderBy(nocaseOrder(stories.name), stories.id).all();
+  listStores(): Store[] {
+    return this.storeQuery().groupBy(stores.id).orderBy(nocaseOrder(stores.name), stores.id).all();
   }
 
-  getStory(id: number): Story {
-    const row = this.storyQuery().where(eq(stories.id, id)).groupBy(stories.id).get();
+  getStore(id: number): Store {
+    const row = this.storeQuery().where(eq(stores.id, id)).groupBy(stores.id).get();
     if (!row) throw new NotFoundError();
     return row;
   }
 
-  createStory(
+  createStore(
     name: string,
     streetName: string,
     building: string,
@@ -113,13 +113,15 @@ export class LocationsRepository {
     city: string,
     externalId: string,
     retailChainId: number | null,
-  ): Story {
-    const c = this.normalizeStory(name, streetName, building, apartment, postalCode, city, externalId);
-    const id = this.insertStory(c, retailChainId);
-    return this.getStory(id);
+    lat: number | null = null,
+    lng: number | null = null,
+  ): Store {
+    const c = this.normalizeStore(name, streetName, building, apartment, postalCode, city, externalId, lat, lng);
+    const id = this.insertStore(c, retailChainId);
+    return this.getStore(id);
   }
 
-  updateStory(
+  updateStore(
     id: number,
     name: string,
     streetName: string,
@@ -129,13 +131,15 @@ export class LocationsRepository {
     city: string,
     externalId: string,
     retailChainId: number | null,
+    lat: number | null = null,
+    lng: number | null = null,
   ): void {
-    const c = this.normalizeStory(name, streetName, building, apartment, postalCode, city, externalId);
+    const c = this.normalizeStore(name, streetName, building, apartment, postalCode, city, externalId, lat, lng);
     const chain = this.optionalChain(retailChainId);
     try {
       const n = changesOf(
         this.orm
-          .update(stories)
+          .update(stores)
           .set({
             name: c.name,
             streetName: c.streetName,
@@ -145,8 +149,10 @@ export class LocationsRepository {
             city: c.city,
             externalId: c.externalId,
             retailChainId: chain,
+            lat: c.lat,
+            lng: c.lng,
           })
-          .where(eq(stories.id, id))
+          .where(eq(stores.id, id))
           .run(),
       );
       if (n === 0) throw new NotFoundError();
@@ -157,19 +163,19 @@ export class LocationsRepository {
     }
   }
 
-  deleteStory(id: number): void {
-    const c = this.getStory(id);
-    if (c.purchaseCount > 0) throw new StoryInUseError();
-    const n = changesOf(this.orm.delete(stories).where(eq(stories.id, id)).run());
+  deleteStore(id: number): void {
+    const c = this.getStore(id);
+    if (c.purchaseCount > 0) throw new StoreInUseError();
+    const n = changesOf(this.orm.delete(stores).where(eq(stores.id, id)).run());
     if (n === 0) throw new NotFoundError();
   }
 
-  insertStory(c: Story, retailChainId: number | null): number {
+  insertStore(c: Store, retailChainId: number | null): number {
     const chain = this.optionalChain(retailChainId);
     try {
       return lastId(
         this.orm
-          .insert(stories)
+          .insert(stores)
           .values({
             name: c.name,
             streetName: c.streetName,
@@ -179,6 +185,8 @@ export class LocationsRepository {
             city: c.city,
             externalId: c.externalId,
             retailChainId: chain,
+            lat: c.lat,
+            lng: c.lng,
           })
           .run(),
       );
@@ -188,7 +196,7 @@ export class LocationsRepository {
     }
   }
 
-  normalizeStory(
+  normalizeStore(
     name: string,
     streetName: string,
     building: string,
@@ -196,7 +204,9 @@ export class LocationsRepository {
     postalCode: string,
     city: string,
     externalId: string,
-  ): Story {
+    lat: number | null = null,
+    lng: number | null = null,
+  ): Store {
     return {
       id: 0,
       name,
@@ -206,16 +216,18 @@ export class LocationsRepository {
       postalCode,
       city,
       externalId,
+      lat,
+      lng,
       retailChainId: null,
       retailChainName: '',
       purchaseCount: 0,
     };
   }
 
-  optionalStory(id: number | null | undefined): number | null {
+  optionalStore(id: number | null | undefined): number | null {
     if (!id) return null;
-    const n = this.orm.select({ n: count() }).from(stories).where(eq(stories.id, id)).get();
-    if (countOf(n?.n) === 0) throw new InvalidStoryError();
+    const n = this.orm.select({ n: count() }).from(stores).where(eq(stores.id, id)).get();
+    if (countOf(n?.n) === 0) throw new InvalidStoreError();
     return id;
   }
 
@@ -226,30 +238,32 @@ export class LocationsRepository {
     return id;
   }
 
-  storyChainID(storyId: number | null | undefined): number | null {
-    if (!storyId) return null;
-    const row = this.orm.select({ retailChainId: stories.retailChainId }).from(stories).where(eq(stories.id, storyId)).get();
+  storeChainID(storeId: number | null | undefined): number | null {
+    if (!storeId) return null;
+    const row = this.orm.select({ retailChainId: stores.retailChainId }).from(stores).where(eq(stores.id, storeId)).get();
     return row?.retailChainId ?? null;
   }
 
-  private storyQuery() {
+  private storeQuery() {
     return this.orm
       .select({
-        id: stories.id,
-        name: stories.name,
-        streetName: stories.streetName,
-        buildingNumber: stories.buildingNumber,
-        apartmentNumber: stories.apartmentNumber,
-        postalCode: stories.postalCode,
-        city: stories.city,
-        externalId: stories.externalId,
-        retailChainId: stories.retailChainId,
+        id: stores.id,
+        name: stores.name,
+        streetName: stores.streetName,
+        buildingNumber: stores.buildingNumber,
+        apartmentNumber: stores.apartmentNumber,
+        postalCode: stores.postalCode,
+        city: stores.city,
+        externalId: stores.externalId,
+        lat: stores.lat,
+        lng: stores.lng,
+        retailChainId: stores.retailChainId,
         retailChainName: emptyStr(retailChains.name),
         purchaseCount: sql<number>`cast(count(${purchases.id}) as integer)`.mapWith(Number),
       })
-      .from(stories)
-      .leftJoin(retailChains, eq(retailChains.id, stories.retailChainId))
-      .leftJoin(purchases, eq(purchases.storyId, stories.id));
+      .from(stores)
+      .leftJoin(retailChains, eq(retailChains.id, stores.retailChainId))
+      .leftJoin(purchases, eq(purchases.storeId, stores.id));
   }
 
   private normalizeRetailChain(name: string, legalName: string, taxId: string): RetailChain {
@@ -258,7 +272,7 @@ export class LocationsRepository {
       name,
       legalName,
       taxId: this.normalizeTaxID(taxId),
-      storyCount: 0,
+      storeCount: 0,
     };
   }
 

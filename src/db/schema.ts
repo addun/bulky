@@ -4,6 +4,7 @@ import {
   index,
   integer,
   primaryKey,
+  real,
   sqliteTable,
   text,
   uniqueIndex,
@@ -49,8 +50,8 @@ export const retailChains = sqliteTable(
   (t) => [uniqueIndex('retail_chains_name').on(nocase(t.name)), uniqueIndex('retail_chains_tax_id').on(nocase(t.taxId))],
 );
 
-export const stories = sqliteTable(
-  'stories',
+export const stores = sqliteTable(
+  'stores',
   {
     id: integer('id').primaryKey(),
     name: text('name').notNull(),
@@ -61,11 +62,13 @@ export const stories = sqliteTable(
     city: text('city').notNull(),
     retailChainId: integer('retail_chain_id').references(() => retailChains.id),
     externalId: text('external_id').notNull().default(''),
+    lat: real('lat'),
+    lng: real('lng'),
   },
   (t) => [
-    index('idx_stories_name').on(nocase(t.name)),
-    index('idx_stories_retail_chain').on(t.retailChainId),
-    uniqueIndex('idx_stories_external_id')
+    index('idx_stores_name').on(nocase(t.name)),
+    index('idx_stores_retail_chain').on(t.retailChainId),
+    uniqueIndex('idx_stores_external_id')
       .on(nocase(t.externalId))
       .where(sql`external_id != ''`),
   ],
@@ -99,7 +102,7 @@ export const purchases = sqliteTable(
     productId: integer('product_id')
       .notNull()
       .references(() => products.id, { onDelete: 'cascade' }),
-    storyId: integer('story_id').references(() => stories.id),
+    storeId: integer('store_id').references(() => stores.id),
     boughtOn: text('bought_on').notNull(),
     quantity: text('quantity').notNull(),
     amount: text('amount').notNull(),
@@ -109,7 +112,7 @@ export const purchases = sqliteTable(
   },
   (t) => [
     index('idx_purchases_product').on(t.productId, t.boughtOn),
-    index('idx_purchases_story').on(t.storyId),
+    index('idx_purchases_store').on(t.storeId),
     index('idx_purchases_receipt').on(t.receiptId),
   ],
 );
@@ -121,22 +124,22 @@ export const productAliases = sqliteTable(
     productId: integer('product_id')
       .notNull()
       .references(() => products.id, { onDelete: 'cascade' }),
-    storyId: integer('story_id').references(() => stories.id, { onDelete: 'cascade' }),
+    storeId: integer('store_id').references(() => stores.id, { onDelete: 'cascade' }),
     retailChainId: integer('retail_chain_id').references(() => retailChains.id, { onDelete: 'cascade' }),
     alias: text('alias').notNull(),
   },
   (t) => [
-    check('product_aliases_scope', sql`NOT (story_id IS NOT NULL AND retail_chain_id IS NOT NULL)`),
+    check('product_aliases_scope', sql`NOT (store_id IS NOT NULL AND retail_chain_id IS NOT NULL)`),
     index('idx_product_aliases_product').on(t.productId),
     uniqueIndex('idx_product_aliases_shop')
-      .on(t.storyId, nocase(t.alias))
-      .where(sql`story_id IS NOT NULL`),
+      .on(t.storeId, nocase(t.alias))
+      .where(sql`store_id IS NOT NULL`),
     uniqueIndex('idx_product_aliases_chain')
       .on(t.retailChainId, nocase(t.alias))
       .where(sql`retail_chain_id IS NOT NULL`),
     uniqueIndex('idx_product_aliases_global')
       .on(nocase(t.alias))
-      .where(sql`story_id IS NULL AND retail_chain_id IS NULL`),
+      .where(sql`store_id IS NULL AND retail_chain_id IS NULL`),
   ],
 );
 

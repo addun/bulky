@@ -48,7 +48,7 @@
           <span class="history-amt">{{money this.amount}}</span>
         </div>
         <p class="history-facts">
-          {{#if this.storyId}}<span>{{at ../storyById this.storyId "name"}}</span>{{/if}}
+          {{#if this.storeId}}<span>{{at ../storeById this.storeId "name"}}</span>{{/if}}
           <span>{{qty this.quantity}} {{../product.unitName}}</span>
           <span>{{unitPrice this.amount this.quantity}} / {{../product.unitName}}</span>
         </p>

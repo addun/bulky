@@ -1,5 +1,5 @@
 import { Decimal } from 'decimal.js';
-import type { Story } from '../locations/locations.models.js';
+import type { Store } from '../locations/locations.models.js';
 
 export const RECEIPT_PENDING = 'pending';
 export const RECEIPT_READY = 'ready';
@@ -42,15 +42,15 @@ export type BillLineInput = {
 };
 
 export type BillImport = {
-  storyId: number | null;
-  story: Story | null;
+  storeId: number | null;
+  store: Store | null;
   receiptId: number | null;
   boughtOn: string;
   lines: BillLineInput[];
 };
 
 export type BillImportResult = {
-  storyId: number | null;
+  storeId: number | null;
   productIds: number[];
   purchases: number;
 };

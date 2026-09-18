@@ -522,7 +522,7 @@ label textarea {
   grid-template-columns: 1fr auto auto;
 }
 
-.story-addr {
+.store-addr {
   color: var(--muted);
 }
 

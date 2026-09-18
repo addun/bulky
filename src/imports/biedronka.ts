@@ -26,7 +26,7 @@ export function billFromBiedronka(raw: unknown, tx: BiedronkaTx): Bill {
 function billFromDetails(receipt: BiedronkaReceipt, tx: BiedronkaTx): Bill {
   const bill = emptyBill();
   bill.boughtOn = tx.date.trim() || receipt.date;
-  bill.storyName = biedronkaStoreName(tx.store_name || receipt.store_name, receipt.store);
+  bill.storeName = biedronkaStoreName(tx.store_name || receipt.store_name, receipt.store);
   bill.externalId = receipt.store_id.trim();
   if (bill.externalId === '') {
     const n = shopNumber.exec(tx.store_name || receipt.store_name);
@@ -84,9 +84,9 @@ function billFromTill(payload: unknown, tx: BiedronkaTx): Bill {
   const scale = moneyScale(lines, tx.total_price);
   const bill = emptyBill();
   bill.boughtOn = tx.date.trim();
-  bill.storyName = tx.store_name.trim();
-  if (bill.storyName === '') bill.storyName = 'Biedronka';
-  const n = shopNumber.exec(bill.storyName);
+  bill.storeName = tx.store_name.trim();
+  if (bill.storeName === '') bill.storeName = 'Biedronka';
+  const n = shopNumber.exec(bill.storeName);
   if (n) bill.externalId = n[0]!;
   const num = tx.receipt_num.trim();
   if (num !== '') bill.notes = 'Receipt ' + num;
@@ -139,8 +139,8 @@ function toLooseJSON(bill: Bill): unknown {
     bought_at: bill.boughtAt,
     notes: bill.notes,
     not_a_bill: bill.notABill,
-    company_id: bill.storyId,
-    company_name: bill.storyName,
+    company_id: bill.storeId,
+    company_name: bill.storeName,
     external_id: bill.externalId,
     street_name: bill.streetName,
     building_number: bill.buildingNumber,

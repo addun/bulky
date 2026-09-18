@@ -40,7 +40,7 @@ function assertMigrationCleanup(db: DatabaseService): void {
   if (!idCol || idCol.type.toLowerCase() !== 'integer') throw new Error(`drizzle id type: ${idCol?.type}`);
 
   const rows = db.sqlite.prepare(`SELECT id FROM "__drizzle_migrations" ORDER BY created_at`).all() as Array<{ id: number | null }>;
-  if (rows.length !== 2 || rows[0]!.id !== 1 || rows[1]!.id !== 2) {
+  if (rows.length !== 4 || rows[0]!.id !== 1 || rows[1]!.id !== 2 || rows[2]!.id !== 3 || rows[3]!.id !== 4) {
     throw new Error(`drizzle ids: ${JSON.stringify(rows)}`);
   }
 }
@@ -61,88 +61,117 @@ function runStoreSmoke(): void {
   const db = new DatabaseService(new ConfigService({ DATA_DIR: dir }));
   try {
     assertMigrationCleanup(db);
-    const store = createStore(db);
-    store.units.createUnit('kg');
-    store.units.createUnit('g');
-    const kg = store.units.findUnitByName('KG');
-    const g = store.units.findUnitByName('g');
+    const repos = createStore(db);
+    repos.units.createUnit('kg');
+    repos.units.createUnit('g');
+    const kg = repos.units.findUnitByName('KG');
+    const g = repos.units.findUnitByName('g');
     if (kg.name !== 'kg') throw new Error(`expected kg, got ${kg.name}`);
 
-    const chain = store.locations.createRetailChain('Biedronka', 'Jerónimo Martins', '1234567890');
-    const story = store.locations.createStory('Katowice', 'Kosciuszki', '10', '', '40-001', 'Katowice', '2615', chain.id);
-    if (story.retailChainName !== 'Biedronka') throw new Error('story chain join');
+    const chain = repos.locations.createRetailChain('Biedronka', 'Jerónimo Martins', '1234567890');
+    const store = repos.locations.createStore(
+      'Katowice',
+      'Kosciuszki',
+      '10',
+      '',
+      '40-001',
+      'Katowice',
+      '2615',
+      chain.id,
+      50.88258,
+      18.688478,
+    );
+    if (store.retailChainName !== 'Biedronka') throw new Error('store chain join');
+    if (store.lat == null || store.lng == null || Math.abs(store.lat - 50.88258) > 1e-9 || Math.abs(store.lng - 18.688478) > 1e-9) {
+      throw new Error(`store coords: ${store.lat}, ${store.lng}`);
+    }
+    repos.locations.updateStore(
+      store.id,
+      store.name,
+      store.streetName,
+      store.buildingNumber,
+      store.apartmentNumber,
+      store.postalCode,
+      store.city,
+      store.externalId,
+      store.retailChainId,
+      null,
+      null,
+    );
+    const cleared = repos.locations.getStore(store.id);
+    if (cleared.lat !== null || cleared.lng !== null) throw new Error('store coords cleared');
 
-    const flour = store.products.createProduct(
+    const flour = repos.products.createProduct(
       'Maka',
       kg.id,
       null,
       [{ unitId: g.id, unitName: 'g', factor: new Decimal(1000) }],
     );
-    store.purchases.createPurchase(flour.id, story.id, '2026-01-15 12:00', new Decimal('2.5'), new Decimal('12.50'), KIND_PURCHASE);
-    store.aliases.createAlias(flour.id, story.id, null, 'Maka Tortowa');
+    repos.purchases.createPurchase(flour.id, store.id, '2026-01-15 12:00', new Decimal('2.5'), new Decimal('12.50'), KIND_PURCHASE);
+    repos.aliases.createAlias(flour.id, store.id, null, 'Maka Tortowa');
 
-    const found = store.products.findProductByName('maka', null);
+    const found = repos.products.findProductByName('maka', null);
     if (found.id !== flour.id) throw new Error('nocase product lookup');
-    const byAlias = store.products.findProductByName('maka tortowa', story.id);
+    const byAlias = repos.products.findProductByName('maka tortowa', store.id);
     if (byAlias.id !== flour.id) throw new Error('alias lookup');
 
-    const items = store.products.listProducts('');
+    const items = repos.products.listProducts('');
     if (items.length !== 1 || items[0]!.purchaseCount !== 1) throw new Error('product list stats');
     if (!items[0]!.quote) throw new Error('quote missing');
 
-    const group = store.groups.createComparisonGroup('Flour', kg.id, [flour.id]);
+    const group = repos.groups.createComparisonGroup('Flour', kg.id, [flour.id]);
     if (group.productCount !== 1) throw new Error('group count');
-    const rice = store.products.createProduct('Ryz', kg.id, null);
-    store.purchases.createPurchase(rice.id, story.id, '2026-01-20 12:00', new Decimal('1'), new Decimal('8'), KIND_PURCHASE);
-    store.groups.updateComparisonGroup(group.id, 'Flour', kg.id, [flour.id, rice.id]);
-    const related = store.groups.relatedGroupProducts(flour.id, new Date());
+    const rice = repos.products.createProduct('Ryz', kg.id, null);
+    repos.purchases.createPurchase(rice.id, store.id, '2026-01-20 12:00', new Decimal('1'), new Decimal('8'), KIND_PURCHASE);
+    repos.groups.updateComparisonGroup(group.id, 'Flour', kg.id, [flour.id, rice.id]);
+    const related = repos.groups.relatedGroupProducts(flour.id, new Date());
     if (related.length !== 1 || related[0]!.id !== rice.id) throw new Error('related group products');
-    const leaders = store.groups.comparisonLeaders(flour.id);
+    const leaders = repos.groups.comparisonLeaders(flour.id);
     if (leaders.length !== 1 || !leaders[0]!.leader) throw new Error('comparison leaders');
 
-    const merged = store.products.mergeProducts(flour.id, rice.id);
+    const merged = repos.products.mergeProducts(flour.id, rice.id);
     if (merged.keeper.id !== flour.id) throw new Error('merge keeper');
-    if (store.purchases.listPurchases(flour.id).length !== 2) throw new Error('merge purchases');
+    if (repos.purchases.listPurchases(flour.id).length !== 2) throw new Error('merge purchases');
 
-    store.units.setSetting('ocr_model', 'vision');
-    if (store.units.ocrModel() !== 'vision') throw new Error('settings upsert');
+    repos.units.setSetting('ocr_model', 'vision');
+    if (repos.units.ocrModel() !== 'vision') throw new Error('settings upsert');
 
-    const pending = store.receipts.createReceipt('pending.jpg');
-    const pendingRow = store.receipts.listReceipts().find((r) => r.id === pending.id);
+    const pending = repos.receipts.createReceipt('pending.jpg');
+    const pendingRow = repos.receipts.listReceipts().find((r) => r.id === pending.id);
     if (!pendingRow || pendingRow.boughtOn !== '' || pendingRow.shopName !== '') throw new Error('pending list extras');
-    store.receipts.deleteReceipt(pending.id);
+    repos.receipts.deleteReceipt(pending.id);
 
-    const receipt = store.receipts.createReceipt('bill.jpg');
-    store.receipts.saveAIResponse(
+    const receipt = repos.receipts.createReceipt('bill.jpg');
+    repos.receipts.saveAIResponse(
       receipt.id,
-      JSON.stringify({ bought_on: '2026-03-01', company_name: 'Biedronka', company_id: story.id }),
+      JSON.stringify({ bought_on: '2026-03-01', company_name: 'Biedronka', company_id: store.id }),
     );
-    if (store.receipts.latestSourcedBoughtOn('ocr') !== '2026-03-01') throw new Error('json extract');
-    const receiptRow = store.receipts.listReceipts().find((r) => r.id === receipt.id);
+    if (repos.receipts.latestSourcedBoughtOn('ocr') !== '2026-03-01') throw new Error('json extract');
+    const receiptRow = repos.receipts.listReceipts().find((r) => r.id === receipt.id);
     if (!receiptRow) throw new Error('list missing receipt');
     if (receiptRow.boughtOn !== '2026-03-01') throw new Error('list boughtOn');
-    if (receiptRow.shopName !== story.name) throw new Error('list shopName');
-    store.receipts.deleteReceipt(receipt.id);
+    if (receiptRow.shopName !== store.name) throw new Error('list shopName');
+    repos.receipts.deleteReceipt(receipt.id);
     try {
-      store.receipts.getReceipt(receipt.id);
+      repos.receipts.getReceipt(receipt.id);
       throw new Error('deleted receipt should be gone');
     } catch (err) {
       if (!(err instanceof NotFoundError)) throw err;
     }
 
-    const named = store.receipts.createReceipt('named.jpg');
-    store.receipts.saveAIResponse(named.id, JSON.stringify({ bought_on: '2026-03-02', company_name: 'Lidl' }));
-    const namedRow = store.receipts.listReceipts().find((r) => r.id === named.id);
+    const named = repos.receipts.createReceipt('named.jpg');
+    repos.receipts.saveAIResponse(named.id, JSON.stringify({ bought_on: '2026-03-02', company_name: 'Lidl' }));
+    const namedRow = repos.receipts.listReceipts().find((r) => r.id === named.id);
     if (!namedRow || namedRow.boughtOn !== '2026-03-02' || namedRow.shopName !== 'Lidl') {
       throw new Error('list company_name');
     }
-    store.receipts.deleteReceipt(named.id);
+    repos.receipts.deleteReceipt(named.id);
 
-    const only = store.receipts.createReceipt('only.jpg');
-    store.receipts.saveAIResponse(only.id, '{}');
-    const onlyRes = store.receipts.migrateReceipt(only.id, {
-      storyId: story.id,
-      story: null,
+    const only = repos.receipts.createReceipt('only.jpg');
+    repos.receipts.saveAIResponse(only.id, '{}');
+    const onlyRes = repos.receipts.migrateReceipt(only.id, {
+      storeId: store.id,
+      store: null,
       receiptId: only.id,
       boughtOn: '2026-04-01 12:00',
       lines: [
@@ -158,19 +187,19 @@ function runStoreSmoke(): void {
       ],
     }, '{}');
     const breadId = onlyRes.productIds[0]!;
-    store.receipts.deleteReceipt(only.id);
+    repos.receipts.deleteReceipt(only.id);
     try {
-      store.products.getProduct(breadId);
+      repos.products.getProduct(breadId);
       throw new Error('orphan product should be gone');
     } catch (err) {
       if (!(err instanceof NotFoundError)) throw err;
     }
 
-    const keep = store.receipts.createReceipt('keep.jpg');
-    store.receipts.saveAIResponse(keep.id, '{}');
-    store.receipts.migrateReceipt(keep.id, {
-      storyId: story.id,
-      story: null,
+    const keep = repos.receipts.createReceipt('keep.jpg');
+    repos.receipts.saveAIResponse(keep.id, '{}');
+    repos.receipts.migrateReceipt(keep.id, {
+      storeId: store.id,
+      store: null,
       receiptId: keep.id,
       boughtOn: '2026-04-02 12:00',
       lines: [
@@ -185,28 +214,28 @@ function runStoreSmoke(): void {
         },
       ],
     }, '{}');
-    if (store.purchases.listPurchases(flour.id).length !== 3) throw new Error('receipt purchase missing');
-    store.receipts.deleteReceipt(keep.id);
-    if (store.purchases.listPurchases(flour.id).length !== 2) throw new Error('shared product purchases');
-    store.products.getProduct(flour.id);
+    if (repos.purchases.listPurchases(flour.id).length !== 3) throw new Error('receipt purchase missing');
+    repos.receipts.deleteReceipt(keep.id);
+    if (repos.purchases.listPurchases(flour.id).length !== 2) throw new Error('shared product purchases');
+    repos.products.getProduct(flour.id);
 
     try {
-      store.units.createUnit('kg');
+      repos.units.createUnit('kg');
       throw new Error('duplicate unit should fail');
     } catch (err) {
       if (!(err instanceof DuplicateError)) throw err;
     }
 
-    const listed = store.units.listUnits();
+    const listed = repos.units.listUnits();
     const kgRow = listed.find((u) => u.name === 'kg');
     if (!kgRow || kgRow.productCount < 1) throw new Error('unit use count');
 
-    const milk = store.products.insertImported('Mleko', kg.id, '5900000000001');
+    const milk = repos.products.insertImported('Mleko', kg.id, '5900000000001');
     if (milk.ean !== '5900000000001') throw new Error('imported ean');
-    store.products.applyImportedEan(milk.id, '5900000000002');
-    if (store.products.getProduct(milk.id).ean !== '5900000000002') throw new Error('update ean');
-    store.products.applyImportedEan(milk.id, '');
-    if (store.products.getProduct(milk.id).ean !== '5900000000002') throw new Error('empty ean must not clear');
+    repos.products.applyImportedEan(milk.id, '5900000000002');
+    if (repos.products.getProduct(milk.id).ean !== '5900000000002') throw new Error('update ean');
+    repos.products.applyImportedEan(milk.id, '');
+    if (repos.products.getProduct(milk.id).ean !== '5900000000002') throw new Error('empty ean must not clear');
   } finally {
     db.onModuleDestroy();
     rmSync(dir, { recursive: true, force: true });

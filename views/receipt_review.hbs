@@ -24,17 +24,17 @@
       <label>Date and hour <input type="datetime-local" name="bought_on" required value="{{datetimeLocal view.boughtOn}}"></label>
       <label>
         Store
-        <select name="story_id">
+        <select name="store_id">
           <option value="">None</option>
-          {{#each stories}}
-          <option value="{{this.id}}" {{#if (eq this.id ../view.storyId)}}selected{{/if}}>{{this.label}}</option>
+          {{#each stores}}
+          <option value="{{this.id}}" {{#if (eq this.id ../view.storeId)}}selected{{/if}}>{{this.label}}</option>
           {{/each}}
         </select>
       </label>
       {{#if view.addressLine}}<p class="hint">Address on the bill: {{view.addressLine}}</p>{{/if}}
-      {{#if view.createStoryUrl}}<p><a class="btn btn-ghost" href="{{view.createStoryUrl}}">Create store</a></p>{{/if}}
-      {{#if (and (not stories) (not view.createStoryUrl))}}<p class="hint">No stores yet. You can still save, or <a href="/admin/stories/new">add a store</a> first.</p>{{/if}}
-      <input type="hidden" name="story_name" value="{{view.storyName}}">
+      {{#if view.createStoreUrl}}<p><a class="btn btn-ghost" href="{{view.createStoreUrl}}">Create store</a></p>{{/if}}
+      {{#if (and (not stores) (not view.createStoreUrl))}}<p class="hint">No stores yet. You can still save, or <a href="/admin/stores/new">add a store</a> first.</p>{{/if}}
+      <input type="hidden" name="store_name" value="{{view.storeName}}">
       <input type="hidden" name="external_id" value="{{view.externalId}}">
       <input type="hidden" name="street_name" value="{{view.streetName}}">
       <input type="hidden" name="building_number" value="{{view.buildingNumber}}">

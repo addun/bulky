@@ -1,6 +1,6 @@
 import { Controller, Get, Logger, Param, Post, Query, Req, Res } from '@nestjs/common';
 import type { Request, Response } from 'express';
-import { DuplicateError, InvalidStoryError, InvalidUnitError } from '../domain/errors.js';
+import { DuplicateError, InvalidStoreError, InvalidUnitError } from '../domain/errors.js';
 import { billFromBiedronka, type BiedronkaTx } from '../imports/biedronka.js';
 import { biedronkaReceipt } from '../imports/biedronka.schema.js';
 import { marshalBill } from '../ocr/types.js';
@@ -9,7 +9,7 @@ import { LocationsRepository } from '#app/store/locations';
 import { ProductsRepository } from '#app/store/products';
 import { RECEIPT_SOURCE_BIEDRONKA, ReceiptsRepository } from '#app/store/receipts';
 import { UnitsRepository } from '#app/store/units';
-import { billToImport, hydrateBill, matchStory, storyChainID } from './receipt-form.js';
+import { billToImport, hydrateBill, matchStore, storeChainID } from './receipt-form.js';
 import { ViewsService } from './views.service.js';
 import { biedronkaFormatQuery, biedronkaImportBody, biedronkaPageQuery, biedronkaTokenBody, biedronkaTxId, formIssue } from './schema.js';
 
@@ -94,11 +94,11 @@ export class BiedronkaController {
     this.log.log(`import ${id}: ${bill.lines.length} lines`);
     try {
       const products = this.products.listProducts('');
-      const stories = this.locations.listStories();
+      const stores = this.locations.listStores();
       const aliases = this.aliases.listAliases();
       const defaults = this.units.unitDefaults();
-      if (bill.storyId === 0) bill.storyId = matchStory(bill, stories);
-      bill = hydrateBill(bill, products, aliases, storyChainID(bill.storyId, stories), defaults.pieceId, defaults.weightId);
+      if (bill.storeId === 0) bill.storeId = matchStore(bill, stores);
+      bill = hydrateBill(bill, products, aliases, storeChainID(bill.storeId, stores), defaults.pieceId, defaults.weightId);
     } catch (err) {
       this.log.warn(`import ${id}: catalog failed: ${err instanceof Error ? err.message : String(err)}`);
       res.status(500).json({ error: 'could not load the catalog', id });
@@ -151,7 +151,7 @@ export class BiedronkaController {
         res.status(422).json({ error: 'Set piece and weight units under Settings, then import again.', id });
         return;
       }
-      if (err instanceof InvalidStoryError) {
+      if (err instanceof InvalidStoreError) {
         this.log.warn(`import ${id}: store failed: ${msg}`);
         res.status(422).json({ error: 'could not save the store', id });
         return;

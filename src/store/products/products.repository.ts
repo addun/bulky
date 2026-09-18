@@ -246,16 +246,16 @@ export class ProductsRepository {
     this.orm.update(products).set({ ean: next }).where(eq(products.id, id)).run();
   }
 
-  findProductByName(name: string, storyId: number | null): Product {
+  findProductByName(name: string, storeId: number | null): Product {
     name = name.trim();
     if (name === '') throw new NotFoundError();
-    if (storyId) {
+    if (storeId) {
       try {
-        return this.productByAlias(name, storyId, null);
+        return this.productByAlias(name, storeId, null);
       } catch (err) {
         if (!(err instanceof NotFoundError)) throw err;
       }
-      const chainId = this.locations.storyChainID(storyId);
+      const chainId = this.locations.storeChainID(storeId);
       if (chainId) {
         try {
           return this.productByAlias(name, null, chainId);
@@ -274,14 +274,14 @@ export class ProductsRepository {
     return mapProduct(row);
   }
 
-  productByAlias(aliasName: string, storyId: number | null, chainId: number | null): Product {
+  productByAlias(aliasName: string, storeId: number | null, chainId: number | null): Product {
     aliasName = aliasName.trim();
     if (aliasName === '') throw new NotFoundError();
-    const scope = storyId
-      ? and(nocaseEq(productAliases.alias, aliasName), eq(productAliases.storyId, storyId))
+    const scope = storeId
+      ? and(nocaseEq(productAliases.alias, aliasName), eq(productAliases.storeId, storeId))
       : chainId
         ? and(nocaseEq(productAliases.alias, aliasName), eq(productAliases.retailChainId, chainId))
-        : and(nocaseEq(productAliases.alias, aliasName), isNull(productAliases.storyId), isNull(productAliases.retailChainId));
+        : and(nocaseEq(productAliases.alias, aliasName), isNull(productAliases.storeId), isNull(productAliases.retailChainId));
     const row = this.orm
       .select({
         id: products.id,
