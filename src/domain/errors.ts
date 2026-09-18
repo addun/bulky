@@ -65,6 +65,12 @@ export class SameProductError extends AppError {
   }
 }
 
+export class SameStoreError extends AppError {
+  constructor() {
+    super('cannot merge a store into itself');
+  }
+}
+
 export class UnitMismatchError extends AppError {
   constructor() {
     super('products use different units');

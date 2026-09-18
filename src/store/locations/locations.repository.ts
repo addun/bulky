@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { count, eq, sql } from 'drizzle-orm';
 import { DatabaseService } from '../../db/database.service.js';
 import { changesOf, countOf, emptyStr, lastId, nocaseOrder } from '../../db/query.js';
-import { purchases, retailChains, stores } from '../../db/schema.js';
+import { productAliases, purchases, retailChains, stores } from '../../db/schema.js';
 import {
   DuplicateError,
   InvalidRetailChainError,
@@ -10,6 +10,7 @@ import {
   isUniqueErr,
   NotFoundError,
   RetailChainInUseError,
+  SameStoreError,
   StoreInUseError,
 } from '../../domain/errors.js';
 import type { ImportedShop, RetailChain, Store, StoreImportResult } from './locations.models.js';
@@ -146,6 +147,23 @@ export class LocationsRepository {
     if (c.purchaseCount > 0) throw new StoreInUseError();
     const n = changesOf(this.orm.delete(stores).where(eq(stores.id, id)).run());
     if (n === 0) throw new NotFoundError();
+  }
+
+  mergeStores(intoId: number, fromId: number): { keeper: Store } {
+    if (intoId === fromId) throw new SameStoreError();
+    return this.db.immediate(() => {
+      const into = this.getStore(intoId);
+      const from = this.getStore(fromId);
+      if (into.externalId !== '' && from.externalId !== '' && into.externalId.toLowerCase() !== from.externalId.toLowerCase()) {
+        throw new DuplicateError();
+      }
+      this.reassignPurchases(from.id, into.id);
+      this.reassignAliases(from.id, into.id);
+      this.reassignReceipts(from.id, into.id);
+      this.orm.delete(stores).where(eq(stores.id, from.id)).run();
+      this.handOffStoreFields(into, from);
+      return { keeper: this.getStore(into.id) };
+    });
   }
 
   upsertImportedStores(retailChainId: number, shops: ImportedShop[]): StoreImportResult {
@@ -329,6 +347,54 @@ export class LocationsRepository {
   private normalizeTaxID(s: string): string {
     return [...s.trim()].filter((r) => /[\p{L}\p{N}]/u.test(r)).join('').toUpperCase();
   }
+
+  private reassignPurchases(fromId: number, intoId: number): void {
+    this.orm.update(purchases).set({ storeId: intoId }).where(eq(purchases.storeId, fromId)).run();
+  }
+
+  private reassignAliases(fromId: number, intoId: number): void {
+    this.orm.run(sql`
+      DELETE FROM product_aliases
+      WHERE product_aliases.store_id = ${fromId}
+        AND EXISTS (
+          SELECT 1 FROM product_aliases AS k
+          WHERE k.store_id = ${intoId}
+            AND k.alias = product_aliases.alias COLLATE NOCASE
+        )
+    `);
+    this.orm.update(productAliases).set({ storeId: intoId }).where(eq(productAliases.storeId, fromId)).run();
+  }
+
+  private reassignReceipts(fromId: number, intoId: number): void {
+    this.orm.run(sql`
+      UPDATE receipts
+      SET raw_response = json_set(raw_response, '$.company_id', ${intoId})
+      WHERE json_valid(raw_response)
+        AND CAST(json_extract(raw_response, '$.company_id') AS INTEGER) = ${fromId}
+    `);
+  }
+
+  private handOffStoreFields(into: Store, from: Store): void {
+    this.orm
+      .update(stores)
+      .set({
+        streetName: filledStr(into.streetName, from.streetName),
+        buildingNumber: filledStr(into.buildingNumber, from.buildingNumber),
+        apartmentNumber: filledStr(into.apartmentNumber, from.apartmentNumber),
+        postalCode: filledStr(into.postalCode, from.postalCode),
+        city: filledStr(into.city, from.city),
+        externalId: filledStr(into.externalId, from.externalId),
+        lat: into.lat ?? from.lat,
+        lng: into.lng ?? from.lng,
+        retailChainId: into.retailChainId ?? from.retailChainId,
+      })
+      .where(eq(stores.id, into.id))
+      .run();
+  }
+}
+
+function filledStr(into: string, from: string): string {
+  return into.trim() === '' ? from : into;
 }
 
 function storeAddrMatchKey(s: { streetName: string; buildingNumber: string; city: string }): string {

@@ -5,7 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import Database from 'better-sqlite3';
 import { Decimal } from 'decimal.js';
 import { DatabaseService } from '../db/database.service.js';
-import { DuplicateError, NotFoundError } from '../domain/errors.js';
+import { DuplicateError, NotFoundError, SameStoreError } from '../domain/errors.js';
 import { importedShopsFromBiedronka, shopsFromBiedronka } from '../imports/biedronka-shops.js';
 import {
   AliasesRepository,
@@ -343,6 +343,70 @@ function runStoreSmoke(): void {
     if (repos.products.getProduct(milk.id).ean !== '5900000000002') throw new Error('update ean');
     repos.products.applyImportedEan(milk.id, '');
     if (repos.products.getProduct(milk.id).ean !== '5900000000002') throw new Error('empty ean must not clear');
+
+    const salt = repos.products.createProduct('Sol', kg.id, null);
+    const keepShop = repos.locations.createStore('Keep Shop', 'Main', '1', '', '', 'KeepCity', '', chain.id);
+    const dropShop = repos.locations.createStore(
+      'Drop Shop',
+      'Side',
+      '2',
+      '4',
+      '00-123',
+      'DropCity',
+      '4242',
+      chain.id,
+      50.1,
+      19.9,
+    );
+    repos.purchases.createPurchase(salt.id, dropShop.id, '2026-01-16 12:00', new Decimal('1'), new Decimal('3'), KIND_PURCHASE);
+    repos.aliases.createAlias(salt.id, keepShop.id, null, 'Sol Shop');
+    repos.aliases.createAlias(salt.id, dropShop.id, null, 'Sol Shop');
+    repos.aliases.createAlias(salt.id, dropShop.id, null, 'Sol Drop');
+    const dropReceipt = repos.receipts.createReceipt('drop-shop.jpg');
+    repos.receipts.saveAIResponse(dropReceipt.id, JSON.stringify({ bought_on: '2026-01-16', company_id: dropShop.id }));
+    const mergedShop = repos.locations.mergeStores(keepShop.id, dropShop.id);
+    if (mergedShop.keeper.id !== keepShop.id) throw new Error('store merge keeper');
+    const keptShop = repos.locations.getStore(keepShop.id);
+    if (
+      keptShop.externalId !== '4242' ||
+      keptShop.lat !== 50.1 ||
+      keptShop.lng !== 19.9 ||
+      keptShop.apartmentNumber !== '4' ||
+      keptShop.postalCode !== '00-123'
+    ) {
+      throw new Error('store merge fields');
+    }
+    if (keptShop.name !== 'Keep Shop' || keptShop.city !== 'KeepCity' || keptShop.streetName !== 'Main') {
+      throw new Error('store merge kept identity');
+    }
+    if (keptShop.purchaseCount !== 1) throw new Error('store merge purchase count');
+    try {
+      repos.locations.getStore(dropShop.id);
+      throw new Error('merged store should be gone');
+    } catch (err) {
+      if (!(err instanceof NotFoundError)) throw err;
+    }
+    const shopBuys = repos.purchases.listPurchases(salt.id);
+    if (shopBuys.length !== 1 || shopBuys[0]!.storeId !== keepShop.id) throw new Error('store merge purchases');
+    const shopAliases = repos.aliases.listAliasesByProduct(salt.id).filter((a) => a.storeId === keepShop.id);
+    const shopAliasNames = shopAliases.map((a) => a.alias).sort();
+    if (shopAliasNames.join(',') !== 'Sol Drop,Sol Shop') throw new Error('store merge aliases');
+    const dropReceiptRow = repos.receipts.listReceipts().find((r) => r.id === dropReceipt.id);
+    if (!dropReceiptRow || dropReceiptRow.shopName !== 'Keep Shop') throw new Error('store merge receipts');
+    try {
+      repos.locations.mergeStores(keepShop.id, keepShop.id);
+      throw new Error('same store merge should fail');
+    } catch (err) {
+      if (!(err instanceof SameStoreError)) throw err;
+    }
+    const codedA = repos.locations.createStore('Coded A', 'A', '1', '', '', 'City', 'AAAA', chain.id);
+    const codedB = repos.locations.createStore('Coded B', 'B', '2', '', '', 'City', 'BBBB', chain.id);
+    try {
+      repos.locations.mergeStores(codedA.id, codedB.id);
+      throw new Error('conflicting store codes should fail');
+    } catch (err) {
+      if (!(err instanceof DuplicateError)) throw err;
+    }
   } finally {
     db.onModuleDestroy();
     rmSync(dir, { recursive: true, force: true });
