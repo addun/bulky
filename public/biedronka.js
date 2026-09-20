@@ -4,43 +4,40 @@
   var TOKEN = "/api/biedronka/token";
   var CLIENT_ID = "cma20";
   var REDIRECT = "app://cma20.biedronka.pl";
+  var HINT_HELPER = "The Chromium helper fills this field after Moja Biedronka sign-in. Click Finish sign-in to continue. The code works once and expires in about a minute.";
+  var HINT_PASTE = "After SMS (or if you are already signed in), the login tries to open app://cma20.biedronka.pl?code=…. Paste that address here. To fill it automatically, load the unpacked helper from extensions/biedronka (Chrome, Edge, Brave, or Arc), then refresh. The helper matches localhost:8080, 127.0.0.1:8080, shop.home.arpa, and shop.piekna2.pl. The code works once and expires in about a minute.";
 
   var signedOutEl = document.getElementById("biedronka-signed-out");
-  var form = document.getElementById("biedronka-form");
-  if (!form || !signedOutEl) return;
-
-  var accessEl = document.getElementById("biedronka-access");
-  var refreshEl = document.getElementById("biedronka-refresh");
-  var tokenForm = document.getElementById("biedronka-token-form");
+  var signedInEl = document.getElementById("biedronka-signed-in");
   var signInBtn = document.getElementById("biedronka-signin");
   var finishBtn = document.getElementById("biedronka-finish");
   var codeEl = document.getElementById("biedronka-code");
-  var codeStep = document.getElementById("biedronka-code-step");
-  var authLinkWrap = document.getElementById("biedronka-auth-link");
-  var authHref = document.getElementById("biedronka-auth-href");
+  if (!signedOutEl || !signedInEl || !signInBtn || !finishBtn || !codeEl) return;
+
+  var codeHintEl = document.getElementById("biedronka-code-hint");
   var sessionEl = document.getElementById("biedronka-session");
-  var sinceEl = document.getElementById("biedronka-since");
-  var receiptsEl = document.getElementById("biedronka-receipts");
-  var fetchBtn = document.getElementById("biedronka-fetch");
   var clearBtn = document.getElementById("biedronka-clear");
-  var downloadBtn = document.getElementById("biedronka-download");
-  var importBtn = document.getElementById("biedronka-import");
+  var importAllBtn = document.getElementById("biedronka-import-all");
+  var moreBtn = document.getElementById("biedronka-more");
   var statusEl = document.getElementById("biedronka-status");
   var resultsEl = document.getElementById("biedronka-results");
   var tableBody = document.querySelector("#biedronka-table tbody");
-  var jsonEl = document.getElementById("biedronka-json");
 
   var lastPayload = null;
   var accessToken = "";
   var refreshToken = "";
   var pkceVerifier = "";
   var importedSet = {};
+  var finishingSignIn = false;
+  var loadingBills = false;
+  var importing = false;
+  var listPage = 1;
+  var listArchived = false;
 
   function log() {
     var args = ["[biedronka]"].concat([].slice.call(arguments));
     console.info.apply(console, args);
   }
-  var importedSince = "";
 
   try {
     localStorage.removeItem("bulkly.biedronka.tokens");
@@ -52,7 +49,6 @@
     if (!el) return;
     try {
       var data = JSON.parse(el.getAttribute("data-payload") || "{}");
-      importedSince = data.since || "";
       (data.ids || []).forEach(function (id) {
         if (id) importedSet[id] = true;
       });
@@ -60,53 +56,34 @@
   })();
 
   showSession();
+  applyHelperUi();
 
   signInBtn.addEventListener("click", startSignIn);
   finishBtn.addEventListener("click", finishSignIn);
-  tokenForm.addEventListener("submit", function (e) {
-    e.preventDefault();
-    var t = {
-      access_token: accessEl.value.trim(),
-      refresh_token: refreshEl.value.trim()
-    };
-    if (!t.access_token && !t.refresh_token) {
-      setStatus("Paste an access token or a refresh token.");
-      return;
-    }
-    saveTokens(t);
-    accessEl.value = "";
-    refreshEl.value = "";
-    showSession();
-    setStatus("Tokens are in this page until you close or refresh it.");
+  document.documentElement.addEventListener("bulkly-biedronka-redirect", function () {
+    var url = document.documentElement.getAttribute("data-bulkly-biedronka-redirect") || "";
+    document.documentElement.removeAttribute("data-bulkly-biedronka-redirect");
+    if (!url) return;
+    codeEl.value = url;
+    codeEl.focus();
+    setStatus("The helper filled the redirect. Click Finish sign-in.");
   });
-  form.addEventListener("submit", function (e) {
-    e.preventDefault();
-    runFetch();
-  });
-  clearBtn.addEventListener("click", function () {
-    accessToken = "";
-    refreshToken = "";
-    pkceVerifier = "";
-    try { sessionStorage.removeItem("bulkly.biedronka.pkce"); } catch (err) {}
-    accessEl.value = "";
-    refreshEl.value = "";
-    lastPayload = null;
-    downloadBtn.hidden = true;
-    if (importBtn) importBtn.hidden = true;
-    resultsEl.hidden = true;
-    showSession();
-    setStatus("Signed out.");
-  });
-  downloadBtn.addEventListener("click", function () {
-    if (!lastPayload) return;
-    var blob = new Blob([JSON.stringify(lastPayload, null, 2)], { type: "application/json" });
-    var a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = "biedronka-" + (sinceEl.value || "bills") + ".json";
-    a.click();
-    URL.revokeObjectURL(a.href);
-  });
-  if (importBtn) importBtn.addEventListener("click", runImport);
+  if (clearBtn) {
+    clearBtn.addEventListener("click", function () {
+      accessToken = "";
+      refreshToken = "";
+      pkceVerifier = "";
+      try { sessionStorage.removeItem("bulkly.biedronka.pkce"); } catch (err) {}
+      lastPayload = null;
+      listPage = 1;
+      if (resultsEl) resultsEl.hidden = true;
+      if (tableBody) tableBody.textContent = "";
+      showSession();
+      setStatus("Signed out.");
+    });
+  }
+  if (moreBtn) moreBtn.addEventListener("click", function () { loadBills(false); });
+  if (importAllBtn) importAllBtn.addEventListener("click", runImportAll);
 
   function tokens() {
     return { access_token: accessToken, refresh_token: refreshToken };
@@ -125,7 +102,7 @@
   function showSession() {
     var on = signedIn();
     signedOutEl.hidden = on;
-    form.hidden = !on;
+    signedInEl.hidden = !on;
     if (!on) {
       sessionEl.textContent = "";
       return;
@@ -140,6 +117,15 @@
 
   function setStatus(msg) {
     statusEl.textContent = msg || "";
+  }
+
+  function helperEnabled() {
+    return document.documentElement.getAttribute("data-bulkly-biedronka-ext") === "1";
+  }
+
+  function applyHelperUi() {
+    if (!codeHintEl) return;
+    codeHintEl.textContent = helperEnabled() ? HINT_HELPER : HINT_PASTE;
   }
 
   function b64url(bytes) {
@@ -170,17 +156,25 @@
     var pkce = await generatePkce();
     pkceVerifier = pkce.verifier;
     try { sessionStorage.setItem("bulkly.biedronka.pkce", pkceVerifier); } catch (err) {}
-    if (codeEl) codeEl.value = "";
+    codeEl.value = "";
     var url = authorizationURL(pkce.challenge);
-    authHref.href = url;
-    authLinkWrap.hidden = false;
-    codeStep.hidden = false;
-    setStatus("Sign in in the Biedronka tab (phone, captcha, SMS), then paste the app:// redirect here.");
+    if (helperEnabled()) {
+      setStatus("Sign in in the Biedronka tab. The helper will fill the redirect here.");
+    } else {
+      setStatus("Sign in in the Biedronka tab, then paste the app:// redirect here.");
+    }
     var w = window.open(url, "_blank");
-    if (!w) setStatus("Popup blocked. Use Open the Biedronka login, then paste the app:// redirect here.");
+    if (!w) {
+      if (helperEnabled()) {
+        setStatus("Popup blocked. Allow popups for this page, then click Sign in again. The helper will fill the redirect here.");
+      } else {
+        setStatus("Popup blocked. Allow popups for this page, then click Sign in again and paste the app:// redirect here.");
+      }
+    }
   }
 
   async function finishSignIn() {
+    if (finishingSignIn) return;
     var verifier = pkceVerifier;
     if (!verifier) {
       setStatus("Start sign-in again so this page still has the PKCE verifier.");
@@ -193,6 +187,7 @@
       setStatus(String(err.message || err));
       return;
     }
+    finishingSignIn = true;
     finishBtn.disabled = true;
     try {
       var next = await tokenRequest({
@@ -205,11 +200,13 @@
       try { sessionStorage.removeItem("bulkly.biedronka.pkce"); } catch (err) {}
       saveTokens(next);
       showSession();
-      setStatus("Signed in. Choose a since date, then fetch.");
+      setStatus("Signed in. Loading bills…");
+      await loadBills(true);
     } catch (err) {
       setStatus(String(err.message || err));
-      if (codeEl) codeEl.value = "";
+      codeEl.value = "";
     } finally {
+      finishingSignIn = false;
       finishBtn.disabled = false;
     }
   }
@@ -254,135 +251,115 @@
     }
   }
 
-  function ymd(d) {
-    var y = d.getFullYear();
-    var m = String(d.getMonth() + 1).padStart(2, "0");
-    var day = String(d.getDate()).padStart(2, "0");
-    return y + "-" + m + "-" + day;
-  }
-
-  function defaultSince() {
-    if (importedSince) return importedSince;
-    var d = new Date();
-    d.setDate(d.getDate() - 7);
-    return ymd(d);
-  }
-
-  if (sinceEl) {
-    sinceEl.max = ymd(new Date());
-    if (!sinceEl.value) sinceEl.value = defaultSince();
-  }
-
-  function cutoffMs() {
-    var raw = sinceEl && sinceEl.value;
-    if (!raw) return new Date(defaultSince() + "T00:00:00").getTime();
-    var d = new Date(raw + "T00:00:00");
-    if (isNaN(d.getTime())) return new Date(defaultSince() + "T00:00:00").getTime();
-    return d.getTime();
-  }
-
-  function txTime(tx) {
-    if (!tx || !tx.date) return null;
-    var d = new Date(tx.date);
-    if (isNaN(d.getTime())) return null;
-    return d.getTime();
-  }
-
-  async function runFetch() {
+  async function loadBills(reset) {
+    if (loadingBills) return;
     var t = tokens();
     if (!t.access_token && !t.refresh_token) {
       setStatus("Sign in with Moja Biedronka first.");
       return;
     }
-    fetchBtn.disabled = true;
-    downloadBtn.hidden = true;
-    lastPayload = null;
+    loadingBills = true;
+    if (moreBtn) moreBtn.disabled = true;
+    if (importAllBtn) importAllBtn.disabled = true;
     try {
       await ensureFresh();
-      var collected = [];
-      var page = 1;
-      var pageCount = 1;
-      var cut = cutoffMs();
-      while (page <= pageCount) {
-        setStatus(progressLine(page, pageCount, collected.length, 0));
-        var payload = await apiGet("transactions/", { page: String(page) });
-        if (!payload || typeof payload !== "object") {
-          throw new Error("transactions response was not JSON");
-        }
-        pageCount = Math.max(1, Number(payload.page_count) || page);
-        var rows = Array.isArray(payload.transactions) ? payload.transactions : [];
-        var inWindow = [];
-        for (var i = 0; i < rows.length; i++) {
-          var when = txTime(rows[i]);
-          if (when == null || when >= cut) inWindow.push(rows[i]);
-        }
-        collected = collected.concat(inWindow);
-        if (!rows.length || inWindow.length === 0) break;
-        var next = Number(payload.next_page);
-        if (!next || next <= page) break;
-        page = next;
+      if (reset) {
+        listPage = 1;
+        listArchived = false;
+        lastPayload = {
+          fetched_at: new Date().toISOString(),
+          via: "proxy",
+          transactions: []
+        };
       }
-
-      var withReceipts = 0;
-      var wantReceipts = receiptsEl.checked;
-      log("listed", collected.length, "bills since", sinceEl && sinceEl.value ? sinceEl.value : defaultSince(), "receipts=" + !!wantReceipts);
-      for (var j = 0; j < collected.length; j++) {
-        var tx = collected[j];
-        if (!wantReceipts || !tx || !tx.id) continue;
-        setStatus(progressLine(page, pageCount, collected.length, withReceipts));
-        try {
-          var got = await fetchTxReceipt(tx);
-          tx.receipt = got.receipt;
-          tx.source = got.source;
-          tx.lines = sellLines(tx.receipt);
-          log(tx.id, "source=" + tx.source, "lines=" + (tx.lines && tx.lines.length || 0));
-          withReceipts++;
-        } catch (err) {
-          tx.receipt_error = String(err.message || err);
-          log(tx.id, "receipt failed:", tx.receipt_error);
-        }
+      setStatus("Loading page " + listPage + "…");
+      var query = { page: String(listPage) };
+      if (listArchived) query.archived = "1";
+      var payload = await apiGet("transactions/", query);
+      if (!payload || typeof payload !== "object") {
+        throw new Error("transactions response was not JSON");
       }
-
-      lastPayload = {
-        fetched_at: new Date().toISOString(),
-        since: sinceEl && sinceEl.value ? sinceEl.value : defaultSince(),
-        via: "proxy",
-        transactions: collected
-      };
-      render(lastPayload);
-      log("fetch done", collected.length + " bills", withReceipts + " receipts");
-      setStatus(collected.length + " bills since " + lastPayload.since + ".");
-      downloadBtn.hidden = collected.length === 0;
-      if (importBtn) importBtn.hidden = importableCount(collected) === 0;
+      var pageCount = Math.max(1, Number(payload.page_count) || listPage);
+      var rows = Array.isArray(payload.transactions)
+        ? payload.transactions
+        : Array.isArray(payload.results)
+          ? payload.results
+          : [];
+      log("listed", listArchived ? "archived" : "current", "page", listPage, "of", pageCount, rows.length + " bills");
+      for (var i = 0; i < rows.length; i++) lastPayload.transactions.push(rows[i]);
+      var fromArchive = listArchived;
+      var next = Number(payload.next_page);
+      if (next && next > listPage) listPage = next;
+      else if (!listArchived) {
+        listArchived = true;
+        listPage = 1;
+      } else listPage = 0;
+      var n = lastPayload.transactions.length;
+      var emptyMsg = "";
+      if (!n) {
+        emptyMsg = fromArchive
+          ? "No older bills."
+          : "No current bills from the last 12 days. Load more for older bills.";
+      }
+      render(lastPayload, emptyMsg);
+      setStatus(n ? n + " bill" + (n === 1 ? "" : "s") + " loaded." : "");
     } catch (err) {
       setStatus(String(err.message || err));
     } finally {
-      fetchBtn.disabled = false;
+      loadingBills = false;
+      if (moreBtn) {
+        moreBtn.hidden = !listPage;
+        moreBtn.disabled = false;
+      }
+      syncImportAll();
     }
   }
 
-  function progressLine(page, pageCount, n, receipts) {
-    var msg = "Page " + page + " of " + pageCount + " · " + n + " bills";
-    if (receiptsEl.checked) msg += " · " + receipts + " receipts";
-    return msg;
+  function render(payload, emptyMsg) {
+    tableBody.textContent = "";
+    var rows = payload.transactions || [];
+    if (!rows.length) {
+      var empty = document.createElement("tr");
+      var td = document.createElement("td");
+      td.colSpan = 4;
+      td.className = "empty";
+      td.textContent = emptyMsg || "No bills.";
+      empty.appendChild(td);
+      tableBody.appendChild(empty);
+    } else {
+      rows.forEach(function (tx) {
+        var tr = document.createElement("tr");
+        addCell(tr, formatDate(tx.date));
+        addCell(tr, tx.store_name || "");
+        addCell(tr, formatMoney(tx.total_price));
+        addImportCell(tr, tx);
+        tableBody.appendChild(tr);
+      });
+    }
+    resultsEl.hidden = false;
+    syncImportAll();
   }
 
-  function render(payload) {
-    tableBody.textContent = "";
-    (payload.transactions || []).forEach(function (tx) {
-      var tr = document.createElement("tr");
-      var lines = Array.isArray(tx.lines) ? tx.lines.length : "";
-      addCell(tr, formatDate(tx.date));
-      addCell(tr, tx.store_name || "");
-      addCell(tr, tx.receipt_num || tx.id || "");
-      addCell(tr, formatMoney(tx.total_price));
-      addCell(tr, lines === "" ? (tx.receipt_error || "") : String(lines));
-      addCell(tr, tx.source || "list");
-      addCell(tr, bulklyLabel(tx));
-      tableBody.appendChild(tr);
-    });
-    jsonEl.textContent = JSON.stringify(payload, null, 2);
-    resultsEl.hidden = false;
+  function addImportCell(tr, tx) {
+    var td = document.createElement("td");
+    td.className = "tight";
+    if (!tx || !tx.id) {
+      tr.appendChild(td);
+      return;
+    }
+    if (importedSet[tx.id] || tx.bulkly_status === "imported" || tx.bulkly_status === "skipped") {
+      td.textContent = bulklyLabel(tx);
+    } else {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn btn-plain";
+      btn.textContent = "Import";
+      btn.addEventListener("click", function () {
+        importOne(tx);
+      });
+      td.appendChild(btn);
+    }
+    tr.appendChild(td);
   }
 
   function bulklyLabel(tx) {
@@ -391,37 +368,61 @@
     if (tx.bulkly_status === "skipped") return "already in";
     if (tx.bulkly_error) return tx.bulkly_error;
     if (importedSet[tx.id]) return "already in";
-    if (tx.receipt) return "new";
     return "";
+  }
+
+  function importable(tx) {
+    return !!(tx && tx.id && !importedSet[tx.id] && tx.bulkly_status !== "imported" && tx.bulkly_status !== "skipped");
   }
 
   function importableCount(rows) {
     var n = 0;
     (rows || []).forEach(function (tx) {
-      if (tx && tx.id && tx.receipt && !importedSet[tx.id]) n++;
+      if (importable(tx)) n++;
     });
     return n;
   }
 
-  async function runImport() {
-    if (!lastPayload || !lastPayload.transactions) {
-      setStatus("Fetch bills first.");
-      return;
+  function syncImportAll() {
+    if (!importAllBtn) return;
+    var n = lastPayload ? importableCount(lastPayload.transactions) : 0;
+    importAllBtn.hidden = !lastPayload;
+    importAllBtn.disabled = importing || loadingBills || n === 0;
+  }
+
+  async function importOne(tx) {
+    if (importing || loadingBills) return;
+    if (!importable(tx)) return;
+    importing = true;
+    syncImportAll();
+    setStatus("Importing…");
+    try {
+      tx.bulkly_error = "";
+      await ensureFresh();
+      await ensureReceipt(tx);
+      await postImport(tx);
+    } catch (err) {
+      tx.bulkly_error = String(err.message || err);
+      log(tx.id, "import failed:", tx.bulkly_error);
+      setStatus(tx.bulkly_error);
     }
-    var t = tokens();
-    if (!t.access_token && !t.refresh_token) {
-      setStatus("Sign in with Moja Biedronka first.");
-      return;
-    }
+    importing = false;
+    render(lastPayload);
+    if (!tx.bulkly_error) setStatus(tx.bulkly_status === "skipped" ? "Already in receipts." : "Imported. Open Receipts to edit products or the visit.");
+  }
+
+  async function runImportAll() {
+    if (!lastPayload || !lastPayload.transactions) return;
+    if (importing || loadingBills) return;
     var rows = lastPayload.transactions;
     var todo = importableCount(rows);
     if (!todo) {
       setStatus("Nothing new to import.");
-      if (importBtn) importBtn.hidden = true;
+      syncImportAll();
       return;
     }
-    if (importBtn) importBtn.disabled = true;
-    if (fetchBtn) fetchBtn.disabled = true;
+    importing = true;
+    syncImportAll();
     var imported = 0;
     var skipped = 0;
     var failed = 0;
@@ -429,56 +430,52 @@
       await ensureFresh();
       for (var i = 0; i < rows.length; i++) {
         var tx = rows[i];
-        if (!tx || !tx.id) continue;
-        if (importedSet[tx.id]) {
-          tx.bulkly_status = "skipped";
-          skipped++;
+        if (!importable(tx)) {
+          if (tx && tx.id && importedSet[tx.id]) skipped++;
           continue;
         }
-        if (!tx.receipt) {
-          tx.bulkly_error = "no receipt";
-          failed++;
-          continue;
-        }
-        setStatus("Importing " + (imported + skipped + failed + 1) + " of " + todo + " new bills…");
+        setStatus("Importing " + (imported + skipped + failed + 1) + " of " + todo + "…");
         try {
-          log("POST import", tx.id, "source=" + (tx.source || ""));
-          var out = await apiPost("import", {
-            id: String(tx.id),
-            date: tx.date || "",
-            store_name: tx.store_name || "",
-            receipt_num: tx.receipt_num || "",
-            total_price: Number(tx.total_price) || 0,
-            receipt: tx.receipt
-          });
-          if (out && out.status === "skipped") {
-            tx.bulkly_status = "skipped";
-            importedSet[tx.id] = true;
-            skipped++;
-            log(tx.id, "skipped duplicate");
-          } else {
-            tx.bulkly_status = "imported";
-            tx.receipt_id = out && out.receipt_id;
-            importedSet[tx.id] = true;
-            imported++;
-            log(tx.id, "imported receipt_id=" + (out && out.receipt_id));
-          }
+          await ensureReceipt(tx);
+          await postImport(tx);
+          if (tx.bulkly_status === "skipped") skipped++;
+          else imported++;
         } catch (err) {
           tx.bulkly_error = String(err.message || err);
           failed++;
           log(tx.id, "import failed:", tx.bulkly_error);
         }
       }
-      render(lastPayload);
       var parts = [];
       if (imported) parts.push("imported " + imported);
       if (skipped) parts.push("skipped " + skipped);
       if (failed) parts.push("failed " + failed);
       setStatus(parts.join(", ") + ". Open Receipts to edit products or the visit.");
-      if (importBtn) importBtn.hidden = importableCount(rows) === 0;
     } finally {
-      if (importBtn) importBtn.disabled = false;
-      if (fetchBtn) fetchBtn.disabled = false;
+      importing = false;
+      render(lastPayload);
+    }
+  }
+
+  async function postImport(tx) {
+    log("POST import", tx.id, "source=" + (tx.source || ""));
+    var out = await apiPost("import", {
+      id: String(tx.id),
+      date: tx.date || "",
+      store_name: tx.store_name || "",
+      receipt_num: tx.receipt_num || "",
+      total_price: Number(tx.total_price) || 0,
+      receipt: tx.receipt
+    });
+    if (out && out.status === "skipped") {
+      tx.bulkly_status = "skipped";
+      importedSet[tx.id] = true;
+      log(tx.id, "skipped duplicate");
+    } else {
+      tx.bulkly_status = "imported";
+      tx.receipt_id = out && out.receipt_id;
+      importedSet[tx.id] = true;
+      log(tx.id, "imported receipt_id=" + (out && out.receipt_id));
     }
   }
 
@@ -600,6 +597,14 @@
     return await readJSON(await fetch(TOKEN, { method: "POST", headers: headers, body: body }));
   }
 
+  async function ensureReceipt(tx) {
+    if (tx.receipt) return;
+    setStatus("Loading receipt " + (tx.receipt_num || tx.id) + "…");
+    var got = await fetchTxReceipt(tx);
+    tx.receipt = got.receipt;
+    tx.source = got.source;
+  }
+
   async function fetchTxReceipt(tx) {
     var id = encodeURIComponent(String(tx.id));
     log(tx.id, "details");
@@ -638,7 +643,7 @@
     var desc = data && data.error_description ? String(data.error_description) : "";
     var err = data && data.error ? String(data.error) : "";
     if (err === "invalid_grant" || /code not valid/i.test(desc)) {
-      return "That login code is expired or already used. Click Sign in again, finish SMS, then paste the new app:// address right away.";
+      return "That login code is expired or already used. Click Sign in again and finish SMS right away.";
     }
     if (desc) return desc;
     if (err) return err;

@@ -47,7 +47,7 @@ export class BiedronkaController {
       raw = '{"ids":[],"since":""}';
     }
     this.views.html(res, 'biedronka', 200, {
-      page: this.views.page('Biedronka', '', ''),
+      page: this.views.page('Biedronka import', '', ''),
       importedJSON: raw,
     });
   }
@@ -141,8 +141,13 @@ export class BiedronkaController {
       purchases = out.result.purchases;
     } catch (err) {
       if (err instanceof DuplicateError) {
-        this.log.log(`import ${id}: skipped duplicate`);
-        res.status(200).json({ status: 'skipped', id });
+        if (this.receipts.listReceiptExternalIDs(RECEIPT_SOURCE_BIEDRONKA).includes(id)) {
+          this.log.log(`import ${id}: skipped duplicate`);
+          res.status(200).json({ status: 'skipped', id });
+          return;
+        }
+        this.log.warn(`import ${id}: catalog clash`);
+        res.status(422).json({ error: 'could not save this bill', id });
         return;
       }
       const msg = err instanceof Error ? err.message : String(err);
@@ -166,11 +171,20 @@ export class BiedronkaController {
 
   @Get('api/biedronka/transactions')
   async biedronkaTransactions(
-    @Query({ schema: biedronkaPageQuery }) query: { page: number },
+    @Query({ schema: biedronkaPageQuery }) query: { page: number; archived: boolean },
     @Req() req: Request,
     @Res() res: Response,
   ): Promise<void> {
-    await this.proxyBiedronka(req, res, 'GET', this.biedronkaAPIURL('transactions/'), { page: String(query.page) }, null, null);
+    const path = query.archived ? 'transactions/archived/' : 'transactions/';
+    await this.proxyBiedronka(
+      req,
+      res,
+      'GET',
+      this.biedronkaAPIURL(path),
+      { page: String(query.page), ...last30DayRange() },
+      null,
+      null,
+    );
   }
 
   @Get('api/biedronka/transactions/:id')
@@ -297,6 +311,7 @@ export class BiedronkaController {
     let ct = resp.headers.get('content-type') ?? '';
     if (ct === '') ct = 'application/json';
     this.log.log(`${method} ${parsed.pathname}${parsed.search} -> ${resp.status} ${payload.length}B`);
+    if (method === 'GET' && payload.length < 200) this.log.log(`body ${payload.toString('utf8')}`);
     return { status: resp.status, contentType: ct, payload };
   }
 
@@ -309,6 +324,19 @@ export class BiedronkaController {
   private biedronkaAuthURL(): string {
     return this.biedronkaAuth || biedronkaTokenURL;
   }
+}
+
+function last30DayRange(): { start_date: string; end_date: string } {
+  const end = new Date();
+  const start = new Date(end.getFullYear(), end.getMonth(), end.getDate() - 29);
+  return { start_date: calendarDay(start), end_date: calendarDay(end) };
+}
+
+function calendarDay(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 function receiptKind(receipt: unknown): string {

@@ -1,4 +1,5 @@
 import { Decimal } from 'decimal.js';
+import { fromInstant } from '../domain/bought-on.js';
 import { parseBill } from '../ocr/parse.js';
 import { emptyBill, NoLinesError, productLines, type Bill, type Line } from '../ocr/types.js';
 import {
@@ -25,7 +26,7 @@ export function billFromBiedronka(raw: unknown, tx: BiedronkaTx): Bill {
 
 function billFromDetails(receipt: BiedronkaReceipt, tx: BiedronkaTx): Bill {
   const bill = emptyBill();
-  bill.boughtOn = tx.date.trim() || receipt.date;
+  bill.boughtOn = fromInstant(tx.date.trim() || receipt.date);
   bill.storeName = biedronkaStoreName(tx.store_name || receipt.store_name, receipt.store);
   bill.externalId = receipt.store_id.trim();
   if (bill.externalId === '') {
@@ -83,7 +84,7 @@ function billFromTill(payload: unknown, tx: BiedronkaTx): Bill {
   if (lines.length === 0) throw new NoLinesError();
   const scale = moneyScale(lines, tx.total_price);
   const bill = emptyBill();
-  bill.boughtOn = tx.date.trim();
+  bill.boughtOn = fromInstant(tx.date.trim());
   bill.storeName = tx.store_name.trim();
   if (bill.storeName === '') bill.storeName = 'Biedronka';
   const n = shopNumber.exec(bill.storeName);

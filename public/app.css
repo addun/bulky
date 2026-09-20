@@ -292,8 +292,7 @@ label textarea {
 
 .stack[hidden],
 #biedronka-signed-out[hidden],
-#biedronka-code-step[hidden],
-#biedronka-auth-link[hidden],
+#biedronka-signed-in[hidden],
 #biedronka-results[hidden] {
   display: none;
 }
@@ -891,6 +890,10 @@ code {
   grid-template-columns: minmax(11rem, 16rem) 1fr;
   gap: 1.4rem;
   align-items: start;
+}
+
+.receipt-layout:not(:has(.receipt-slip)) {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .receipt-slip {
@@ -1706,6 +1709,10 @@ label.check input {
   border-bottom: 0;
 }
 
+.data-table td.empty {
+  text-align: center;
+}
+
 .json-block {
   margin: 1rem 0 0;
 }
@@ -1715,6 +1722,11 @@ label.check input {
   font-weight: 500;
 }
 
-#biedronka-advanced {
-  margin-top: 1.4rem;
+#biedronka-code-hint {
+  display: block;
+}
+
+#biedronka-table .btn {
+  padding: 0.25rem 0.65rem;
+  font-size: 0.85rem;
 }

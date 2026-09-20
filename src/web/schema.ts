@@ -247,6 +247,7 @@ export const biedronkaPageQuery = z.object({
   page: field
     .transform((s) => Number.parseInt(s === '' ? '1' : s, 10))
     .pipe(z.number({ error: 'invalid page' }).int({ error: 'invalid page' }).positive('invalid page')),
+  archived: field.transform((s) => s === '1' || s === 'true'),
 });
 
 export const biedronkaImportBody = z.object({

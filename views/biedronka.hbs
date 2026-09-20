@@ -1,80 +1,51 @@
 {{> header}}
-<h1>Biedronka</h1>
-<p class="lede">Sign in with Moja Biedronka, pull bills since a date, then import them as saved purchases. Open a receipt to change products or the visit. Already imported bills are skipped. Tokens stay in this page, not in the database. All Biedronka API calls go through Bulkly.</p>
+<h1>Biedronka import</h1>
+<p class="lede">Import e-bills from Moja Biedronka as saved purchases. Already imported bills are skipped. Tokens stay in this page, not in the database.</p>
 <div id="biedronka-imported" hidden data-payload="{{importedJSON}}"></div>
 
-<div id="biedronka-signed-out">
+<div id="biedronka-signed-out" class="stack">
   <div class="form-actions">
     <button type="button" class="btn btn-tag" id="biedronka-signin">Sign in with Moja Biedronka</button>
   </div>
-  <p class="hint" id="biedronka-auth-link" hidden><a id="biedronka-auth-href" target="_blank" rel="noopener">Open the Biedronka login</a> if the tab did not appear.</p>
-  <div id="biedronka-code-step" hidden>
-    <label>Redirect or code
-      <textarea id="biedronka-code" rows="3" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>
-      <span class="hint">After SMS, the login tries to open <code>app://cma20.biedronka.pl?code=…</code>. Paste that address immediately — the code works once and expires in about a minute. An old code from a previous try will not work.</span>
-    </label>
-    <div class="form-actions">
-      <button type="button" class="btn btn-tag" id="biedronka-finish">Finish sign-in</button>
-    </div>
-  </div>
-  <details class="json-block" id="biedronka-advanced">
-    <summary>I already have tokens</summary>
-    <form class="stack" id="biedronka-token-form">
-      <label>Access token
-        <textarea id="biedronka-access" name="access_token" rows="3" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>
-      </label>
-      <label>Refresh token
-        <textarea id="biedronka-refresh" name="refresh_token" rows="3" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>
-        <span class="hint">Kept in this page until you close or refresh it. Bulkly talks to Biedronka from the server, not from this tab.</span>
-      </label>
-      <div class="form-actions">
-        <button type="submit" class="btn btn-plain">Use these tokens</button>
-      </div>
-    </form>
-  </details>
-</div>
-
-<form class="stack" id="biedronka-form" hidden>
-  <p class="meta" id="biedronka-session"></p>
-  <label>Since
-    <input id="biedronka-since" name="since" type="date" required>
-    <span class="hint">Bills on this day and after. Defaults to the newest imported Biedronka bill, or seven days ago. Same-day bills you already have are skipped by transaction id.</span>
-  </label>
-  <label class="check">
-    <input id="biedronka-receipts" type="checkbox" checked>
-    Also download receipt lines
+  <label>Auth URL
+    <textarea id="biedronka-code" rows="3" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>
+    <span class="hint" id="biedronka-code-hint"></span>
   </label>
   <div class="form-actions">
-    <button type="submit" class="btn btn-tag" id="biedronka-fetch">Fetch bills</button>
-    <button type="button" class="btn btn-plain" id="biedronka-clear">Sign out</button>
-    <button type="button" class="btn btn-plain" id="biedronka-download" hidden>Download JSON</button>
-    <button type="button" class="btn btn-tag" id="biedronka-import" hidden>Import into receipts</button>
+    <button type="button" class="btn btn-tag" id="biedronka-finish">Finish sign-in</button>
   </div>
-</form>
+</div>
+
+<div id="biedronka-signed-in" hidden>
+  <p class="meta" id="biedronka-session"></p>
+  <div class="form-actions">
+    <button type="button" class="btn btn-plain" id="biedronka-clear">Sign out</button>
+  </div>
+</div>
 
 <p class="meta" id="biedronka-status"></p>
 
 <div id="biedronka-results" hidden>
+  <div class="page-head">
+    <h2>Bills</h2>
+    <button type="button" class="btn btn-tag" id="biedronka-import-all">Import all</button>
+  </div>
   <div class="table-wrap">
     <table class="data-table" id="biedronka-table">
       <thead>
         <tr>
           <th>Date</th>
           <th>Store</th>
-          <th>Receipt</th>
           <th>Total</th>
-          <th>Lines</th>
-          <th>Source</th>
-          <th>Bulkly</th>
+          <th></th>
         </tr>
       </thead>
       <tbody></tbody>
     </table>
   </div>
-  <details class="json-block">
-    <summary>Raw JSON</summary>
-    <pre class="mcp-snippet" id="biedronka-json"></pre>
-  </details>
+  <div class="form-actions">
+    <button type="button" class="btn btn-plain" id="biedronka-more" hidden>Load more</button>
+  </div>
 </div>
-<script src="/static/biedronka.js?v=details"></script>
+<script src="/static/biedronka.js?v=empty-row"></script>
 {{> footer}}

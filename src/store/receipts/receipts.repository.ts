@@ -299,7 +299,13 @@ export class ReceiptsRepository {
         inn.store.city,
         inn.store.externalId,
       );
-      storeId = this.locations.insertStore(c, inn.store.retailChainId);
+      try {
+        storeId = this.locations.insertStore(c, inn.store.retailChainId);
+      } catch (err) {
+        if (!(err instanceof DuplicateError)) throw err;
+        storeId = this.locations.storeIdByExternalId(c.externalId);
+        if (!storeId) throw err;
+      }
     }
     const created = new Map<string, number>();
     const newIds = new Set<number>();
