@@ -224,12 +224,13 @@ export class ProductsRepository {
   insertImported(name: string, unitId: number, ean = ''): Product {
     const n = this.orm.select({ n: count() }).from(units).where(eq(units.id, unitId)).get();
     if (countOf(n?.n) === 0) throw new InvalidUnitError();
-    const aliasCount = this.orm
-      .select({ n: count() })
+    const aliased = this.orm
+      .select({ productId: productAliases.productId })
       .from(productAliases)
       .where(nocaseEq(productAliases.alias, name))
+      .limit(1)
       .get();
-    if (countOf(aliasCount?.n) > 0) throw new DuplicateError();
+    if (aliased) return this.getProductRow(aliased.productId);
     const id = lastId(
       this.orm
         .insert(products)

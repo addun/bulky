@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { count, eq, sql } from 'drizzle-orm';
 import { DatabaseService } from '../../db/database.service.js';
-import { changesOf, countOf, emptyStr, lastId, nocaseOrder } from '../../db/query.js';
+import { changesOf, countOf, emptyStr, lastId, nocaseEq, nocaseOrder } from '../../db/query.js';
 import { productAliases, purchases, retailChains, stores } from '../../db/schema.js';
 import {
   DuplicateError,
@@ -232,6 +232,13 @@ export class LocationsRepository {
       }
       return { created, updated };
     });
+  }
+
+  storeIdByExternalId(externalId: string): number | null {
+    const want = externalId.trim();
+    if (want === '') return null;
+    const row = this.orm.select({ id: stores.id }).from(stores).where(nocaseEq(stores.externalId, want)).get();
+    return row?.id ?? null;
   }
 
   insertStore(c: Store, retailChainId: number | null): number {

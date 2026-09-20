@@ -1,0 +1,44 @@
+{
+  "manifest_version": 3,
+  "name": "Bulkly Biedronka",
+  "version": "1.0.2",
+  "description": "Catches Moja Biedronka app:// OAuth redirects and finishes sign-in on Bulkly /imports/biedronka.",
+  "permissions": ["webRequest", "webNavigation", "tabs"],
+  "host_permissions": [
+    "https://konto.biedronka.pl/*",
+    "http://localhost:8080/*",
+    "http://127.0.0.1:8080/*",
+    "*://shop.home.arpa/*",
+    "*://shop.piekna2.pl/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://localhost:8080/imports/biedronka",
+        "http://localhost:8080/imports/biedronka*",
+        "http://127.0.0.1:8080/imports/biedronka",
+        "http://127.0.0.1:8080/imports/biedronka*",
+        "*://shop.home.arpa/imports/biedronka",
+        "*://shop.home.arpa/imports/biedronka*",
+        "*://shop.piekna2.pl/imports/biedronka",
+        "*://shop.piekna2.pl/imports/biedronka*"
+      ],
+      "js": ["content-bulkly.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["https://konto.biedronka.pl/*"],
+      "js": ["content-keycloak.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["https://konto.biedronka.pl/*"],
+      "js": ["inject-keycloak.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    }
+  ]
+}
