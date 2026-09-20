@@ -18,7 +18,7 @@ Open **Receipts**, take a photo or choose a file (jpeg, png, webp, gif, or pdf, 
 
 Open `/imports/biedronka` (also linked from Receipts). Sign in with Moja Biedronka. The Chromium helper from `extensions/biedronka` fills the redirect field; click **Finish sign-in** to continue. Without the helper, paste the `app://` address. The first page of e-bills loads automatically; **Load more** appends older bills. **Import** saves one bill, **Import all** saves every new bill on the list. Each imported e-paragon is saved as purchases immediately — there is no confirm step. Known till names match aliases and the catalog; new names become products (using the piece/weight units from Settings). Open the saved receipt to change products or the visit. API imports do not store a preview image.
 
-Bulkly stores the Biedronka transaction id on the receipt and skips ids it already has. **Since** defaults to the newest imported bill’s date so a later visit can pick up same-day shops. Loyalty tokens stay in the browser tab. Token exchange, bill list, transaction details, and import all go through Bulkly; the browser does not call Biedronka’s API.
+Bulkly stores the Biedronka transaction id on the receipt and skips ids it already has. Loyalty tokens stay in the browser tab. Token exchange, bill list, transaction details, and import all go through Bulkly; the browser does not call Biedronka’s API.
 
 Photo scans still show as reading, to confirm, failed, or saved. Open a scan to see its status. Failed scans can be sent back to the reader with **Read again**, or you can photograph or upload the bill again.
 
