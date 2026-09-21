@@ -673,7 +673,6 @@ function emptyReceipt(): Receipt {
     createdAt: '',
     source: '',
     externalId: '',
-    sourcePayload: '',
   };
 }
 

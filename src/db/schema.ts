@@ -85,7 +85,6 @@ export const receipts = sqliteTable(
     errorMessage: text('error_message').notNull().default(''),
     source: text('source').notNull(),
     externalId: text('external_id').notNull().default(''),
-    sourcePayload: text('source_payload').notNull().default(''),
   },
   (t) => [
     index('idx_receipts_status').on(t.status),
