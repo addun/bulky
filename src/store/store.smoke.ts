@@ -41,9 +41,12 @@ function assertMigrationCleanup(db: DatabaseService): void {
   if (!idCol || idCol.type.toLowerCase() !== 'integer') throw new Error(`drizzle id type: ${idCol?.type}`);
 
   const rows = db.sqlite.prepare(`SELECT id FROM "__drizzle_migrations" ORDER BY created_at`).all() as Array<{ id: number | null }>;
-  if (rows.length !== 5 || rows[0]!.id !== 1 || rows[1]!.id !== 2 || rows[2]!.id !== 3 || rows[3]!.id !== 4 || rows[4]!.id !== 5) {
+  if (rows.length !== 6 || rows[0]!.id !== 1 || rows[1]!.id !== 2 || rows[2]!.id !== 3 || rows[3]!.id !== 4 || rows[4]!.id !== 5 || rows[5]!.id !== 6) {
     throw new Error(`drizzle ids: ${JSON.stringify(rows)}`);
   }
+  const receiptCols = (db.sqlite.prepare(`PRAGMA table_info("receipts")`).all() as Array<{ name: string }>).map((c) => c.name);
+  if (receiptCols.includes('source_payload')) throw new Error('source_payload should be dropped');
+  if (!receiptCols.includes('raw_response')) throw new Error('raw_response should remain');
 }
 
 function applyAliasStripMigration(db: DatabaseService): void {

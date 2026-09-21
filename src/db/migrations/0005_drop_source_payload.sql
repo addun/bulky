@@ -1,0 +1,1 @@
+ALTER TABLE `receipts` DROP COLUMN `source_payload`;

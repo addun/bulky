@@ -19,7 +19,6 @@ export type Receipt = {
   createdAt: string;
   source: string;
   externalId: string;
-  sourcePayload: string;
 };
 
 export type ReceiptListItem = {

@@ -79,7 +79,6 @@ export class BiedronkaController {
       receipt_num: body.receipt_num,
       total_price: body.total_price,
     };
-    const receiptJSON = receiptPayload(body.receipt);
     const kind = receiptKind(body.receipt);
     this.log.log(`import ${id}: ${tx.date} ${tx.store_name} ${tx.total_price} kind=${kind}`);
     let bill;
@@ -129,14 +128,7 @@ export class BiedronkaController {
     let receipt;
     let purchases = 0;
     try {
-      const out = this.receipts.importTrustedReceipt(
-        null,
-        RECEIPT_SOURCE_BIEDRONKA,
-        id,
-        receiptJSON.toString('utf8'),
-        inn,
-        rawJSON,
-      );
+      const out = this.receipts.importTrustedReceipt(null, RECEIPT_SOURCE_BIEDRONKA, id, inn, rawJSON);
       receipt = out.receipt;
       purchases = out.result.purchases;
     } catch (err) {
@@ -343,13 +335,6 @@ function receiptKind(receipt: unknown): string {
   if (biedronkaReceipt.safeParse(receipt).success) return 'details';
   if (Array.isArray(receipt)) return 'till';
   return 'other';
-}
-
-function receiptPayload(receipt: unknown): Buffer {
-  if (receipt == null) return Buffer.from('null');
-  if (typeof receipt === 'string') return Buffer.from(receipt.trim());
-  if (Buffer.isBuffer(receipt)) return receipt;
-  return Buffer.from(JSON.stringify(receipt));
 }
 
 function biedronkaAuthCode(value: string): string | null {

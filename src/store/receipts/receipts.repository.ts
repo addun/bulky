@@ -48,16 +48,11 @@ export class ReceiptsRepository {
   }
 
   createReceipt(imagePathVal: string): Receipt {
-    return this.createSourcedReceiptInner(imagePathVal, RECEIPT_SOURCE_OCR, '', '');
+    return this.createSourcedReceiptInner(imagePathVal, RECEIPT_SOURCE_OCR, '');
   }
 
-  createSourcedReceipt(
-    imagePathVal: string | null,
-    source: string,
-    externalId: string,
-    payload: string,
-  ): Receipt {
-    return this.createSourcedReceiptInner(imagePathVal, source, externalId, payload);
+  createSourcedReceipt(imagePathVal: string | null, source: string, externalId: string): Receipt {
+    return this.createSourcedReceiptInner(imagePathVal, source, externalId);
   }
 
   listReceiptExternalIDs(source: string): string[] {
@@ -255,19 +250,11 @@ export class ReceiptsRepository {
     imagePathVal: string | null,
     source: string,
     externalId: string,
-    payload: string,
     inn: BillImport,
     rawJSON: string,
   ): { receipt: Receipt; result: BillImportResult } {
     return this.db.immediate(() => {
-      const receipt = this.createSourcedReceiptInner(
-        imagePathVal,
-        source,
-        externalId,
-        payload,
-        RECEIPT_MIGRATED,
-        rawJSON,
-      );
+      const receipt = this.createSourcedReceiptInner(imagePathVal, source, externalId, RECEIPT_MIGRATED, rawJSON);
       inn.receiptId = receipt.id;
       const result = this.applyBill(inn);
       return { receipt, result };
@@ -282,7 +269,6 @@ export class ReceiptsRepository {
     imagePathVal: string | null,
     source: string,
     externalId: string,
-    payload: string,
     status = RECEIPT_PENDING,
     rawJSON = '',
   ): Receipt {
@@ -298,7 +284,6 @@ export class ReceiptsRepository {
             createdAt: nowRFC3339(),
             source: source.trim().toLowerCase(),
             externalId: externalId.trim(),
-            sourcePayload: payload,
           })
           .run(),
       );
@@ -415,7 +400,6 @@ function mapReceipt(row: {
   createdAt: string;
   source: string;
   externalId: string;
-  sourcePayload: string;
 }): Receipt {
   const imagePath = row.imagePath.trim();
   return { ...row, imagePath: imagePath === '' ? null : imagePath };
