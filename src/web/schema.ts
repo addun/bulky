@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { biedronkaImportReceipt } from '../imports/biedronka.schema.js';
+import { stripAliasWhitespace } from '#app/store/aliases';
 
 /** One HTML/query field: missing, scalar, or first of a repeated field, then trimmed. */
 const field = z.preprocess((v) => {
@@ -164,7 +165,10 @@ export const aliasForm = z.object({
     .pipe(z.number().int().positive('Choose a product.')),
   from_product: optInt,
   scope: field,
-  alias: field.pipe(z.string().min(1, 'Alias is required.')),
+  alias: field
+    .pipe(z.string().min(1, 'Alias is required.'))
+    .transform(stripAliasWhitespace)
+    .pipe(z.string().min(1, 'Alias is required.')),
 });
 
 export const comparisonGroupFields = z.object({

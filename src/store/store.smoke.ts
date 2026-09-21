@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { ConfigService } from '@nestjs/config';
@@ -41,8 +41,16 @@ function assertMigrationCleanup(db: DatabaseService): void {
   if (!idCol || idCol.type.toLowerCase() !== 'integer') throw new Error(`drizzle id type: ${idCol?.type}`);
 
   const rows = db.sqlite.prepare(`SELECT id FROM "__drizzle_migrations" ORDER BY created_at`).all() as Array<{ id: number | null }>;
-  if (rows.length !== 4 || rows[0]!.id !== 1 || rows[1]!.id !== 2 || rows[2]!.id !== 3 || rows[3]!.id !== 4) {
+  if (rows.length !== 5 || rows[0]!.id !== 1 || rows[1]!.id !== 2 || rows[2]!.id !== 3 || rows[3]!.id !== 4 || rows[4]!.id !== 5) {
     throw new Error(`drizzle ids: ${JSON.stringify(rows)}`);
+  }
+}
+
+function applyAliasStripMigration(db: DatabaseService): void {
+  const sql = readFileSync(join(import.meta.dirname, '../db/migrations/0004_alias_strip_spaces.sql'), 'utf8');
+  for (const stmt of sql.split('--> statement-breakpoint')) {
+    const trimmed = stmt.trim();
+    if (trimmed !== '') db.sqlite.exec(trimmed);
   }
 }
 
@@ -215,12 +223,45 @@ function runStoreSmoke(): void {
       [{ unitId: g.id, unitName: 'g', factor: new Decimal(1000) }],
     );
     repos.purchases.createPurchase(flour.id, store.id, '2026-01-15 12:00', new Decimal('2.5'), new Decimal('12.50'), KIND_PURCHASE);
-    repos.aliases.createAlias(flour.id, store.id, null, 'Maka Tortowa');
+    const flourAlias = repos.aliases.createAlias(flour.id, store.id, null, 'Maka Tortowa');
+    if (flourAlias.alias !== 'MakaTortowa') throw new Error(`alias stored with spaces: ${flourAlias.alias}`);
 
     const found = repos.products.findProductByName('maka', null);
     if (found.id !== flour.id) throw new Error('nocase product lookup');
     const byAlias = repos.products.findProductByName('maka tortowa', store.id);
     if (byAlias.id !== flour.id) throw new Error('alias lookup');
+    const byAliasTight = repos.products.findProductByName('makatortowa', store.id);
+    if (byAliasTight.id !== flour.id) throw new Error('alias lookup without spaces');
+    const byAliasExtra = repos.products.findProductByName('maka  tortowa', store.id);
+    if (byAliasExtra.id !== flour.id) throw new Error('alias lookup extra spaces');
+    try {
+      repos.aliases.createAlias(flour.id, store.id, null, 'Maka  Tortowa');
+      throw new Error('spaced alias should be duplicate');
+    } catch (err) {
+      if (!(err instanceof DuplicateError)) throw err;
+    }
+    try {
+      repos.products.createProduct('Maka Tortowa', kg.id, null);
+      throw new Error('product name matching compacted alias');
+    } catch (err) {
+      if (!(err instanceof DuplicateError)) throw err;
+    }
+
+    const oats = repos.products.createProduct('Oats', kg.id, null);
+    const insertAlias = db.sqlite.prepare(
+      `INSERT INTO product_aliases (product_id, store_id, retail_chain_id, alias) VALUES (?, ?, NULL, ?)`,
+    );
+    insertAlias.run(oats.id, store.id, 'Foo Bar');
+    insertAlias.run(oats.id, store.id, 'Foo  Bar');
+    insertAlias.run(oats.id, store.id, 'FooBar');
+    insertAlias.run(oats.id, store.id, 'Foo\u00a0Bar');
+    applyAliasStripMigration(db);
+    const oatAliases = repos.aliases.listAliasesByProduct(oats.id).filter((a) => a.storeId === store.id);
+    if (oatAliases.length !== 1 || oatAliases[0]!.alias !== 'FooBar') {
+      throw new Error(`alias strip migration: ${oatAliases.map((a) => a.alias).join(',')}`);
+    }
+    if (repos.products.findProductByName('foo bar', store.id).id !== oats.id) throw new Error('alias lookup after strip migration');
+    repos.products.deleteProduct(oats.id);
 
     const items = repos.products.listProducts('');
     if (items.length !== 1 || items[0]!.purchaseCount !== 1) throw new Error('product list stats');
@@ -448,7 +489,7 @@ function runStoreSmoke(): void {
     if (shopBuys.length !== 1 || shopBuys[0]!.storeId !== keepShop.id) throw new Error('store merge purchases');
     const shopAliases = repos.aliases.listAliasesByProduct(salt.id).filter((a) => a.storeId === keepShop.id);
     const shopAliasNames = shopAliases.map((a) => a.alias).sort();
-    if (shopAliasNames.join(',') !== 'Sol Drop,Sol Shop') throw new Error('store merge aliases');
+    if (shopAliasNames.join(',') !== 'SolDrop,SolShop') throw new Error('store merge aliases');
     const dropReceiptRow = repos.receipts.listReceipts().find((r) => r.id === dropReceipt.id);
     if (!dropReceiptRow || dropReceiptRow.shopName !== 'Keep Shop') throw new Error('store merge receipts');
     try {

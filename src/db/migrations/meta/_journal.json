@@ -29,6 +29,13 @@
       "when": 1789700000000,
       "tag": "0003_stores",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1789975506743,
+      "tag": "0004_alias_strip_spaces",
+      "breakpoints": true
     }
   ]
 }

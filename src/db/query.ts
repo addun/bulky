@@ -4,6 +4,12 @@ export function nocaseEq(column: SQLWrapper, value: string): SQL {
   return sql`${column} = ${value} collate nocase`;
 }
 
+/** Case-insensitive equality after stripping spaces from the column and the value. */
+export function nocaseCompactEq(column: SQLWrapper, value: string): SQL {
+  const compact = value.replace(/\s+/gu, '');
+  return sql`replace(replace(replace(replace(replace(${column}, ${'\u00a0'}, ''), ${'\t'}, ''), ${'\n'}, ''), ${'\r'}, ''), ' ', '') = ${compact} collate nocase`;
+}
+
 export function nocaseOrder(column: SQLWrapper): SQL {
   return sql`${column} collate nocase`;
 }

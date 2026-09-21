@@ -27,7 +27,7 @@ import {
   type ReceiptVisitRow,
   duplicateReceiptGroups,
 } from './receipts.models.js';
-import { AliasesRepository } from '#app/store/aliases';
+import { AliasesRepository, stripAliasWhitespace } from '#app/store/aliases';
 import { LocationsRepository } from '#app/store/locations';
 import { nowRFC3339 } from '#app/store/now';
 import { ProductsRepository } from '#app/store/products';
@@ -385,7 +385,7 @@ export class ReceiptsRepository {
   }
 
   private maybeAliasFromReceipt(productId: number, storeId: number | null, receiptName: string): void {
-    receiptName = receiptName.trim();
+    receiptName = stripAliasWhitespace(receiptName);
     if (receiptName === '') return;
     let chainId: number | null = null;
     if (storeId) {
