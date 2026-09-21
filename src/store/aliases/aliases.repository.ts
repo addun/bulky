@@ -4,7 +4,7 @@ import { DatabaseService } from '../../db/database.service.js';
 import { changesOf, countOf, emptyStr, lastId, nocaseEq, nocaseOrder } from '../../db/query.js';
 import { productAliases, products, retailChains, stores } from '../../db/schema.js';
 import { AliasScopeError, DuplicateError, isUniqueErr, NotFoundError } from '../../domain/errors.js';
-import type { ProductAlias } from './aliases.models.js';
+import { stripAliasWhitespace, type ProductAlias } from './aliases.models.js';
 import { LocationsRepository } from '#app/store/locations';
 
 @Injectable()
@@ -101,20 +101,23 @@ export class AliasesRepository {
   }
 
   aliasExistsExcept(alias: string, exceptProductId: number): boolean {
+    alias = stripAliasWhitespace(alias);
+    if (alias === '') return false;
     const row = this.orm
       .select({ n: count() })
       .from(productAliases)
-      .where(and(nocaseEq(productAliases.alias, alias.trim()), ne(productAliases.productId, exceptProductId)))
+      .where(and(nocaseEq(productAliases.alias, alias), ne(productAliases.productId, exceptProductId)))
       .get();
     return countOf(row?.n) > 0;
   }
 
   reassignProduct(fromId: number, intoId: number, intoName: string): void {
+    const compactName = stripAliasWhitespace(intoName);
     this.orm.run(sql`
       DELETE FROM product_aliases
       WHERE product_aliases.product_id = ${fromId}
         AND (
-          product_aliases.alias = ${intoName} COLLATE NOCASE
+          product_aliases.alias = ${compactName} COLLATE NOCASE
           OR EXISTS (
             SELECT 1 FROM product_aliases AS k
             WHERE k.product_id = ${intoId}
@@ -149,16 +152,18 @@ export class AliasesRepository {
 
   private prepareAlias(productId: number, storeId: number | null, chainId: number | null, alias: string) {
     if (storeId && chainId) throw new AliasScopeError();
+    alias = stripAliasWhitespace(alias);
+    if (alias === '') throw new DuplicateError();
     const n = this.orm.select({ n: count() }).from(products).where(eq(products.id, productId)).get();
     if (countOf(n?.n) === 0) throw new NotFoundError();
     const store = this.locations.optionalStore(storeId);
     const chain = this.locations.optionalChain(chainId);
-    const clash = this.orm
-      .select({ n: count() })
+    const names = this.orm
+      .select({ name: products.name })
       .from(products)
-      .where(and(nocaseEq(products.name, alias), ne(products.id, productId)))
-      .get();
-    if (countOf(clash?.n) > 0) throw new DuplicateError();
+      .where(ne(products.id, productId))
+      .all();
+    if (names.some((p) => stripAliasWhitespace(p.name).toLowerCase() === alias.toLowerCase())) throw new DuplicateError();
     return { productId, storeId: store, chainId: chain, alias };
   }
 }

@@ -26,27 +26,35 @@ export function matchProduct(
   names: Label[],
 ): { id: number; ok: boolean } {
   if (query.trim() === '') return { id: 0, ok: false };
-  for (const pool of [shop, chain, global, names]) {
-    const { id, result } = exactPool(query, pool);
+  for (const pool of [shop, chain, global]) {
+    const { id, result } = exactPool(query, pool, true);
     if (result === 'hit') return { id, ok: true };
     if (result === 'ambiguous') return { id: 0, ok: false };
   }
+  const named = exactPool(query, names, false);
+  if (named.result === 'hit') return { id: named.id, ok: true };
+  if (named.result === 'ambiguous') return { id: 0, ok: false };
   return { id: 0, ok: false };
 }
 
 function exactPool(
   query: string,
   labels: Label[],
+  ignoreSpaces: boolean,
 ): { id: number; result: 'none' | 'hit' | 'ambiguous' } {
-  const q = fold(query);
+  const q = normalize(query, ignoreSpaces);
   if (q === '') return { id: 0, result: 'none' };
   const matched = new Set<number>();
   for (const lab of labels) {
-    if (fold(lab.text) === q) matched.add(lab.productID);
+    if (normalize(lab.text, ignoreSpaces) === q) matched.add(lab.productID);
   }
   if (matched.size === 0) return { id: 0, result: 'none' };
   if (matched.size === 1) return { id: [...matched][0]!, result: 'hit' };
   return { id: 0, result: 'ambiguous' };
+}
+
+function normalize(s: string, ignoreSpaces: boolean): string {
+  return fold(ignoreSpaces ? s.replace(/\s+/gu, '') : s);
 }
 
 export function fold(s: string): string {

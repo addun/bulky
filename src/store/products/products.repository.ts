@@ -15,7 +15,7 @@ import {
 } from '../../domain/errors.js';
 import { search } from '../../domain/match.js';
 import { quotesByProduct } from '../../domain/price-stats.js';
-import type { ProductAlias } from '../aliases/aliases.models.js';
+import { stripAliasWhitespace, type ProductAlias } from '../aliases/aliases.models.js';
 import { KIND_PURCHASE } from '../purchases/purchases.models.js';
 import { type MergePlan, type Product, type ProductConversion, type ProductListItem, type ProductQuote } from './products.models.js';
 import { AliasesRepository } from '#app/store/aliases';
@@ -227,7 +227,7 @@ export class ProductsRepository {
     const aliased = this.orm
       .select({ productId: productAliases.productId })
       .from(productAliases)
-      .where(nocaseEq(productAliases.alias, name))
+      .where(nocaseEq(productAliases.alias, stripAliasWhitespace(name)))
       .limit(1)
       .get();
     if (aliased) return this.getProductRow(aliased.productId);
@@ -276,7 +276,7 @@ export class ProductsRepository {
   }
 
   productByAlias(aliasName: string, storeId: number | null, chainId: number | null): Product {
-    aliasName = aliasName.trim();
+    aliasName = stripAliasWhitespace(aliasName);
     if (aliasName === '') throw new NotFoundError();
     const scope = storeId
       ? and(nocaseEq(productAliases.alias, aliasName), eq(productAliases.storeId, storeId))

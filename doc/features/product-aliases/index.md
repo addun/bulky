@@ -10,6 +10,6 @@ Each alias has one scope:
 
 Matching tries store, then chain, then any-shop, then the catalog name. A Lidl chain alias never applies on a Biedronka bill.
 
-The products page search looks at catalog names and aliases. Close wording still counts there (Polish diacritics, extra spaces, a trailing size, a small typo). Receipt matching does not: till labels are compared exactly.
+Aliases are stored without whitespace, so “Bulka razowa” and “Bulkarazowa” are the same alias. The products page search looks at catalog names and aliases. Close wording still counts there (Polish diacritics, extra spaces, a trailing size, a small typo). Receipt matching compares till labels to aliases without spaces; catalog names still need the same wording (case, extra spaces, punctuation, and Polish diacritics do not matter).
 
 Add aliases from **Aliases** in the sidebar, or from a product (the Aliases link next to Edit, which lists only that product). Saving a bill also stores the printed till name as an alias on the product you keep — new or existing; see [Receipt matching](../receipt-matching/index.md). If a bill created a second catalog row for something you already keep, [merge](../product-merge/index.md) the extra row into the product you want to keep.
