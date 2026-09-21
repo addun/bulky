@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { and, count, eq, ne, sql } from 'drizzle-orm';
 import { DatabaseService } from '../../db/database.service.js';
-import { changesOf, countOf, emptyStr, lastId, nocaseCompactEq, nocaseEq, nocaseOrder } from '../../db/query.js';
+import { changesOf, countOf, emptyStr, lastId, nocaseEq, nocaseOrder } from '../../db/query.js';
 import { productAliases, products, retailChains, stores } from '../../db/schema.js';
 import { AliasScopeError, DuplicateError, isUniqueErr, NotFoundError } from '../../domain/errors.js';
 import { stripAliasWhitespace, type ProductAlias } from './aliases.models.js';
@@ -158,12 +158,12 @@ export class AliasesRepository {
     if (countOf(n?.n) === 0) throw new NotFoundError();
     const store = this.locations.optionalStore(storeId);
     const chain = this.locations.optionalChain(chainId);
-    const clash = this.orm
-      .select({ n: count() })
+    const names = this.orm
+      .select({ name: products.name })
       .from(products)
-      .where(and(nocaseCompactEq(products.name, alias), ne(products.id, productId)))
-      .get();
-    if (countOf(clash?.n) > 0) throw new DuplicateError();
+      .where(ne(products.id, productId))
+      .all();
+    if (names.some((p) => stripAliasWhitespace(p.name).toLowerCase() === alias.toLowerCase())) throw new DuplicateError();
     return { productId, storeId: store, chainId: chain, alias };
   }
 }
