@@ -1,0 +1,29 @@
+{{> header}}
+<div class="page-head">
+  <h1>Duplicate receipts</h1>
+  <a class="btn btn-plain" href="/admin/receipts">Receipts</a>
+</div>
+<p class="lede">Receipts from the same shop at the same time.</p>
+
+{{#unless groups}}
+  <p class="empty">No duplicates.</p>
+{{else}}
+  {{#each groups}}
+  <h2>{{#if this.shopName}}{{this.shopName}}{{else}}Unknown shop{{/if}} · {{datetime this.boughtOn}}</h2>
+  <p class="meta">{{this.count}} receipts</p>
+  <ul class="ledger">
+    {{#each this.receipts}}
+    <li>
+      <a class="row" href="/admin/receipts/{{this.id}}">
+        <span class="thumb thumb-empty" aria-hidden="true"></span>
+        <span class="row-main">
+          <strong>{{#if this.shopName}}{{this.shopName}}{{else}}{{datetime this.displayDate}}{{/if}}</strong>
+          <span class="meta">{{#if this.shopName}}{{datetime this.displayDate}} · {{/if}}{{this.statusLabel}}</span>
+        </span>
+      </a>
+    </li>
+    {{/each}}
+  </ul>
+  {{/each}}
+{{/unless}}
+{{> footer}}

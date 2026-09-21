@@ -33,6 +33,7 @@ import {
   RECEIPT_PENDING,
   ReceiptsRepository,
   type Receipt,
+  type ReceiptDuplicateGroup,
   type ReceiptListItem,
 } from '#app/store/receipts';
 import { UnitsRepository, type Unit } from '#app/store/units';
@@ -72,6 +73,26 @@ export class ReceiptsController {
   @Get()
   receipts(@Query({ schema: flashQuery }) query: { error: string }, @Res() res: Response): void {
     this.renderReceipts(res, 200, query.error);
+  }
+
+  @Get('duplicates')
+  duplicateReceipts(@Res() res: Response): void {
+    let groups: ReceiptDuplicateGroup[];
+    try {
+      groups = this.receiptsStore.listDuplicateReceipts();
+    } catch {
+      this.views.text(res, 500, 'could not load receipts');
+      return;
+    }
+    this.views.html(res, 'receipt_duplicates', 200, {
+      page: this.views.adminPage('Duplicate receipts', '', ''),
+      groups: groups.map((g) => ({
+        shopName: g.shopName,
+        boughtOn: g.boughtOn,
+        count: g.receipts.length,
+        receipts: g.receipts.map(presentReceiptListItem),
+      })),
+    });
   }
 
   @Post()

@@ -22,7 +22,10 @@ import {
   type BillImportResult,
   type BillLineInput,
   type Receipt,
+  type ReceiptDuplicateGroup,
   type ReceiptListItem,
+  type ReceiptVisitRow,
+  duplicateReceiptGroups,
 } from './receipts.models.js';
 import { AliasesRepository } from '#app/store/aliases';
 import { LocationsRepository } from '#app/store/locations';
@@ -94,6 +97,22 @@ export class ReceiptsRepository {
   }
 
   listReceipts(): ReceiptListItem[] {
+    return this.scanReceiptList().map((row) => ({
+      id: row.id,
+      imagePath: row.imagePath,
+      status: row.status,
+      errorMessage: row.errorMessage,
+      createdAt: row.createdAt,
+      boughtOn: row.boughtOn,
+      shopName: row.shopName,
+    }));
+  }
+
+  listDuplicateReceipts(): ReceiptDuplicateGroup[] {
+    return duplicateReceiptGroups(this.scanReceiptList());
+  }
+
+  private scanReceiptList(): ReceiptVisitRow[] {
     return this.orm
       .select({
         id: receipts.id,
@@ -102,7 +121,9 @@ export class ReceiptsRepository {
         errorMessage: receipts.errorMessage,
         createdAt: receipts.createdAt,
         boughtOn: sql<string>`trim(coalesce(case when json_valid(${receipts.rawResponse}) then json_extract(${receipts.rawResponse}, '$.bought_on') end, ''))`,
+        boughtAt: sql<string>`trim(coalesce(case when json_valid(${receipts.rawResponse}) then json_extract(${receipts.rawResponse}, '$.bought_at') end, ''))`,
         shopName: sql<string>`trim(coalesce(${stores.name}, case when json_valid(${receipts.rawResponse}) then json_extract(${receipts.rawResponse}, '$.company_name') end, ''))`,
+        shopId: sql<number>`coalesce(case when json_valid(${receipts.rawResponse}) then json_extract(${receipts.rawResponse}, '$.company_id') end, 0)`,
       })
       .from(receipts)
       .leftJoin(
@@ -115,7 +136,9 @@ export class ReceiptsRepository {
         ...r,
         imagePath: r.imagePath.trim() === '' ? null : r.imagePath,
         boughtOn: (r.boughtOn ?? '').trim(),
+        boughtAt: (r.boughtAt ?? '').trim(),
         shopName: (r.shopName ?? '').trim(),
+        shopId: Number(r.shopId) || 0,
       }));
   }
 
