@@ -274,6 +274,60 @@ function runStoreSmoke(): void {
     }
     repos.receipts.deleteReceipt(named.id);
 
+    const dupA = repos.receipts.createReceipt('dup-a.jpg');
+    const dupB = repos.receipts.createReceipt('dup-b.jpg');
+    const dupC = repos.receipts.createReceipt('dup-c.jpg');
+    const otherShop = repos.locations.createStore('Other', 'Street', '1', '', '', 'City', 'other-dup', chain.id);
+    repos.receipts.saveAIResponse(
+      dupA.id,
+      JSON.stringify({ bought_on: '2026-05-01', bought_at: '14:32', company_id: store.id, company_name: 'Biedronka' }),
+    );
+    repos.receipts.saveAIResponse(
+      dupB.id,
+      JSON.stringify({ bought_on: '2026-05-01 14:32', company_id: store.id, company_name: 'Biedronka' }),
+    );
+    repos.receipts.saveAIResponse(
+      dupC.id,
+      JSON.stringify({ bought_on: '2026-05-01', bought_at: '15:00', company_id: store.id, company_name: 'Biedronka' }),
+    );
+    const dups = repos.receipts.listDuplicateReceipts();
+    if (dups.length !== 1) throw new Error(`dup groups: ${dups.length}`);
+    if (dups[0]!.receipts.length !== 2) throw new Error('dup count');
+    if (dups[0]!.boughtOn !== '2026-05-01 14:32') throw new Error('dup time');
+    if (dups[0]!.shopName !== store.name) throw new Error('dup shop');
+    if (!dups[0]!.receipts.some((r) => r.id === dupA.id) || !dups[0]!.receipts.some((r) => r.id === dupB.id)) {
+      throw new Error('dup members');
+    }
+
+    const other = repos.receipts.createReceipt('dup-other.jpg');
+    repos.receipts.saveAIResponse(
+      other.id,
+      JSON.stringify({ bought_on: '2026-05-01', bought_at: '14:32', company_id: otherShop.id }),
+    );
+    if (repos.receipts.listDuplicateReceipts().length !== 1) throw new Error('other shop should not join');
+
+    const lidlA = repos.receipts.createReceipt('lidl-a.jpg');
+    const lidlB = repos.receipts.createReceipt('lidl-b.jpg');
+    repos.receipts.saveAIResponse(
+      lidlA.id,
+      JSON.stringify({ bought_on: '2026-05-02', bought_at: '09:10', company_name: 'Lidl' }),
+    );
+    repos.receipts.saveAIResponse(
+      lidlB.id,
+      JSON.stringify({ bought_on: '2026-05-02', bought_at: '09:10', company_name: 'lidl' }),
+    );
+    if (repos.receipts.listDuplicateReceipts().length !== 2) throw new Error('named dup groups');
+
+    const datelessA = repos.receipts.createReceipt('date-a.jpg');
+    const datelessB = repos.receipts.createReceipt('date-b.jpg');
+    repos.receipts.saveAIResponse(datelessA.id, JSON.stringify({ bought_on: '2026-05-03', company_name: 'Lidl' }));
+    repos.receipts.saveAIResponse(datelessB.id, JSON.stringify({ bought_on: '2026-05-03', company_name: 'Lidl' }));
+    if (repos.receipts.listDuplicateReceipts().length !== 2) throw new Error('date-only should not duplicate');
+
+    for (const r of [dupA, dupB, dupC, other, lidlA, lidlB, datelessA, datelessB]) {
+      repos.receipts.deleteReceipt(r.id);
+    }
+
     const only = repos.receipts.createReceipt('only.jpg');
     repos.receipts.saveAIResponse(only.id, '{}');
     const onlyRes = repos.receipts.migrateReceipt(only.id, {
