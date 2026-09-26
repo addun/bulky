@@ -41,7 +41,16 @@ function assertMigrationCleanup(db: DatabaseService): void {
   if (!idCol || idCol.type.toLowerCase() !== 'integer') throw new Error(`drizzle id type: ${idCol?.type}`);
 
   const rows = db.sqlite.prepare(`SELECT id FROM "__drizzle_migrations" ORDER BY created_at`).all() as Array<{ id: number | null }>;
-  if (rows.length !== 6 || rows[0]!.id !== 1 || rows[1]!.id !== 2 || rows[2]!.id !== 3 || rows[3]!.id !== 4 || rows[4]!.id !== 5 || rows[5]!.id !== 6) {
+  if (
+    rows.length !== 7 ||
+    rows[0]!.id !== 1 ||
+    rows[1]!.id !== 2 ||
+    rows[2]!.id !== 3 ||
+    rows[3]!.id !== 4 ||
+    rows[4]!.id !== 5 ||
+    rows[5]!.id !== 6 ||
+    rows[6]!.id !== 7
+  ) {
     throw new Error(`drizzle ids: ${JSON.stringify(rows)}`);
   }
   const receiptCols = (db.sqlite.prepare(`PRAGMA table_info("receipts")`).all() as Array<{ name: string }>).map((c) => c.name);
@@ -223,7 +232,7 @@ function runStoreSmoke(): void {
       'Maka',
       kg.id,
       null,
-      [{ unitId: g.id, unitName: 'g', factor: new Decimal(1000) }],
+      [{ unitId: g.id, unitName: 'g', compareValue: new Decimal(1), factor: new Decimal(1000) }],
     );
     repos.purchases.createPurchase(flour.id, store.id, '2026-01-15 12:00', new Decimal('2.5'), new Decimal('12.50'), KIND_PURCHASE);
     const flourAlias = repos.aliases.createAlias(flour.id, store.id, null, 'Maka Tortowa');
@@ -434,6 +443,11 @@ function runStoreSmoke(): void {
     const listed = repos.units.listUnits();
     const kgRow = listed.find((u) => u.name === 'kg');
     if (!kgRow || kgRow.productCount < 1) throw new Error('unit use count');
+    if (!kgRow.compareValue.eq(1) || !repos.units.getUnit(g.id).compareValue.eq(1)) throw new Error('default compare value');
+    repos.units.updateUnit(g.id, 'g', new Decimal(100));
+    if (!repos.units.getUnit(g.id).compareValue.eq(100)) throw new Error('compare value');
+    const gConv = repos.products.getProduct(flour.id).conversions.find((c) => c.unitId === g.id);
+    if (!gConv || !gConv.compareValue.eq(100)) throw new Error('conversion compare value');
 
     const milk = repos.products.insertImported('Mleko', kg.id, '5900000000001');
     if (milk.ean !== '5900000000001') throw new Error('imported ean');

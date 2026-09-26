@@ -33,7 +33,7 @@
           <strong>{{this.name}}</strong>
           <span class="meta">{{this.unitName}}{{#if this.lastBought}} · last {{datetime this.lastBought}}{{/if}}</span>
         </span>
-        <span class="row-amt">{{#if this.quote}}{{money this.quote.price}} / {{this.unitName}}{{else}}—{{/if}}</span>
+        <span class="row-amt">{{#if this.quote}}{{perUnit this.quote.price this.compareValue this.unitName}}{{else}}—{{/if}}</span>
       </a>
     </li>
     {{/each}}

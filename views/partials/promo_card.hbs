@@ -9,7 +9,7 @@
       <span class="promo-body">
         <strong class="promo-name">{{this.product.name}}</strong>
         {{#if this.current}}
-        <span class="promo-now">{{money this.current}} / {{this.product.unitName}}</span>
+        <span class="promo-now">{{perUnit this.current this.product.compareValue this.product.unitName}}</span>
         {{#each this.extras}}
         <span class="promo-alt">{{money this.price}} / {{this.unitName}}</span>
         {{/each}}

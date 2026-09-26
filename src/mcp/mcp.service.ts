@@ -5,6 +5,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { boughtOnDate } from '../domain/bought-on.js';
+import { compareUnitLabel, priceAtCompare } from '../domain/format.js';
 import { ProductsRepository } from '#app/store/products';
 
 const matchLimit = 10;
@@ -14,8 +15,8 @@ const noMatchHint =
 const matchSchema = z.object({
   id: z.number().describe('Catalog product id'),
   name: z.string().describe('Catalog product name'),
-  unit: z.string().describe('Catalog unit, for example kg'),
-  price: z.string().optional().describe('Unit price as a decimal string'),
+  unit: z.string().describe('Compare quantity and unit, for example kg or 100 g'),
+  price: z.string().optional().describe('Price for that compare quantity, as a decimal string'),
   bought_on: z.string().optional().describe('Purchase date YYYY-MM-DD'),
   window: z
     .string()
@@ -51,7 +52,7 @@ export class McpService {
       'best_price',
       {
         description:
-          'Find products in the Bulkly purchase log and return the best unit price. ' +
+          'Find products in the Bulkly purchase log and return the best price for the unit compare quantity (1 by default, often 100 for grams). ' +
           'Uses the lowest unit price from the last 30 days when one exists; otherwise the most recent recorded unit price. ' +
           'Catalog names are Polish (plus receipt aliases). Search with the user\'s words first, then retry with a Polish translation if nothing matches. ' +
           'If several products match, return all of them and do not pick one.',
@@ -113,9 +114,10 @@ export function bestPrice(products: ProductsRepository, query: string, now: Date
   const quotes = products.searchProductQuotes(query, now, matchLimit);
   const out: BestPriceOutput = { query, matches: [] };
   for (const q of quotes) {
-    const m: BestPriceMatch = { id: q.product.id, name: q.product.name, unit: q.product.unitName };
+    const unit = compareUnitLabel(q.product.unitName, q.product.compareValue);
+    const m: BestPriceMatch = { id: q.product.id, name: q.product.name, unit };
     if (q.quote) {
-      m.price = q.quote.price.toString();
+      m.price = priceAtCompare(q.quote.price, q.product.compareValue).toString();
       m.bought_on = boughtOnDate(q.quote.boughtOn);
       m.window = q.quote.window;
       m.currency = currency;

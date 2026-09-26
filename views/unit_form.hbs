@@ -1,9 +1,13 @@
 {{> header}}
-<h1>Rename unit</h1>
+<h1>Edit unit</h1>
 <form class="stack" method="post" action="/admin/units/{{unit.id}}">
   <label>Name <input name="name" required value="{{unit.name}}" autofocus></label>
+  <label>Compare value
+    <input name="compare_value" required inputmode="decimal" value="{{#if compareInput}}{{compareInput}}{{else}}{{qty unit.compareValue}}{{/if}}">
+    <span class="hint">Prices are shown per this much of the unit. Grams are usually 100, so 0,05 zł/g is shown as 5,00 zł / 100 g. Leave 1 to keep the price per single unit.</span>
+  </label>
   <div class="actions">
-    <button type="submit" class="btn btn-tag">Save name</button>
+    <button type="submit" class="btn btn-tag">Save</button>
     <a href="/admin/units">Cancel</a>
   </div>
 </form>

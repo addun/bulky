@@ -61,9 +61,11 @@
       return;
     }
     var sym = (form.getAttribute("data-qty-symbol") || "").trim();
-    var price = formatMoney(amount / qty) + (sym ? " " + sym : "");
+    var compare = parseNum(form.getAttribute("data-qty-compare")) || 1;
+    var price = formatMoney((amount / qty) * compare) + (sym ? " " + sym : "");
+    var basis = compare === 1 ? unit : String(compare).replace(".", ",") + (unit ? " " + unit : "");
     total.hidden = false;
-    total.textContent = price + (unit ? "/" + unit : " per unit");
+    total.textContent = price + (basis ? "/" + basis : " per unit");
   }
 
   function bindQty(form) {

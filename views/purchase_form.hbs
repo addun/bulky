@@ -1,7 +1,7 @@
 {{> header}}
 <h1>{{#if new}}Add new purchase{{else if purchase.isPrice}}Edit price{{else}}Edit purchase{{/if}}</h1>
 <p class="lede">{{product.name}}</p>
-<form class="stack" method="post" action="{{#if new}}/admin/products/{{product.id}}/purchases{{else}}/admin/purchases/{{purchase.id}}{{/if}}" data-qty-form data-qty-unit="{{product.unitName}}" data-qty-symbol="{{page.symbol}}">
+<form class="stack" method="post" action="{{#if new}}/admin/products/{{product.id}}/purchases{{else}}/admin/purchases/{{purchase.id}}{{/if}}" data-qty-form data-qty-unit="{{product.unitName}}" data-qty-compare="{{qty product.compareValue}}" data-qty-symbol="{{page.symbol}}">
   {{#if (and (not new) purchase.receiptId)}}
   <p class="meta">From <a href="/admin/receipts/{{purchase.receiptId}}">receipt {{purchase.receiptId}}</a></p>
   {{/if}}

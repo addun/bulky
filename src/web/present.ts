@@ -26,6 +26,7 @@ import {
   type Product,
   type ProductListItem,
 } from '#app/store/products';
+import { priceAtCompare } from '../domain/format.js';
 import { yearlySummaries } from '../domain/yearly-summaries.js';
 import { KIND_PRICE, KIND_PURCHASE, type Purchase } from '#app/store/purchases';
 import { RECEIPT_PENDING, receiptStatusLabel, type Receipt, type ReceiptListItem } from '#app/store/receipts';
@@ -149,8 +150,8 @@ export function presentProductPage(
   const low30 = lowestSince(purchases, from30);
   const lowest = yearLowest(yearPoints);
   const stats: ProductStatRow[] = [];
-  if (low30) stats.push({ label: 'Najniższa w ostatnich 30 dniach', money: low30.price });
-  if (lowest) stats.push({ label: 'Najniższa w ostatnich 365 dniach', money: lowest });
+  if (low30) stats.push({ label: 'Najniższa w ostatnich 30 dniach', money: priceAtCompare(low30.price, product.compareValue) });
+  if (lowest) stats.push({ label: 'Najniższa w ostatnich 365 dniach', money: priceAtCompare(lowest, product.compareValue) });
 
   let priceEyebrow = 'Najlepsza cena, ostatnie 30 dni';
   let priceNote = '';

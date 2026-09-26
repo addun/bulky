@@ -52,8 +52,8 @@ import {
   mergeForm,
   mergeParams,
   mergeQuery,
-  nameFields,
-  nameForm,
+  unitFields,
+  unitForm,
   newStoreQuery,
   productFields,
   productForm,
@@ -161,13 +161,18 @@ export class CatalogController {
 
   @Post('/admin/units')
   createUnit(@Body() raw: unknown, @Res() res: Response): void {
-    const parsed = nameForm.safeParse(raw);
+    const parsed = unitForm.safeParse(raw);
     if (!parsed.success) {
       this.views.redirect(res, '/admin/units?error=' + encodeURIComponent(formIssue(parsed.error)));
       return;
     }
+    const compare = readCompareValue(parsed.data.compare_value);
+    if (compare.error || !compare.value) {
+      this.views.redirect(res, '/admin/units?error=' + encodeURIComponent(compare.error));
+      return;
+    }
     try {
-      this.unitsStore.createUnit(parsed.data.name);
+      this.unitsStore.createUnit(parsed.data.name, compare.value);
       this.views.redirect(res, '/admin/units');
     } catch (err) {
       if (err instanceof DuplicateError) {
@@ -182,7 +187,11 @@ export class CatalogController {
   editUnit(@Param('id', { schema: id }) unitId: number, @Res() res: Response): void {
     try {
       const u = this.unitsStore.getUnit(unitId);
-      this.views.html(res, 'unit_form', 200, { page: this.views.adminPage('Rename unit', '', ''), unit: u });
+      this.views.html(res, 'unit_form', 200, {
+        page: this.views.adminPage('Edit unit', '', ''),
+        unit: u,
+        compareInput: '',
+      });
     } catch (err) {
       if (err instanceof NotFoundError) return this.views.text(res, 404, 'not found');
       this.views.text(res, 500, 'could not load unit');
@@ -191,24 +200,36 @@ export class CatalogController {
 
   @Post('/admin/units/:id')
   updateUnit(@Param('id', { schema: id }) unitId: number, @Body() raw: unknown, @Res() res: Response): void {
-    const parsed = nameForm.safeParse(raw);
-    const name = nameFields.parse(raw).name;
+    const fields = unitFields.parse(raw);
+    const parsed = unitForm.safeParse(raw);
+    const compare = readCompareValue(fields.compare_value);
+    const draft = { id: unitId, name: fields.name, compareValue: compare.value ?? new Decimal(1), productCount: 0 };
     if (!parsed.success) {
       this.views.html(res, 'unit_form', 422, {
-        page: this.views.adminPage('Rename unit', '', formIssue(parsed.error)),
-        unit: { id: unitId, name: name, productCount: 0 },
+        page: this.views.adminPage('Edit unit', '', formIssue(parsed.error)),
+        unit: draft,
+        compareInput: fields.compare_value,
+      });
+      return;
+    }
+    if (compare.error || !compare.value) {
+      this.views.html(res, 'unit_form', 422, {
+        page: this.views.adminPage('Edit unit', '', compare.error),
+        unit: draft,
+        compareInput: fields.compare_value,
       });
       return;
     }
     try {
-      this.unitsStore.updateUnit(unitId, parsed.data.name);
+      this.unitsStore.updateUnit(unitId, parsed.data.name, compare.value);
       this.views.redirect(res, '/admin/units');
     } catch (err) {
       if (err instanceof NotFoundError) return this.views.text(res, 404, 'not found');
       if (err instanceof DuplicateError) {
         this.views.html(res, 'unit_form', 422, {
-          page: this.views.adminPage('Rename unit', '', 'That unit already exists.'),
-          unit: { id: unitId, name: name, productCount: 0 },
+          page: this.views.adminPage('Edit unit', '', 'That unit already exists.'),
+          unit: draft,
+          compareInput: fields.compare_value,
         });
         return;
       }
@@ -1085,6 +1106,7 @@ export class CatalogController {
     try {
       const u = this.unitsStore.getUnit(unitID);
       draft.unitName = u.name;
+      draft.compareValue = u.compareValue;
     } catch {
       /* ignore */
     }
@@ -1684,7 +1706,26 @@ function emptyAlias(): ProductAlias {
 }
 
 function emptyProduct(): Product {
-  return { id: 0, name: '', ean: '', unitId: 0, unitName: '', imagePath: null, createdAt: '', conversions: [] };
+  return {
+    id: 0,
+    name: '',
+    ean: '',
+    unitId: 0,
+    unitName: '',
+    compareValue: new Decimal(1),
+    imagePath: null,
+    createdAt: '',
+    conversions: [],
+  };
+}
+
+function readCompareValue(raw: string): { value: Decimal | null; error: string } {
+  try {
+    return { value: parseDecimal(raw, 6, false), error: '' };
+  } catch (err) {
+    const message = (err as Error).message;
+    return { value: null, error: message.endsWith('.') ? `Compare value ${message}` : `Compare value ${message}.` };
+  }
 }
 
 function parseExtraUnits(body: ProductFields, purchaseUnitID: number): { convs: ProductConversion[]; msg: string } {
@@ -1704,7 +1745,7 @@ function parseExtraUnits(body: ProductFields, purchaseUnitID: number): { convs: 
     seen.add(extraUnitID);
     try {
       const factor = parseDecimal(facStr, 8, false);
-      out.push({ unitId: extraUnitID, unitName: '', factor: factor });
+      out.push({ unitId: extraUnitID, unitName: '', compareValue: new Decimal(1), factor: factor });
     } catch (err) {
       return { convs: out, msg: 'Extra unit factor ' + (err as Error).message + '.' };
     }

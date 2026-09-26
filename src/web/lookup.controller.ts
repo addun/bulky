@@ -3,7 +3,7 @@ import type { Response } from 'express';
 import { ComparisonGroupsRepository } from '#app/store/comparison-groups';
 import { ProductsRepository, type ProductQuote } from '#app/store/products';
 import { PurchasesRepository, type Purchase } from '#app/store/purchases';
-import { formatMoneyPerUnit } from '../domain/format.js';
+import { compareUnitLabel, formatMoneyPerUnit, priceAtCompare } from '../domain/format.js';
 import { bestRecentPrice, pricesBetween } from '../domain/price-stats.js';
 import { boughtOnDate } from '../domain/bought-on.js';
 import { ViewsService } from './views.service.js';
@@ -76,7 +76,10 @@ export class LookupController {
       const from365 = new Date(today);
       from365.setDate(from365.getDate() - 365);
       const points = pricesBetween(purchases, from365, today);
-      const rows = points.map((pt) => ({ on: boughtOnDate(pt.boughtOn), price: pt.price.toString() }));
+      const rows = points.map((pt) => ({
+        on: boughtOnDate(pt.boughtOn),
+        price: priceAtCompare(pt.price, p.compareValue).toString(),
+      }));
       const related = this.groups.relatedGroupProducts(productId, now);
       this.views.html(res, 'lookup_show', 200, {
         page: this.views.page(p.name, '', ''),
@@ -120,10 +123,14 @@ export class LookupController {
       return {
         id: it.product.id,
         name: it.product.name,
-        unit: it.product.unitName,
+        unit: compareUnitLabel(it.product.unitName, it.product.compareValue),
         image: img,
         price: it.quote
-          ? formatMoneyPerUnit(it.quote.price, this.views.symbol, it.product.unitName)
+          ? formatMoneyPerUnit(
+              priceAtCompare(it.quote.price, it.product.compareValue),
+              this.views.symbol,
+              compareUnitLabel(it.product.unitName, it.product.compareValue),
+            )
           : undefined,
       };
     });

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { count, eq, sql } from 'drizzle-orm';
+import { Decimal } from 'decimal.js';
 import { DatabaseService } from '../../db/database.service.js';
 import { changesOf, countOf, lastId, nocaseEq, nocaseOrder } from '../../db/query.js';
 import { comparisonGroups, settings, units } from '../../db/schema.js';
@@ -28,35 +29,33 @@ export class UnitsRepository {
 
   listUnits(): Unit[] {
     return this.orm
-      .select({ id: units.id, name: units.name, productCount: unitUseCount })
+      .select(this.unitColumns())
       .from(units)
       .orderBy(nocaseOrder(units.name))
-      .all();
+      .all()
+      .map((row) => this.mapUnit(row));
   }
 
   getUnit(id: number): Unit {
-    const row = this.orm
-      .select({ id: units.id, name: units.name, productCount: unitUseCount })
-      .from(units)
-      .where(eq(units.id, id))
-      .get();
+    const row = this.orm.select(this.unitColumns()).from(units).where(eq(units.id, id)).get();
     if (!row) throw new NotFoundError();
-    return row;
+    return this.mapUnit(row);
   }
 
   findUnitByName(name: string): Unit {
-    const row = this.orm
-      .select({ id: units.id, name: units.name, productCount: unitUseCount })
-      .from(units)
-      .where(nocaseEq(units.name, name))
-      .get();
+    const row = this.orm.select(this.unitColumns()).from(units).where(nocaseEq(units.name, name)).get();
     if (!row) throw new NotFoundError();
-    return row;
+    return this.mapUnit(row);
   }
 
-  createUnit(name: string): Unit {
+  createUnit(name: string, compareValue?: Decimal): Unit {
     try {
-      const id = lastId(this.orm.insert(units).values({ name }).run());
+      const id = lastId(
+        this.orm
+          .insert(units)
+          .values(compareValue ? { name, compareValue: compareValue.toString() } : { name })
+          .run(),
+      );
       return this.getUnit(id);
     } catch (err) {
       if (isUniqueErr(err)) throw new DuplicateError();
@@ -64,9 +63,11 @@ export class UnitsRepository {
     }
   }
 
-  updateUnit(id: number, name: string): void {
+  updateUnit(id: number, name: string, compareValue: Decimal): void {
     try {
-      const n = changesOf(this.orm.update(units).set({ name }).where(eq(units.id, id)).run());
+      const n = changesOf(
+        this.orm.update(units).set({ name, compareValue: compareValue.toString() }).where(eq(units.id, id)).run(),
+      );
       if (n === 0) throw new NotFoundError();
     } catch (err) {
       if (err instanceof NotFoundError) throw err;
@@ -112,6 +113,24 @@ export class UnitsRepository {
 
   ocrModel(): string {
     return this.getSetting(SETTING_OCR_MODEL);
+  }
+
+  private unitColumns() {
+    return {
+      id: units.id,
+      name: units.name,
+      compareValue: units.compareValue,
+      productCount: unitUseCount,
+    };
+  }
+
+  private mapUnit(row: { id: number; name: string; compareValue: string; productCount: number }): Unit {
+    return {
+      id: row.id,
+      name: row.name,
+      compareValue: new Decimal(row.compareValue),
+      productCount: row.productCount,
+    };
   }
 
   private settingUnitID(key: string): number | null {
