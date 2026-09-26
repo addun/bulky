@@ -1,8 +1,6 @@
-import { join } from 'node:path';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Response } from 'express';
-import { viewData } from './helpers.js';
 import { makePage, type Page } from './present.js';
 
 @Injectable()
@@ -23,19 +21,15 @@ export class ViewsService {
     return makePage(title, query, errMsg, this.symbol, this.currency, true, refreshSeconds);
   }
 
-  html(res: Response, template: string, status: number, data: Record<string, unknown>): void {
-    res.status(status).render(template, viewData(data));
+  json(res: Response, status: number, data: Record<string, unknown>): void {
+    res.status(status).json(data);
   }
 
   text(res: Response, status: number, body: string): void {
-    res.status(status).type('text/plain').send(body);
+    res.status(status).json({ error: body });
   }
 
   redirect(res: Response, path: string): void {
-    res.redirect(303, path);
-  }
-
-  viewsDir(): string {
-    return join(import.meta.dirname, '..', '..', 'views');
+    res.status(200).json({ location: path });
   }
 }

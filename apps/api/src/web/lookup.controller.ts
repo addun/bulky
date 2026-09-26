@@ -29,7 +29,7 @@ export class LookupController {
       const popularItems = this.loadPopular();
       const popular = this.presentCards(popularItems);
       const products = q ? this.presentCards(this.loadSuggestions(q)) : popular;
-      this.views.html(res, 'lookup', 200, {
+      this.views.json(res, 200, {
         page: this.views.page('Czy to promka', q, ''),
         query: q,
         mode: q ? 'search' : 'popular',
@@ -51,21 +51,6 @@ export class LookupController {
     }
   }
 
-  @Get('/api/products/suggestions.html')
-  suggestionsHTML(@Query({ schema: qQuery }) query: { q: string }, @Res() res: Response): void {
-    const q = query.q;
-    try {
-      const items = q ? this.loadSuggestions(q) : this.loadPopular();
-      this.views.html(res, 'lookup_suggestions', 200, {
-        query: q,
-        mode: q ? 'search' : 'popular',
-        products: this.presentCards(items),
-      });
-    } catch {
-      this.views.text(res, 500, 'could not search products');
-    }
-  }
-
   @Get('/products/:id')
   showLookup(@Param('id', { schema: id }) productId: number, @Res() res: Response): void {
     try {
@@ -81,7 +66,7 @@ export class LookupController {
         price: priceAtCompare(pt.price, p.compareValue).toString(),
       }));
       const related = this.groups.relatedGroupProducts(productId, now);
-      this.views.html(res, 'lookup_show', 200, {
+      this.views.json(res, 200, {
         page: this.views.page(p.name, '', ''),
         ...presentProductPage(p, purchases, bestRecentPrice(purchases, now), points),
         chartJSON: JSON.stringify(rows),

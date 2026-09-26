@@ -67,7 +67,7 @@ export const biedronkaReceipt = z.object({
   payment_rounding: money.nullable(),
 });
 
-/** Flattened sell line from `public/biedronka.js` (`sellLines`). */
+/** Flattened sell line from the Biedronka import client (`sellLines`). */
 export const biedronkaSellLine = z.object({
   name: z.string(),
   price: money,

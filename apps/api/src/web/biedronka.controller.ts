@@ -46,7 +46,7 @@ export class BiedronkaController {
     } catch {
       raw = '{"ids":[],"since":""}';
     }
-    this.views.html(res, 'biedronka', 200, {
+    this.views.json(res, 200, {
       page: this.views.page('Biedronka import', '', ''),
       importedJSON: raw,
     });
