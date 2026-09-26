@@ -4,6 +4,7 @@ import type { QuotedPrice } from '../../domain/price-stats.js';
 export type ProductConversion = {
   unitId: number;
   unitName: string;
+  compareValue: Decimal;
   factor: Decimal;
 };
 
@@ -13,6 +14,7 @@ export type Product = {
   ean: string;
   unitId: number;
   unitName: string;
+  compareValue: Decimal;
   imagePath: string | null;
   createdAt: string;
   conversions: ProductConversion[];

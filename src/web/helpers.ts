@@ -2,7 +2,7 @@ import { Decimal } from 'decimal.js';
 import hbs from 'hbs';
 import { extraQuotes } from '../domain/price-stats.js';
 import { formatBoughtOn, toDatetimeLocal } from '../domain/bought-on.js';
-import { formatMoney, formatQuantity } from '../domain/format.js';
+import { compareUnitLabel, formatMoney, formatQuantity, priceAtCompare } from '../domain/format.js';
 import type { Product, ProductConversion } from '#app/store/products';
 import type { QuotedPrice } from '../domain/price-stats.js';
 
@@ -52,6 +52,16 @@ export function registerHandlebarsHelpers(): void {
     const q = asDecimal(quantity);
     if (q.isZero()) return '—';
     return formatMoney(asDecimal(amount).div(q), currencySymbol);
+  });
+  hbs.registerHelper('perUnit', (price: Decimal | undefined, compareValue: Decimal, unitName: string) => {
+    if (!price) return '—';
+    return formatMoney(priceAtCompare(asDecimal(price), compareValue), currencySymbol) + ' / ' + compareUnitLabel(unitName ?? '', compareValue);
+  });
+  hbs.registerHelper('linePrice', (amount: Decimal, quantity: Decimal, compareValue: Decimal, unitName: string) => {
+    const q = asDecimal(quantity);
+    if (q.isZero()) return '—';
+    const price = asDecimal(amount).div(q);
+    return formatMoney(priceAtCompare(price, compareValue), currencySymbol) + ' / ' + compareUnitLabel(unitName ?? '', compareValue);
   });
   hbs.registerHelper('extraQuotes', (quote: QuotedPrice | null | undefined, product: Product) =>
     extraQuotes(quote, product),

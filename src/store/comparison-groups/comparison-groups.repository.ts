@@ -165,6 +165,7 @@ export class ComparisonGroupsRepository {
         ean: products.ean,
         unitId: products.unitId,
         unitName: units.name,
+        compareValue: units.compareValue,
         imagePath: products.imagePath,
         createdAt: products.createdAt,
       })

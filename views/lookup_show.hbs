@@ -21,7 +21,7 @@
   <section class="price-stats">
     {{#if quote}}
       <p class="eyebrow">{{priceEyebrow}}</p>
-      <p class="price-stat">{{money quote.price}} / {{product.unitName}}</p>
+      <p class="price-stat">{{perUnit quote.price product.compareValue product.unitName}}</p>
       {{#each extras}}
       <p class="promo-alt">{{money this.price}} / {{this.unitName}}</p>
       {{/each}}

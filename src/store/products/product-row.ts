@@ -1,3 +1,4 @@
+import { Decimal } from 'decimal.js';
 import type { Product } from './products.models.js';
 
 export type ProductRow = {
@@ -6,6 +7,7 @@ export type ProductRow = {
   ean: string;
   unitId: number;
   unitName: string;
+  compareValue: string;
   imagePath: string | null;
   createdAt: string;
 };
@@ -17,6 +19,7 @@ export function mapProduct(row: ProductRow): Product {
     ean: row.ean,
     unitId: row.unitId,
     unitName: row.unitName,
+    compareValue: new Decimal(row.compareValue),
     imagePath: row.imagePath,
     createdAt: row.createdAt,
     conversions: [],

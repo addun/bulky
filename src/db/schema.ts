@@ -20,6 +20,7 @@ export const units = sqliteTable(
   {
     id: integer('id').primaryKey(),
     name: text('name').notNull(),
+    compareValue: text('compare_value').notNull().default('1'),
   },
   (t) => [uniqueIndex('units_name').on(nocase(t.name))],
 );

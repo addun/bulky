@@ -3,6 +3,7 @@
 
 <form class="inline" method="post" action="/admin/units">
   <label class="grow">New unit <input name="name" required></label>
+  <label class="compare-field">Compare <input name="compare_value" required inputmode="decimal" value="1"></label>
   <button type="submit" class="btn btn-tag">Add unit</button>
 </form>
 
@@ -13,9 +14,9 @@
     {{#each units}}
     <li>
       <span class="unit-name">{{this.name}}</span>
-      <span class="meta">{{this.productCount}} product{{#if (ne this.productCount 1)}}s{{/if}}</span>
+      <span class="meta">compare {{qty this.compareValue}} · {{this.productCount}} product{{#if (ne this.productCount 1)}}s{{/if}}</span>
       <span class="tight">
-        <a href="/admin/units/{{this.id}}/edit">Rename</a>
+        <a href="/admin/units/{{this.id}}/edit">Edit</a>
         {{#if (eq this.productCount 0)}}
           <a class="danger" href="/admin/units/{{this.id}}/delete">Delete</a>
         {{/if}}

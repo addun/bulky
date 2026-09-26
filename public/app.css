@@ -632,6 +632,11 @@ label .hint {
   flex: 1;
 }
 
+.compare-field {
+  width: 8.5rem;
+  flex: none;
+}
+
 .preview {
   display: flex;
   gap: 1rem;

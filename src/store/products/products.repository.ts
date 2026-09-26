@@ -205,6 +205,7 @@ export class ProductsRepository {
       .select({
         unitId: productUnitConversions.unitId,
         unitName: units.name,
+        compareValue: units.compareValue,
         factor: productUnitConversions.factor,
       })
       .from(productUnitConversions)
@@ -212,7 +213,12 @@ export class ProductsRepository {
       .where(eq(productUnitConversions.productId, productId))
       .orderBy(nocaseOrder(units.name))
       .all()
-      .map((r) => ({ unitId: r.unitId, unitName: r.unitName, factor: new Decimal(r.factor) }));
+      .map((r) => ({
+        unitId: r.unitId,
+        unitName: r.unitName,
+        compareValue: new Decimal(r.compareValue),
+        factor: new Decimal(r.factor),
+      }));
   }
 
   getProductRow(id: number): Product {
@@ -290,6 +296,7 @@ export class ProductsRepository {
         ean: products.ean,
         unitId: products.unitId,
         unitName: units.name,
+        compareValue: units.compareValue,
         imagePath: products.imagePath,
         createdAt: products.createdAt,
       })
@@ -396,6 +403,7 @@ export class ProductsRepository {
         productId: productUnitConversions.productId,
         unitId: productUnitConversions.unitId,
         unitName: units.name,
+        compareValue: units.compareValue,
         factor: productUnitConversions.factor,
       })
       .from(productUnitConversions)
@@ -405,7 +413,12 @@ export class ProductsRepository {
     const byId = new Map<number, ProductConversion[]>();
     for (const r of rows) {
       const list = byId.get(r.productId) ?? [];
-      list.push({ unitId: r.unitId, unitName: r.unitName, factor: new Decimal(r.factor) });
+      list.push({
+        unitId: r.unitId,
+        unitName: r.unitName,
+        compareValue: new Decimal(r.compareValue),
+        factor: new Decimal(r.factor),
+      });
       byId.set(r.productId, list);
     }
     for (const it of items) it.conversions = byId.get(it.id) ?? [];
@@ -429,6 +442,7 @@ export class ProductsRepository {
         ean: products.ean,
         unitId: products.unitId,
         unitName: units.name,
+        compareValue: units.compareValue,
         imagePath: products.imagePath,
         createdAt: products.createdAt,
       })
@@ -443,6 +457,7 @@ export class ProductsRepository {
       ean: it.ean,
       unitId: it.unitId,
       unitName: it.unitName,
+      compareValue: it.compareValue,
       imagePath: it.imagePath,
       createdAt: it.createdAt,
       conversions: it.conversions,
@@ -485,9 +500,9 @@ export class ProductsRepository {
     const out: ProductConversion[] = [];
     for (const c of convs) {
       if (c.unitId === newUnitId) continue;
-      out.push({ unitId: c.unitId, unitName: c.unitName, factor: c.factor.div(factor) });
+      out.push({ unitId: c.unitId, unitName: c.unitName, compareValue: c.compareValue, factor: c.factor.div(factor) });
     }
-    out.push({ unitId: oldUnitId, unitName: '', factor: new Decimal(1).div(factor) });
+    out.push({ unitId: oldUnitId, unitName: '', compareValue: new Decimal(1), factor: new Decimal(1).div(factor) });
     return out;
   }
 

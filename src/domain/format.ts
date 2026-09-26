@@ -16,6 +16,15 @@ export function formatMoneyPerUnit(d: Decimal, symbol: string, unit: string): st
   return `${formatMoney(d, symbol)} / ${unit}`;
 }
 
+export function priceAtCompare(unitPrice: Decimal, compareValue: Decimal): Decimal {
+  return unitPrice.mul(compareValue);
+}
+
+export function compareUnitLabel(unitName: string, compareValue: Decimal): string {
+  if (compareValue.eq(1)) return unitName;
+  return `${formatQuantity(compareValue)} ${unitName}`;
+}
+
 export function formatGrouped(d: Decimal, places: number): string {
   let neg = d.isNegative();
   if (neg) d = d.abs();

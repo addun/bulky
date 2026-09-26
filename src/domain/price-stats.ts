@@ -1,5 +1,6 @@
 import { Decimal } from 'decimal.js';
 import { boughtOnDate } from './bought-on.js';
+import { compareUnitLabel, priceAtCompare } from './format.js';
 import type { Product, ProductConversion } from '../store/products/products.models.js';
 import type { Purchase } from '../store/purchases/purchases.models.js';
 
@@ -25,10 +26,19 @@ export type UnitQuote = {
 };
 
 export function unitQuotes(quote: QuotedPrice, p: Product): UnitQuote[] {
-  const out: UnitQuote[] = [{ unitName: p.unitName, price: quote.price }];
+  const out: UnitQuote[] = [
+    {
+      unitName: compareUnitLabel(p.unitName, p.compareValue),
+      price: priceAtCompare(quote.price, p.compareValue),
+    },
+  ];
   for (const c of p.conversions ?? []) {
     if (c.factor.isZero()) continue;
-    out.push({ unitName: c.unitName, price: quote.price.div(c.factor) });
+    const perOne = quote.price.div(c.factor);
+    out.push({
+      unitName: compareUnitLabel(c.unitName, c.compareValue),
+      price: priceAtCompare(perOne, c.compareValue),
+    });
   }
   return out;
 }

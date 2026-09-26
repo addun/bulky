@@ -50,7 +50,7 @@
         <p class="history-facts">
           {{#if this.storeId}}<span>{{at ../storeById this.storeId "name"}}</span>{{/if}}
           <span>{{qty this.quantity}} {{../product.unitName}}</span>
-          <span>{{unitPrice this.amount this.quantity}} / {{../product.unitName}}</span>
+          <span>{{linePrice this.amount this.quantity ../product.compareValue ../product.unitName}}</span>
         </p>
         <p class="history-foot">
           {{#if this.receiptId}}

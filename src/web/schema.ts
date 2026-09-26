@@ -88,6 +88,16 @@ export const nameForm = z.object({
   name: field.pipe(z.string().min(1, 'Name is required.')),
 });
 
+export const unitFields = z.object({
+  name: field,
+  compare_value: field,
+});
+
+export const unitForm = z.object({
+  name: field.pipe(z.string().min(1, 'Name is required.')),
+  compare_value: field,
+});
+
 export const settingsForm = z.object({
   ocr_model: field.pipe(z.string().min(1, 'AI model is required.')),
   piece_unit_id: field
