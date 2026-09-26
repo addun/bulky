@@ -92,7 +92,7 @@ export class CatalogController {
     const q = query.q;
     try {
       const items = this.products.listProducts(q);
-      this.views.html(res, 'index', 200, {
+      this.views.json(res, 200, {
         page: this.views.adminPage('Products', q, query.error),
         products: items.map(presentListItem),
         imported: query.imported,
@@ -134,7 +134,7 @@ export class CatalogController {
 
   private renderAdmin(res: Response, status: number, errMsg: string): void {
     try {
-      this.views.html(res, 'admin', status, {
+      this.views.json(res, status, {
         page: this.views.adminPage('Settings', '', errMsg),
         ocrModel: this.unitsStore.ocrModel(),
         units: this.unitsStore.listUnits(),
@@ -150,7 +150,7 @@ export class CatalogController {
   @Get('/admin/units')
   units(@Query({ schema: flashQuery }) query: { error: string }, @Res() res: Response): void {
     try {
-      this.views.html(res, 'units', 200, {
+      this.views.json(res, 200, {
         page: this.views.adminPage('Units', '', query.error),
         units: this.unitsStore.listUnits(),
       });
@@ -187,7 +187,7 @@ export class CatalogController {
   editUnit(@Param('id', { schema: id }) unitId: number, @Res() res: Response): void {
     try {
       const u = this.unitsStore.getUnit(unitId);
-      this.views.html(res, 'unit_form', 200, {
+      this.views.json(res, 200, {
         page: this.views.adminPage('Edit unit', '', ''),
         unit: u,
         compareInput: '',
@@ -205,7 +205,7 @@ export class CatalogController {
     const compare = readCompareValue(fields.compare_value);
     const draft = { id: unitId, name: fields.name, compareValue: compare.value ?? new Decimal(1), productCount: 0 };
     if (!parsed.success) {
-      this.views.html(res, 'unit_form', 422, {
+      this.views.json(res, 422, {
         page: this.views.adminPage('Edit unit', '', formIssue(parsed.error)),
         unit: draft,
         compareInput: fields.compare_value,
@@ -213,7 +213,7 @@ export class CatalogController {
       return;
     }
     if (compare.error || !compare.value) {
-      this.views.html(res, 'unit_form', 422, {
+      this.views.json(res, 422, {
         page: this.views.adminPage('Edit unit', '', compare.error),
         unit: draft,
         compareInput: fields.compare_value,
@@ -226,7 +226,7 @@ export class CatalogController {
     } catch (err) {
       if (err instanceof NotFoundError) return this.views.text(res, 404, 'not found');
       if (err instanceof DuplicateError) {
-        this.views.html(res, 'unit_form', 422, {
+        this.views.json(res, 422, {
           page: this.views.adminPage('Edit unit', '', 'That unit already exists.'),
           unit: draft,
           compareInput: fields.compare_value,
@@ -248,7 +248,7 @@ export class CatalogController {
         );
         return;
       }
-      this.views.html(res, 'confirm', 200, {
+      this.views.json(res, 200, {
         page: this.views.adminPage('Delete unit', '', ''),
         title: `Delete unit “${u.name}”?`,
         body: 'This only removes the unit from the list. No products use it.',
@@ -282,7 +282,7 @@ export class CatalogController {
   @Get('/admin/retail-chains')
   retailChains(@Query({ schema: flashQuery }) query: { error: string }, @Res() res: Response): void {
     try {
-      this.views.html(res, 'retail_chains', 200, {
+      this.views.json(res, 200, {
         page: this.views.adminPage('Retail chains', '', query.error),
         retailChains: this.locations.listRetailChains().map(presentChain),
       });
@@ -359,7 +359,7 @@ export class CatalogController {
         );
         return;
       }
-      this.views.html(res, 'confirm', 200, {
+      this.views.json(res, 200, {
         page: this.views.adminPage('Delete retail chain', '', ''),
         title: `Delete retail chain “${c.name}”?`,
         body: 'This only removes the chain from the list. No stores use it.',
@@ -398,7 +398,7 @@ export class CatalogController {
     isNew: boolean,
     errMsg: string,
   ): void {
-    this.views.html(res, 'retail_chain_form', status, {
+    this.views.json(res, status, {
       page: this.views.adminPage(isNew ? 'Add retail chain' : 'Edit retail chain', '', errMsg),
       retailChain: presentChain(chain),
       new: isNew,
@@ -410,7 +410,7 @@ export class CatalogController {
   @Get('/admin/stores')
   stores(@Query({ schema: flashQuery }) query: { error: string }, @Res() res: Response): void {
     try {
-      this.views.html(res, 'stores', 200, {
+      this.views.json(res, 200, {
         page: this.views.adminPage('Stores', '', query.error),
         stores: this.locations.listStores().map(presentStore),
       });
@@ -517,7 +517,7 @@ export class CatalogController {
         );
         return;
       }
-      this.views.html(res, 'confirm', 200, {
+      this.views.json(res, 200, {
         page: this.views.adminPage('Delete store', '', ''),
         title: `Delete store “${co.name}”?`,
         body: 'This only removes the store from the list. No purchases use it.',
@@ -589,7 +589,7 @@ export class CatalogController {
         return;
       }
       const plan = this.locations.mergePlan(intoID, storeId);
-      this.views.html(res, 'store_merge_confirm', 200, {
+      this.views.json(res, 200, {
         page: this.views.adminPage('Merge ' + plan.from.name, '', ''),
         plan: { ...plan, into: presentStore(plan.into), from: presentStore(plan.from) },
       });
@@ -647,7 +647,7 @@ export class CatalogController {
 
   private renderStoreMergeForm(res: Response, status: number, store: Store, intoID: number, errMsg: string): void {
     const targets = this.locations.listStores().filter((s) => s.id !== store.id).map(presentStore);
-    this.views.html(res, 'store_merge', status, {
+    this.views.json(res, status, {
       page: this.views.adminPage('Merge ' + store.name, '', errMsg),
       store: presentStore(store),
       targets,
@@ -657,7 +657,7 @@ export class CatalogController {
 
   private renderStoreForm(res: Response, status: number, co: Store, isNew: boolean, errMsg: string, next: string): void {
     try {
-      this.views.html(res, 'store_form', status, {
+      this.views.json(res, status, {
         page: this.views.adminPage(isNew ? 'Add store' : 'Edit store', '', errMsg),
         store: presentStore(co),
         retailChains: this.locations.listRetailChains().map(presentChain),
@@ -678,7 +678,7 @@ export class CatalogController {
       let filter: Product | null = null;
       if (productID > 0) filter = this.products.getProduct(productID);
       const list = filter ? this.aliasesStore.listAliasesByProduct(filter.id) : this.aliasesStore.listAliases();
-      this.views.html(res, 'aliases', 200, {
+      this.views.json(res, 200, {
         page: this.views.adminPage('Aliases', '', query.error),
         aliases: list.map(presentAlias),
         filter: filter,
@@ -806,7 +806,7 @@ export class CatalogController {
       let action = `/admin/aliases/${aliasId}/delete`;
       const q = aliasesQuerySuffix(from);
       if (q) action += q;
-      this.views.html(res, 'confirm', 200, {
+      this.views.json(res, 200, {
         page: this.views.adminPage(`Delete alias “${a.alias}”?`, '', ''),
         title: `Delete alias “${a.alias}”?`,
         body: 'This only removes the alternate name. The product stays.',
@@ -853,7 +853,7 @@ export class CatalogController {
     isNew: boolean,
     errMsg: string,
   ): void {
-    this.views.html(res, 'alias_form', status, {
+    this.views.json(res, status, {
       page: this.views.adminPage(isNew ? 'Add alias' : 'Edit alias', '', errMsg),
       alias: presentAlias(a),
       products: lookups.products,
@@ -877,7 +877,7 @@ export class CatalogController {
   @Get('/admin/comparison-groups')
   comparisonGroups(@Query({ schema: flashQuery }) query: { error: string }, @Res() res: Response): void {
     try {
-      this.views.html(res, 'comparison_groups', 200, {
+      this.views.json(res, 200, {
         page: this.views.adminPage('Comparison groups', '', query.error),
         groups: this.groups.listComparisonGroups(),
       });
@@ -961,7 +961,7 @@ export class CatalogController {
   confirmDeleteComparisonGroup(@Param('id', { schema: id }) groupId: number, @Res() res: Response): void {
     try {
       const g = this.groups.getComparisonGroup(groupId);
-      this.views.html(res, 'confirm', 200, {
+      this.views.json(res, 200, {
         page: this.views.adminPage('Delete comparison group', '', ''),
         title: `Delete comparison group “${g.name}”?`,
         body: 'Products stay in the catalog. They just leave this group.',
@@ -996,7 +996,7 @@ export class CatalogController {
   ): void {
     try {
       const selectedSet = new Set(selected);
-      this.views.html(res, 'comparison_group_form', status, {
+      this.views.json(res, status, {
         page: this.views.adminPage(isNew ? 'Add comparison group' : 'Edit comparison group', '', errMsg),
         group: g,
         units: this.unitsStore.listUnits(),
@@ -1013,7 +1013,7 @@ export class CatalogController {
   @Get('/admin/products/new')
   newProduct(@Res() res: Response): void {
     try {
-      this.views.html(res, 'product_form', 200, {
+      this.views.json(res, 200, {
         page: this.views.adminPage('Add product', '', ''),
         units: this.unitsStore.listUnits(),
         groups: this.comparisonGroupOptions([]),
@@ -1036,7 +1036,7 @@ export class CatalogController {
       const purchases = this.purchases.listPurchases(productId);
       const stores = this.locations.listStores();
       const groups = this.groups.listComparisonGroupsForProduct(productId);
-      this.views.html(res, 'product_show', 200, {
+      this.views.json(res, 200, {
         page: this.views.adminPage(p.name, '', query.error),
         product: presentProduct(p),
         purchases: purchases.map(presentPurchase),
@@ -1054,7 +1054,7 @@ export class CatalogController {
     try {
       const p = this.products.getProduct(productId);
       const selected = this.groups.listComparisonGroupsForProduct(productId).map((g) => g.id);
-      this.views.html(res, 'product_form', 200, {
+      this.views.json(res, 200, {
         page: this.views.adminPage('Edit ' + p.name, '', ''),
         units: this.unitsStore.listUnits(),
         groups: this.comparisonGroupOptions(selected),
@@ -1111,7 +1111,7 @@ export class CatalogController {
       /* ignore */
     }
     const renderErr = (msg: string, p: Product) => {
-      this.views.html(res, 'product_form', 422, {
+      this.views.json(res, 422, {
         page: this.views.adminPage(productId === 0 ? 'Add product' : 'Edit product', '', msg),
         units: this.unitsStore.listUnits(),
         groups: this.comparisonGroupOptions(groupIDs),
@@ -1219,7 +1219,7 @@ export class CatalogController {
   private renderChangeUnit(res: Response, status: number, p: Product, newUnitID: number, errMsg: string): void {
     try {
       const buys = this.purchases.listPurchases(p.id);
-      this.views.html(res, 'product_change_unit', status, {
+      this.views.json(res, status, {
         page: this.views.adminPage('Change unit for ' + p.name, '', errMsg),
         product: presentProduct(p),
         newUnitId: newUnitID,
@@ -1273,7 +1273,7 @@ export class CatalogController {
         return;
       }
       const plan = this.products.mergePlan(intoID, productId);
-      this.views.html(res, 'product_merge_confirm', 200, {
+      this.views.json(res, 200, {
         page: this.views.adminPage('Merge ' + plan.from.name, '', ''),
         plan: { ...plan, into: presentProduct(plan.into), from: presentProduct(plan.from) },
       });
@@ -1332,7 +1332,7 @@ export class CatalogController {
 
   private renderMergeForm(res: Response, status: number, p: Product, intoID: number, errMsg: string): void {
     const items = this.products.listProducts('').filter((it) => it.id !== p.id);
-    this.views.html(res, 'product_merge', status, {
+    this.views.json(res, status, {
       page: this.views.adminPage('Merge ' + p.name, '', errMsg),
       product: presentProduct(p),
       targets: items,
@@ -1344,7 +1344,7 @@ export class CatalogController {
   confirmDeleteProduct(@Param('id', { schema: id }) productId: number, @Res() res: Response): void {
     try {
       const p = this.products.getProduct(productId);
-      this.views.html(res, 'confirm', 200, {
+      this.views.json(res, 200, {
         page: this.views.adminPage('Delete ' + p.name, '', ''),
         title: `Delete ${p.name}?`,
         body: 'This removes the product and every purchase and price recorded for it. The unit stays.',
@@ -1471,7 +1471,7 @@ export class CatalogController {
         p.kind === 'price'
           ? 'The product stays. Only this price is removed from the history.'
           : 'The product stays. Only this buy is removed from the history.';
-      this.views.html(res, 'confirm', 200, {
+      this.views.json(res, 200, {
         page: this.views.adminPage('Delete ' + noun, '', ''),
         title: `Delete this ${noun} of ${prod.name}?`,
         body: body,
@@ -1518,7 +1518,7 @@ export class CatalogController {
   ): void {
     let title = 'Add new purchase';
     if (!isNew) title = p.kind === 'price' ? 'Edit price' : 'Edit purchase';
-    this.views.html(res, 'purchase_form', status, {
+    this.views.json(res, status, {
       page: this.views.adminPage(title, '', errMsg),
       product: presentProduct(prod),
       purchase: presentPurchase(p),

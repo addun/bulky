@@ -2,13 +2,46 @@
 
 A local log of products you buy in bulk: quantity, price in PLN, and a running history.
 
-## Run with Docker
+The repo is a pnpm workspace:
+
+- `apps/api` — NestJS JSON API, SQLite, OCR, and MCP
+- `apps/web` — SvelteKit UI with Tailwind CSS
+
+## Develop
+
+Needs Node 22+ and pnpm 11 (`corepack enable`).
+
+```bash
+pnpm install
+pnpm dev
+```
+
+The API listens on [http://127.0.0.1:8080](http://127.0.0.1:8080). The UI listens on [http://localhost:5173](http://localhost:5173) and proxies `/api`, `/images`, and `/mcp` to the API.
+
+`pnpm build` builds both packages. `pnpm start` runs the built API. Seed fake catalog data with `pnpm seed` (see `apps/api/src/seed/cli.ts` for flags such as `--clamp-prices`). Generate Drizzle migrations with `pnpm db:generate`.
+
+Optional environment (read by the API):
+
+| Variable          | Default                    | Meaning                                      |
+| ----------------- | -------------------------- | -------------------------------------------- |
+| `DATA_DIR`        | `./data`                   | SQLite file and `images/`, relative to the API process |
+| `ADDR`            | `:8080`                    | Listen address                               |
+| `CURRENCY`        | `PLN`                      | Label only                                   |
+| `CURRENCY_SYMBOL` | `zł`                       | Shown next to amounts                        |
+| `OCR_API_KEY`     |                            | API key for the bill reader (`OPENAI_API_KEY` is also accepted) |
+| `OCR_BASE_URL`    | `https://api.openai.com/v1` | OpenAI-compatible base URL (Ollama, etc.)   |
+
+The Svelte app is a shell: home search calls `GET /api/products/suggestions.json`. Admin, receipt, and Biedronka screens are not ported yet. Those operations still exist as JSON on the API. Receipt and product files are served from `/images/`.
+
+**Scan a bill** and **Moja Biedronka** still run through the API (upload, OCR, import). Docker includes Poppler so PDFs can be rasterized; locally, install the same with `brew install poppler`. The Chrome helper remains at `extensions/biedronka`.
+
+## Run the API with Docker
 
 ```bash
 docker compose up --build
 ```
 
-The image includes Poppler so PDFs can be turned into page images for the vision model. Locally, install the same with `brew install poppler`.
+Compose publishes the API on port 8080. It does not serve the website. Data (SQLite + product photos) lives in the `bulkly-data` volume.
 
 Published images from GitHub Releases go to the [GitHub Container Registry](https://ghcr.io) as `ghcr.io/<owner>/<repo>` (linux/amd64):
 
@@ -26,42 +59,9 @@ Create a GitHub Release whose tag is a semantic version starting with `v` (`v1.0
 
 No extra secrets: the workflow authenticates with `GITHUB_TOKEN`. After the first push, the package appears on the repo’s **Packages** tab. For a public repo the image is public; for a private repo, `docker login ghcr.io` with a PAT that has `read:packages`.
 
-Open [http://localhost:8080](http://localhost:8080).
-
-Data (SQLite + product photos) lives in the `bulkly-data` volume.
-
-## Without Docker
-
-Needs Node 22+:
-
-```bash
-npm install --legacy-peer-deps
-npm run build
-npm start
-```
-
-Or `npm run start:dev` while developing. Seed fake catalog data with `npm run seed` (see `src/seed/cli.ts` for flags such as `--clamp-prices`).
-
-Optional environment:
-
-| Variable          | Default                    | Meaning                                      |
-| ----------------- | -------------------------- | -------------------------------------------- |
-| `DATA_DIR`        | `./data`                   | SQLite file and `images/`                    |
-| `ADDR`            | `:8080`                    | Listen address                               |
-| `CURRENCY`        | `PLN`                      | Label only                                   |
-| `CURRENCY_SYMBOL` | `zł`                       | Shown next to amounts                        |
-| `OCR_API_KEY`     |                            | API key for the bill reader (`OPENAI_API_KEY` is also accepted) |
-| `OCR_BASE_URL`    | `https://api.openai.com/v1` | OpenAI-compatible base URL (Ollama, etc.)   |
-
-**Scan a bill:** open [http://localhost:8080/admin/receipts](http://localhost:8080/admin/receipts) and upload a photo or a PDF of a receipt. That stores the file, creates a `receipts` row, and reads the bill in the background. Open the receipt (or refresh it) to see whether it is still reading, failed, or ready to confirm. Confirm or edit the product list to migrate those lines into purchases; the receipt status then becomes `migrated`. **Delete receipt** asks for confirmation, then removes the bill, its purchases, and any product that has no other buys left. For OpenAI, set `OCR_API_KEY`. Set the model on **Admin** (`/admin`); photos and PDFs both use that name as images (PDFs are rasterized with `pdftoppm`). Docker includes Poppler; locally you also need `brew install poppler`. For a local OpenAI-compatible server (for example Ollama), set `OCR_BASE_URL` to that server’s `/v1` endpoint and pick a model on **Admin**.
-
-**Moja Biedronka:** open [http://localhost:8080/imports/biedronka](http://localhost:8080/imports/biedronka), sign in, then import bills. Each e-paragon is saved as purchases immediately. Open the receipt to change products or the visit. Already imported transaction ids are skipped. Loyalty tokens stay in the browser tab, not in SQLite. The page talks only to Bulkly; Bulkly calls Biedronka.
-
-After SMS (or if you are already signed in), Moja Biedronka redirects to `app://cma20.biedronka.pl?code=…`, which the browser cannot open. Load the unpacked helper in Chrome, Edge, Brave, or Arc: `chrome://extensions` → Developer mode → Load unpacked → `extensions/biedronka` in this repo, then refresh the import page. The helper fills the redirect field; click **Finish sign-in**. It matches port 8080 on localhost or 127.0.0.1, and `shop.home.arpa` / `shop.piekna2.pl` on http or https. Without it, paste the `app://` address. The first page of bills loads after sign-in; **Load more** fetches older bills. **Import** / **Import all** save new bills.
-
 ## MCP
 
-The web app serves Streamable HTTP MCP at `/mcp` on the same port as the UI. It is open: no token.
+The API serves Streamable HTTP MCP at `/mcp` on port 8080. It is open: no token. The Vite dev server proxies that path.
 
 Catalog names are Polish. The `best_price` tool searches product names and aliases; if an English query misses, ask again with a Polish translation.
 
