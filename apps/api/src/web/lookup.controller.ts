@@ -3,7 +3,7 @@ import type { Response } from 'express';
 import { ComparisonGroupsRepository } from '#app/store/comparison-groups';
 import { ProductsRepository, type ProductQuote } from '#app/store/products';
 import { PurchasesRepository, type Purchase } from '#app/store/purchases';
-import { compareUnitLabel, formatMoneyPerUnit, priceAtCompare } from '../domain/format.js';
+import { compareUnitLabel, formatMoney, formatMoneyPerUnit, priceAtCompare } from '../domain/format.js';
 import { bestRecentPrice, pricesBetween } from '../domain/price-stats.js';
 import { boughtOnDate } from '../domain/bought-on.js';
 import { ViewsService } from './views.service.js';
@@ -29,7 +29,7 @@ export class LookupController {
       const popularItems = this.loadPopular();
       const popular = this.presentCards(popularItems);
       const products = q ? this.presentCards(this.loadSuggestions(q)) : popular;
-      this.views.json(res, 200, {
+      this.views.html(res, 'lookup', 200, {
         page: this.views.page('Czy to promka', q, ''),
         query: q,
         mode: q ? 'search' : 'popular',
@@ -41,11 +41,41 @@ export class LookupController {
     }
   }
 
+  @Get('/api/lookup.json')
+  lookupJSON(@Query({ schema: qQuery }) query: { q: string }, @Res() res: Response): void {
+    const q = query.q;
+    try {
+      const items = q ? this.loadSuggestions(q) : this.loadPopular();
+      res.json({
+        query: q,
+        mode: q ? 'search' : 'popular',
+        products: this.toViewCards(this.presentCards(items)),
+      });
+    } catch {
+      this.views.text(res, 500, 'could not search products');
+    }
+  }
+
   @Get('/api/products/suggestions.json')
   suggestionsJSON(@Query({ schema: qQuery }) query: { q: string }, @Res() res: Response): void {
     try {
       const items = this.loadSuggestions(query.q);
       res.json(this.toSuggestItems(items));
+    } catch {
+      this.views.text(res, 500, 'could not search products');
+    }
+  }
+
+  @Get('/api/products/suggestions.html')
+  suggestionsHTML(@Query({ schema: qQuery }) query: { q: string }, @Res() res: Response): void {
+    const q = query.q;
+    try {
+      const items = q ? this.loadSuggestions(q) : this.loadPopular();
+      this.views.html(res, 'lookup_suggestions', 200, {
+        query: q,
+        mode: q ? 'search' : 'popular',
+        products: this.presentCards(items),
+      });
     } catch {
       this.views.text(res, 500, 'could not search products');
     }
@@ -66,7 +96,7 @@ export class LookupController {
         price: priceAtCompare(pt.price, p.compareValue).toString(),
       }));
       const related = this.groups.relatedGroupProducts(productId, now);
-      this.views.json(res, 200, {
+      this.views.html(res, 'lookup_show', 200, {
         page: this.views.page(p.name, '', ''),
         ...presentProductPage(p, purchases, bestRecentPrice(purchases, now), points),
         chartJSON: JSON.stringify(rows),
@@ -97,6 +127,32 @@ export class LookupController {
   private presentCards(items: ProductQuote[]) {
     const byProduct = groupPurchases(this.purchases.listPurchasesForProductIDs(items.map((it) => it.product.id)));
     return items.map((it) => presentPromoCard(it.product, it.quote, byProduct.get(it.product.id) ?? []));
+  }
+
+  private toViewCards(cards: Array<ReturnType<typeof presentPromoCard>>) {
+    const symbol = this.views.symbol;
+    return cards.map((card) => {
+      const product = card.product;
+      return {
+        id: product.id,
+        name: product.name,
+        image: product.imagePath && product.imagePath.trim() !== '' ? `/images/${product.imagePath}` : '',
+        tint: card.tint,
+        initial: card.initial,
+        now: card.current
+          ? formatMoneyPerUnit(
+              priceAtCompare(card.current, product.compareValue),
+              symbol,
+              compareUnitLabel(product.unitName, product.compareValue),
+            )
+          : '',
+        extras: card.extras.map((extra) => ({
+          price: formatMoney(extra.price, symbol),
+          unitName: extra.unitName,
+        })),
+        priceNote: card.priceNote,
+      };
+    });
   }
 
   private toSuggestItems(items: ReturnType<ProductsRepository['searchProductQuotes']>) {

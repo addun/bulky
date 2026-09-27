@@ -16,5 +16,18 @@ services:
     volumes:
       - bulkly-data:/data
 
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      API_ORIGIN: http://api:8080
+      PORT: "3000"
+      HOST: 0.0.0.0
+    depends_on:
+      - api
+
 volumes:
   bulkly-data:
