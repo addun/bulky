@@ -84,7 +84,7 @@ export class ReceiptsController {
       this.views.text(res, 500, 'could not load receipts');
       return;
     }
-    this.views.json(res, 200, {
+    this.views.html(res, 'receipt_duplicates', 200, {
       page: this.views.adminPage('Duplicate receipts', '', ''),
       groups: groups.map((g) => ({
         shopName: g.shopName,
@@ -322,7 +322,7 @@ export class ReceiptsController {
       receipt.status === RECEIPT_MIGRATED
         ? 'This removes the receipt and every purchase saved from this bill. Products with no other buys left are removed too.'
         : 'This removes the scan and the stored photo. Nothing has been saved as purchases yet.';
-    this.views.json(res, 200, {
+    this.views.html(res, 'confirm', 200, {
       page: this.views.adminPage('Delete receipt', '', ''),
       title: 'Delete this receipt?',
       body,
@@ -534,7 +534,7 @@ export class ReceiptsController {
       this.views.text(res, 500, 'could not load settings');
       return;
     }
-    this.views.json(res, status, {
+    this.views.html(res, 'receipts', status, {
       page: this.views.adminPage('Receipts', '', errMsg),
       configured: this.ocr.configured(),
       model: model,
@@ -551,7 +551,7 @@ export class ReceiptsController {
     stores: Store[],
     errMsg: string,
   ): void {
-    this.views.json(res, status, {
+    this.views.html(res, 'receipt_review', status, {
       page: this.views.adminPage('Confirm bill', '', errMsg),
       view: view,
       products: products,
@@ -562,7 +562,7 @@ export class ReceiptsController {
 
   private renderReceiptStatus(res: Response, status: number, receipt: Receipt, errMsg: string): void {
     const reading = receipt.status === RECEIPT_PENDING;
-    this.views.json(res, status, {
+    this.views.html(res, 'receipt_status', status, {
       page: this.views.adminPage('Receipt', '', errMsg, reading ? 3 : 0),
       receipt: presentReceipt(receipt),
     });
@@ -584,7 +584,7 @@ export class ReceiptsController {
       return;
     }
     const { boughtOn, notes, store } = receiptVisitFacts(receipt, buys, stores);
-    this.views.json(res, status, {
+    this.views.html(res, 'receipt_show', status, {
       page: this.views.adminPage('Receipt', '', errMsg),
       receipt: presentReceipt(receipt),
       purchases: buys,
@@ -622,7 +622,7 @@ export class ReceiptsController {
       boughtOn = facts.boughtOn;
       storeID = facts.store.id;
     }
-    this.views.json(res, status, {
+    this.views.html(res, 'receipt_edit', status, {
       page: this.views.adminPage('Edit visit', '', errMsg),
       receipt: presentReceipt(receipt),
       boughtOn: boughtOn,

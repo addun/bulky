@@ -18,7 +18,7 @@ export class StoreImportsController {
 
   @Get('/admin/retail-chains/imports')
   list(@Query({ schema: flashQuery }) query: { error: string }, @Res() res: Response): void {
-    this.views.json(res, 200, {
+    this.views.html(res, 'retail_chain_imports', 200, {
       page: this.views.adminPage('Imports', '', query.error),
       importers: [
         {
@@ -91,7 +91,7 @@ export class StoreImportsController {
     result: (StoreImportResult & { skipped: number; total: number }) | null,
   ): void {
     try {
-      this.views.json(res, status, {
+      this.views.html(res, 'retail_chain_import_biedronka', status, {
         page: this.views.adminPage('Import Biedronka shops', '', errMsg),
         retailChains: this.locations.listRetailChains().map(presentChain),
         retailChainId: chainId,

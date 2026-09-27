@@ -7,7 +7,6 @@ node_modules
 dist
 build
 .svelte-kit
-apps/web
 *.tsbuildinfo
 *.db
 .DS_Store

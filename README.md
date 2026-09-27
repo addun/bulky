@@ -4,8 +4,8 @@ A local log of products you buy in bulk: quantity, price in PLN, and a running h
 
 The repo is a pnpm workspace:
 
-- `apps/api` — NestJS JSON API, SQLite, OCR, and MCP
-- `apps/web` — SvelteKit UI with Tailwind CSS
+- `apps/api` — NestJS. Still serves the Handlebars UI, plus JSON, SQLite, OCR, and MCP
+- `apps/web` — SvelteKit UI with Tailwind CSS. Pages move here one at a time
 
 ## Develop
 
@@ -16,7 +16,7 @@ pnpm install
 pnpm dev
 ```
 
-The API listens on [http://127.0.0.1:8080](http://127.0.0.1:8080). The UI listens on [http://localhost:5173](http://localhost:5173) and proxies `/api`, `/images`, and `/mcp` to the API.
+The current UI listens on [http://127.0.0.1:8080](http://127.0.0.1:8080). The Svelte app listens on [http://localhost:5173](http://localhost:5173) and proxies `/api`, `/images`, and `/mcp` to the API.
 
 `pnpm build` builds both packages. `pnpm start` runs the built API. Seed fake catalog data with `pnpm seed` (see `apps/api/src/seed/cli.ts` for flags such as `--clamp-prices`). Generate Drizzle migrations with `pnpm db:generate`.
 
@@ -31,17 +31,17 @@ Optional environment (read by the API):
 | `OCR_API_KEY`     |                            | API key for the bill reader (`OPENAI_API_KEY` is also accepted) |
 | `OCR_BASE_URL`    | `https://api.openai.com/v1` | OpenAI-compatible base URL (Ollama, etc.)   |
 
-The Svelte app is a shell: home search calls `GET /api/products/suggestions.json`. Admin, receipt, and Biedronka screens are not ported yet. Those operations still exist as JSON on the API. Receipt and product files are served from `/images/`.
+Handlebars screens stay on port 8080 until each one is ported. The Svelte home page uses the same layout and calls `GET /api/lookup.json`. Receipt and product files are served from `/images/`.
 
-**Scan a bill** and **Moja Biedronka** still run through the API (upload, OCR, import). Docker includes Poppler so PDFs can be rasterized; locally, install the same with `brew install poppler`. The Chrome helper remains at `extensions/biedronka`.
+**Scan a bill:** open [http://localhost:8080/admin/receipts](http://localhost:8080/admin/receipts). **Moja Biedronka:** open [http://localhost:8080/imports/biedronka](http://localhost:8080/imports/biedronka). Docker includes Poppler so PDFs can be rasterized; locally, install the same with `brew install poppler`. The Chrome helper remains at `extensions/biedronka`.
 
-## Run the API with Docker
+## Run with Docker
 
 ```bash
 docker compose up --build
 ```
 
-Compose publishes the API on port 8080. It does not serve the website. Data (SQLite + product photos) lives in the `bulkly-data` volume.
+Compose publishes the Svelte app on [http://localhost:3000](http://localhost:3000) and the API plus the Handlebars UI on [http://localhost:8080](http://localhost:8080). The Svelte container forwards `/api`, images, static files, and pages that are not ported yet to the API. Data (SQLite + product photos) lives in the `bulkly-data` volume.
 
 Published images from GitHub Releases go to the [GitHub Container Registry](https://ghcr.io) as `ghcr.io/<owner>/<repo>` (linux/amd64):
 
