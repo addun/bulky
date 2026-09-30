@@ -7,6 +7,7 @@ import { alias } from 'drizzle-orm/sqlite-core';
 import type { z } from 'zod';
 import { nocaseOrder } from '../../../db/query.js';
 import { productAliases, products, purchases, units } from '../../../db/schema.js';
+import { fromGrosze } from '../../../domain/money.js';
 import { quotesByProduct, type QuotedPrice } from '../../../domain/price-stats.js';
 import { KIND_PURCHASE, type Purchase, type PurchaseKind } from '../../../store/purchases/purchases.models.js';
 import { type GetAdminProductsRequest } from './contract/request.js';
@@ -134,7 +135,7 @@ export class AdminProductsHandler {
         ...row,
         kind: row.kind as PurchaseKind,
         quantity: new Decimal(row.quantity),
-        amount: new Decimal(row.amount),
+        amount: fromGrosze(row.amount),
       }));
   }
 

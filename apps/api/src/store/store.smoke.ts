@@ -42,17 +42,22 @@ function assertMigrationCleanup(db: DatabaseService): void {
 
   const rows = db.sqlite.prepare(`SELECT id FROM "__drizzle_migrations" ORDER BY created_at`).all() as Array<{ id: number | null }>;
   if (
-    rows.length !== 7 ||
+    rows.length !== 8 ||
     rows[0]!.id !== 1 ||
     rows[1]!.id !== 2 ||
     rows[2]!.id !== 3 ||
     rows[3]!.id !== 4 ||
     rows[4]!.id !== 5 ||
     rows[5]!.id !== 6 ||
-    rows[6]!.id !== 7
+    rows[6]!.id !== 7 ||
+    rows[7]!.id !== 8
   ) {
     throw new Error(`drizzle ids: ${JSON.stringify(rows)}`);
   }
+  const amountCol = (db.sqlite.prepare(`PRAGMA table_info("purchases")`).all() as Array<{ name: string; type: string }>).find(
+    (c) => c.name === 'amount',
+  );
+  if (!amountCol || amountCol.type.toLowerCase() !== 'integer') throw new Error(`purchase amount type: ${amountCol?.type}`);
   const receiptCols = (db.sqlite.prepare(`PRAGMA table_info("receipts")`).all() as Array<{ name: string }>).map((c) => c.name);
   if (receiptCols.includes('source_payload')) throw new Error('source_payload should be dropped');
   if (!receiptCols.includes('raw_response')) throw new Error('raw_response should remain');
@@ -234,7 +239,15 @@ function runStoreSmoke(): void {
       null,
       [{ unitId: g.id, unitName: 'g', compareValue: new Decimal(1), factor: new Decimal(1000) }],
     );
-    repos.purchases.createPurchase(flour.id, store.id, '2026-01-15 12:00', new Decimal('2.5'), new Decimal('12.50'), KIND_PURCHASE);
+    const flourBuy = repos.purchases.createPurchase(flour.id, store.id, '2026-01-15 12:00', new Decimal('2.5'), new Decimal('12.50'), KIND_PURCHASE);
+    const storedAmount = db.sqlite.prepare(`SELECT amount, typeof(amount) AS t FROM purchases WHERE id = ?`).get(flourBuy.id) as {
+      amount: number;
+      t: string;
+    };
+    if (storedAmount.amount !== 1250 || storedAmount.t !== 'integer') {
+      throw new Error(`stored amount: ${storedAmount.amount} ${storedAmount.t}`);
+    }
+    if (!flourBuy.amount.eq('12.50')) throw new Error(`loaded amount: ${flourBuy.amount.toString()}`);
     const flourAlias = repos.aliases.createAlias(flour.id, store.id, null, 'Maka Tortowa');
     if (flourAlias.alias !== 'MakaTortowa') throw new Error(`alias stored with spaces: ${flourAlias.alias}`);
 
@@ -276,7 +289,9 @@ function runStoreSmoke(): void {
     repos.products.deleteProduct(oats.id);
 
     const items = repos.products.listProducts('');
-    if (items.length !== 1 || items[0]!.purchaseCount !== 1) throw new Error('product list stats');
+    if (items.length !== 1 || items[0]!.purchaseCount !== 1 || !items[0]!.lifetimeAmount.eq('12.50')) {
+      throw new Error(`product list stats: ${items[0]?.lifetimeAmount.toString()}`);
+    }
     if (!items[0]!.quote) throw new Error('quote missing');
 
     const group = repos.groups.createComparisonGroup('Flour', kg.id, [flour.id]);
@@ -567,8 +582,93 @@ function runDrizzleIdRepairSmoke(): void {
   }
 }
 
+function applyMigrationFile(db: Database.Database, file: string): void {
+  const sql = readFileSync(join(import.meta.dirname, '../db/migrations', file), 'utf8');
+  for (const stmt of sql.split('--> statement-breakpoint')) {
+    const trimmed = stmt.trim();
+    if (trimmed !== '') db.exec(trimmed);
+  }
+}
+
+function assertAmountGroszeMigration(): void {
+  const dir = mkdtempSync(join(tmpdir(), 'bulkly-grosze-'));
+  const raw = new Database(join(dir, 'bulkly.db'));
+  try {
+    raw.exec(`
+      CREATE TABLE purchases (
+        id integer PRIMARY KEY NOT NULL,
+        product_id integer NOT NULL,
+        store_id integer,
+        bought_on text NOT NULL,
+        quantity text NOT NULL,
+        amount text NOT NULL,
+        created_at text NOT NULL,
+        kind text DEFAULT 'purchase' NOT NULL,
+        receipt_id integer
+      );
+    `);
+    const insert = raw.prepare(
+      `INSERT INTO purchases (id, product_id, bought_on, quantity, amount, created_at) VALUES (?, 1, '2026-01-01', '1', ?, '2026-01-01')`,
+    );
+    const samples: Array<[string, number]> = [
+      ['10.45', 1045],
+      ['5', 500],
+      ['4.5', 450],
+      ['0.05', 5],
+      ['12.50', 1250],
+      ['0', 0],
+      ['8.00', 800],
+    ];
+    samples.forEach(([text], i) => insert.run(i + 1, text));
+    applyMigrationFile(raw, '0007_amount_grosze.sql');
+    const rows = raw.prepare(`SELECT id, amount, typeof(amount) AS t FROM purchases ORDER BY id`).all() as Array<{
+      id: number;
+      amount: number;
+      t: string;
+    }>;
+    if (rows.length !== samples.length) throw new Error(`converted rows: ${rows.length}`);
+    for (const [i, [, grosze]] of samples.entries()) {
+      const row = rows[i]!;
+      if (row.amount !== grosze || row.t !== 'integer') throw new Error(`amount ${samples[i]![0]} stored as ${row.amount} ${row.t}`);
+    }
+  } finally {
+    raw.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+
+  const badDir = mkdtempSync(join(tmpdir(), 'bulkly-grosze-bad-'));
+  const bad = new Database(join(badDir, 'bulkly.db'));
+  try {
+    bad.exec(`
+      CREATE TABLE purchases (
+        id integer PRIMARY KEY NOT NULL,
+        product_id integer NOT NULL,
+        store_id integer,
+        bought_on text NOT NULL,
+        quantity text NOT NULL,
+        amount text NOT NULL,
+        created_at text NOT NULL,
+        kind text DEFAULT 'purchase' NOT NULL,
+        receipt_id integer
+      );
+      INSERT INTO purchases (id, product_id, bought_on, quantity, amount, created_at) VALUES (1, 1, '2026-01-01', '1', '10.456', '2026-01-01');
+    `);
+    let failed = false;
+    try {
+      applyMigrationFile(bad, '0007_amount_grosze.sql');
+    } catch {
+      failed = true;
+    }
+    if (!failed) throw new Error('amount with 3 decimal places should fail the migration');
+  } finally {
+    bad.close();
+    rmSync(badDir, { recursive: true, force: true });
+  }
+}
+
 if (process.argv[1] && import.meta.filename === resolve(process.argv[1])) {
   runStoreSmoke();
   runDrizzleIdRepairSmoke();
+  assertAmountGroszeMigration();
   console.log('store smoke ok');
 }
