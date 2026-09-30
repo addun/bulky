@@ -50,6 +50,13 @@
       "when": 1790430814022,
       "tag": "0006_unit_compare_value",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1790762902649,
+      "tag": "0007_amount_grosze",
+      "breakpoints": true
     }
   ]
 }

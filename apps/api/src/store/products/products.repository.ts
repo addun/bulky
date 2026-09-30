@@ -14,6 +14,7 @@ import {
   UnitMismatchError,
 } from '../../domain/errors.js';
 import { search } from '../../domain/match.js';
+import { fromGrosze } from '../../domain/money.js';
 import { quotesByProduct } from '../../domain/price-stats.js';
 import { stripAliasWhitespace, type ProductAlias } from '../aliases/aliases.models.js';
 import { KIND_PURCHASE } from '../purchases/purchases.models.js';
@@ -368,7 +369,7 @@ export class ProductsRepository {
     for (const pr of prows) {
       const i = index.get(pr.productId);
       if (i === undefined) continue;
-      items[i]!.lifetimeAmount = items[i]!.lifetimeAmount.add(new Decimal(pr.amount));
+      items[i]!.lifetimeAmount = items[i]!.lifetimeAmount.add(fromGrosze(pr.amount));
       items[i]!.purchaseCount++;
       if (!items[i]!.lastBought || pr.boughtOn > items[i]!.lastBought) {
         items[i]!.lastBought = pr.boughtOn;

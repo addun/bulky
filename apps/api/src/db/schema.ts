@@ -105,7 +105,7 @@ export const purchases = sqliteTable(
     storeId: integer('store_id').references(() => stores.id),
     boughtOn: text('bought_on').notNull(),
     quantity: text('quantity').notNull(),
-    amount: text('amount').notNull(),
+    amount: integer('amount').notNull(),
     createdAt: text('created_at').notNull(),
     kind: text('kind').notNull().default('purchase'),
     receiptId: integer('receipt_id').references(() => receipts.id, { onDelete: 'set null' }),

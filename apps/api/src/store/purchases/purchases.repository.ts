@@ -5,6 +5,7 @@ import { DatabaseService } from '../../db/database.service.js';
 import { changesOf, countOf, lastId } from '../../db/query.js';
 import { products, purchases, units } from '../../db/schema.js';
 import { InvalidKindError, InvalidQuantityError, NotFoundError } from '../../domain/errors.js';
+import { fromGrosze, toGrosze } from '../../domain/money.js';
 import { KIND_PRICE, KIND_PURCHASE, type Purchase, type PurchaseKind, type ReceiptPurchase } from './purchases.models.js';
 import { LocationsRepository } from '#app/store/locations';
 import { nowRFC3339 } from '#app/store/now';
@@ -17,7 +18,7 @@ type PurchaseRow = {
   receiptId: number | null;
   boughtOn: string;
   quantity: string;
-  amount: string;
+  amount: number;
   createdAt: string;
 };
 
@@ -105,7 +106,7 @@ export class PurchasesRepository {
           receiptId: null,
           boughtOn,
           quantity: quantity.toString(),
-          amount: amount.toString(),
+          amount: toGrosze(amount),
           createdAt: nowRFC3339(),
         })
         .run(),
@@ -132,7 +133,7 @@ export class PurchasesRepository {
           kind,
           boughtOn,
           quantity: quantity.toString(),
-          amount: amount.toString(),
+          amount: toGrosze(amount),
         })
         .where(eq(purchases.id, id))
         .run(),
@@ -209,7 +210,7 @@ export class PurchasesRepository {
           receiptId,
           boughtOn,
           quantity: quantity.toString(),
-          amount: amount.toString(),
+          amount: toGrosze(amount),
           createdAt: nowRFC3339(),
         })
         .run(),
@@ -243,7 +244,7 @@ export class PurchasesRepository {
       ...r,
       kind: r.kind as PurchaseKind,
       quantity: new Decimal(r.quantity),
-      amount: new Decimal(r.amount),
+      amount: fromGrosze(r.amount),
     };
   }
 }
