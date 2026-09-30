@@ -6,11 +6,20 @@ const API_ORIGIN = process.env.API_ORIGIN ?? '';
 function proxied(pathname: string): boolean {
   if (!API_ORIGIN) return false;
   if (pathname === '/' || pathname.startsWith('/_app')) return false;
+  if (pathname === '/admin' || pathname === '/admin/') return false;
   return true;
 }
 
 export const handle: Handle = async ({ event, resolve }) => {
-  if (!proxied(event.url.pathname)) return resolve(event);
+  const admin = event.url.pathname === '/admin' || event.url.pathname === '/admin/';
+  if (!proxied(event.url.pathname)) {
+    return resolve(event, {
+      transformPageChunk: ({ html }) =>
+        admin
+          ? html.replace('<html lang="pl">', '<html lang="en">').replace('<body', '<body class="is-admin"')
+          : html,
+    });
+  }
 
   const target = new URL(event.url.pathname + event.url.search, API_ORIGIN);
   const headers = new Headers(event.request.headers);

@@ -42,18 +42,24 @@ export class ProductsRepository {
   }
 
   listProducts(q: string): ProductListItem[] {
-    return this.listProductsAt(q, new Date(), 0);
+    return this.listProductsAt(q, new Date(), 0).items;
+  }
+
+  /** One page of the admin catalog. `limit` <= 0 returns every match. */
+  listProductsPage(q: string, offset: number, limit: number): { items: ProductListItem[]; total: number } {
+    const start = offset > 0 ? offset : 0;
+    return this.listProductsAt(q, new Date(), limit, start);
   }
 
   searchProductQuotes(q: string, now: Date, limit: number): ProductQuote[] {
     q = q.trim();
     if (q === '') return [];
-    const items = this.listProductsAt(q, now, limit);
+    const { items } = this.listProductsAt(q, now, limit);
     return items.map((it) => ({ product: this.asProduct(it), quote: it.quote }));
   }
 
   listPopularProductQuotes(now: Date, limit: number): ProductQuote[] {
-    const items = this.listProductsAt('', now, 0);
+    const { items } = this.listProductsAt('', now, 0);
     items.sort((a, b) => {
       if (a.lastBought && b.lastBought && a.lastBought !== b.lastBought) {
         return a.lastBought < b.lastBought ? 1 : -1;
@@ -341,7 +347,7 @@ export class ProductsRepository {
     return { into, from };
   }
 
-  private listProductsAt(q: string, now: Date, limit: number): ProductListItem[] {
+  private listProductsAt(q: string, now: Date, limit: number, offset = 0): { items: ProductListItem[]; total: number } {
     q = q.trim();
     const rows = this.productQuery().orderBy(nocaseOrder(products.name)).all();
     const items: ProductListItem[] = rows.map((r) => ({
@@ -353,7 +359,7 @@ export class ProductsRepository {
     }));
     const index = new Map<number, number>();
     items.forEach((it, i) => index.set(it.id, i));
-    if (items.length === 0) return items;
+    if (items.length === 0) return { items, total: 0 };
     const prows = this.orm
       .select({ productId: purchases.productId, boughtOn: purchases.boughtOn, amount: purchases.amount })
       .from(purchases)
@@ -371,9 +377,13 @@ export class ProductsRepository {
     this.attachItemConversions(items);
     let out = items;
     if (q !== '') out = this.filterProductSearch(out, q, this.aliases.listAliases());
-    if (limit > 0 && out.length > limit) out = out.slice(0, limit);
+    const total = out.length;
+    if (limit > 0) {
+      const start = offset > 0 ? offset : 0;
+      out = out.slice(start, start + limit);
+    }
     this.attachProductQuotes(out, now);
-    return out;
+    return { items: out, total };
   }
 
   private filterProductSearch(items: ProductListItem[], q: string, aliases: ProductAlias[]): ProductListItem[] {

@@ -283,6 +283,14 @@ function runStoreSmoke(): void {
     if (group.productCount !== 1) throw new Error('group count');
     const rice = repos.products.createProduct('Ryz', kg.id, null);
     repos.purchases.createPurchase(rice.id, store.id, '2026-01-20 12:00', new Decimal('1'), new Decimal('8'), KIND_PURCHASE);
+    const firstPage = repos.products.listProductsPage('', 0, 1);
+    const secondPage = repos.products.listProductsPage('', 1, 1);
+    if (firstPage.total !== 2 || firstPage.items.length !== 1 || secondPage.items.length !== 1) {
+      throw new Error('product list page');
+    }
+    if (firstPage.items[0]!.id === secondPage.items[0]!.id) throw new Error('product list page overlap');
+    const namedPage = repos.products.listProductsPage('ryz', 0, 40);
+    if (namedPage.total !== 1 || namedPage.items[0]!.id !== rice.id) throw new Error('product list page search');
     repos.groups.updateComparisonGroup(group.id, 'Flour', kg.id, [flour.id, rice.id]);
     const related = repos.groups.relatedGroupProducts(flour.id, new Date());
     if (related.length !== 1 || related[0]!.id !== rice.id) throw new Error('related group products');
