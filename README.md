@@ -16,7 +16,7 @@ pnpm install
 pnpm dev
 ```
 
-The current UI listens on [http://127.0.0.1:8080](http://127.0.0.1:8080). The Svelte app listens on [http://localhost:5173](http://localhost:5173) and proxies `/api`, `/images`, and `/mcp` to the API.
+The current UI listens on [http://127.0.0.1:8080](http://127.0.0.1:8080). The Svelte app listens on [http://localhost:5173](http://localhost:5173) and proxies `/api`, `/images`, `/mcp`, and admin screens that are not ported yet to the API.
 
 `pnpm build` builds both packages. `pnpm start` runs the built API. Seed fake catalog data with `pnpm seed` (see `apps/api/src/seed/cli.ts` for flags such as `--clamp-prices`). Generate Drizzle migrations with `pnpm db:generate`.
 
@@ -31,7 +31,7 @@ Optional environment (read by the API):
 | `OCR_API_KEY`     |                            | API key for the bill reader (`OPENAI_API_KEY` is also accepted) |
 | `OCR_BASE_URL`    | `https://api.openai.com/v1` | OpenAI-compatible base URL (Ollama, etc.)   |
 
-Handlebars screens stay on port 8080 until each one is ported. The Svelte home page uses the same layout and calls `GET /api/lookup.json`. Receipt and product files are served from `/images/`.
+Handlebars screens stay on port 8080 until each one is ported. The Svelte home page calls `GET /api/lookup.json`. The Svelte product list at `/admin` calls `GET /api/admin/products.json`. Receipt and product files are served from `/images/`.
 
 **Scan a bill:** open [http://localhost:8080/admin/receipts](http://localhost:8080/admin/receipts). **Moja Biedronka:** open [http://localhost:8080/imports/biedronka](http://localhost:8080/imports/biedronka). Docker includes Poppler so PDFs can be rasterized; locally, install the same with `brew install poppler`. The Chrome helper remains at `extensions/biedronka`.
 

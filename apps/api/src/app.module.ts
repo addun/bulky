@@ -23,6 +23,7 @@ import { CatalogController } from './web/catalog.controller.js';
 import { ReceiptsController } from './web/receipts.controller.js';
 import { BiedronkaController } from './web/biedronka.controller.js';
 import { StoreImportsController } from './web/store-imports.controller.js';
+import { AdminProductsModule } from './features/admin/products/products.module.js';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { StoreImportsController } from './web/store-imports.controller.js';
     ComparisonGroupsModule,
     ProductsModule,
     ReceiptsModule,
+    AdminProductsModule,
   ],
   controllers: [LookupController, CatalogController, ReceiptsController, BiedronkaController, StoreImportsController],
   providers: [
