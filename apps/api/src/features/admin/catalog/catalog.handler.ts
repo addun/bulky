@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnprocessableEntityException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Decimal } from 'decimal.js';
 import type { z } from 'zod';
@@ -11,7 +11,6 @@ import { KIND_PURCHASE, PurchasesRepository, type Purchase } from '#app/store/pu
 import { UnitsRepository } from '#app/store/units';
 import { ImagesService } from '../../../web/images.service.js';
 import { presentProduct, presentPurchase, presentStore, storesByID } from '../../../web/present.js';
-import { asResponse, problem } from '../http.js';
 import { type MergeRequest, type ProductRequest, type PurchaseRequest, type UnitIdRequest } from './contract/request.js';
 import {
   AdminCatalogBlankResponse,
@@ -40,7 +39,7 @@ export class AdminCatalogHandler {
   ) {}
 
   blank(): AdminCatalogBlankResponse {
-    return asResponse(AdminCatalogBlankResponse, {
+    return AdminCatalogBlankResponse.parse({
       product: presentProduct(emptyProduct()),
       units: this.units.listUnits(),
       groups: this.groupOptions([]),
@@ -49,7 +48,7 @@ export class AdminCatalogHandler {
 
   show(productId: number): AdminCatalogShowResponse {
     const product = this.products.getProduct(productId);
-    return asResponse(AdminCatalogShowResponse, {
+    return AdminCatalogShowResponse.parse({
       product: presentProduct(product),
       purchases: this.purchases.listPurchases(productId).map(presentPurchase),
       storeById: storesByID(this.locations.listStores()),
@@ -61,7 +60,7 @@ export class AdminCatalogHandler {
   edit(productId: number): AdminCatalogBlankResponse {
     const product = this.products.getProduct(productId);
     const selected = this.groups.listComparisonGroupsForProduct(productId).map((group) => group.id);
-    return asResponse(AdminCatalogBlankResponse, {
+    return AdminCatalogBlankResponse.parse({
       product: presentProduct(product),
       units: this.units.listUnits(),
       groups: this.groupOptions(selected),
@@ -79,12 +78,12 @@ export class AdminCatalogHandler {
   remove(productId: number): AdminCatalogOkResponse {
     const image = this.products.deleteProduct(productId);
     this.images.deleteImage(image);
-    return asResponse(AdminCatalogOkResponse, { ok: true });
+    return AdminCatalogOkResponse.parse({ ok: true });
   }
 
   changeUnitForm(productId: number): AdminCatalogChangeUnitResponse {
     const product = this.products.getProduct(productId);
-    return asResponse(AdminCatalogChangeUnitResponse, {
+    return AdminCatalogChangeUnitResponse.parse({
       product: presentProduct(product),
       history: this.purchases.listPurchases(productId).length,
     });
@@ -93,15 +92,15 @@ export class AdminCatalogHandler {
   changeUnit(productId: number, body: z.infer<typeof UnitIdRequest>): AdminCatalogIdResponse {
     const product = this.products.getProduct(productId);
     if (!product.conversions.some((conversion) => conversion.unitId === body.unit_id)) {
-      problem(422, 'Choose one of the extra units on this product.');
+      throw new UnprocessableEntityException('Choose one of the extra units on this product.');
     }
     this.products.changePurchaseUnit(productId, body.unit_id);
-    return asResponse(AdminCatalogIdResponse, { id: productId });
+    return AdminCatalogIdResponse.parse({ id: productId });
   }
 
   mergeOptions(productId: number): AdminCatalogMergeOptionsResponse {
     const product = this.products.getProduct(productId);
-    return asResponse(AdminCatalogMergeOptionsResponse, {
+    return AdminCatalogMergeOptionsResponse.parse({
       product: presentProduct(product),
       targets: this.products.listProducts('').filter((item) => item.id !== product.id),
     });
@@ -109,7 +108,7 @@ export class AdminCatalogHandler {
 
   mergePlan(productId: number, intoId: number): AdminCatalogMergePlanResponse {
     const plan = this.products.mergePlan(intoId, productId);
-    return asResponse(AdminCatalogMergePlanResponse, {
+    return AdminCatalogMergePlanResponse.parse({
       plan: { ...plan, into: presentProduct(plan.into), from: presentProduct(plan.from) },
     });
   }
@@ -117,7 +116,7 @@ export class AdminCatalogHandler {
   merge(productId: number, body: z.infer<typeof MergeRequest>): AdminCatalogIdResponse {
     const { keeper, dropImage } = this.products.mergeProducts(body.into_id, productId);
     this.images.deleteImage(dropImage);
-    return asResponse(AdminCatalogIdResponse, { id: keeper.id });
+    return AdminCatalogIdResponse.parse({ id: keeper.id });
   }
 
   newPurchase(productId: number): AdminCatalogPurchaseFormResponse {
@@ -138,12 +137,11 @@ export class AdminCatalogHandler {
 
   createPurchase(productId: number, body: z.infer<typeof PurchaseRequest>): AdminCatalogPurchaseResponse {
     const parsed = this.parsePurchase(body);
-    if (parsed.err) problem(422, parsed.err);
+    if (parsed.err) throw new UnprocessableEntityException(parsed.err);
     const product = this.products.getProduct(productId);
     const kind = this.purchases.parsePurchaseKind(body.kind);
     const storeId = this.resolveStore(body.store_id);
-    return asResponse(
-      AdminCatalogPurchaseResponse,
+    return AdminCatalogPurchaseResponse.parse(
       this.purchases.createPurchase(product.id, storeId, parsed.boughtOn, parsed.qty, parsed.amount, kind),
     );
   }
@@ -156,22 +154,22 @@ export class AdminCatalogHandler {
 
   updatePurchase(purchaseId: number, body: z.infer<typeof PurchaseRequest>): AdminCatalogPurchaseUpdatedResponse {
     const parsed = this.parsePurchase(body);
-    if (parsed.err) problem(422, parsed.err);
+    if (parsed.err) throw new UnprocessableEntityException(parsed.err);
     const current = this.purchases.getPurchase(purchaseId);
     const kind = this.purchases.parsePurchaseKind(body.kind);
     const storeId = this.resolveStore(body.store_id);
     this.purchases.updatePurchase(purchaseId, storeId, parsed.boughtOn, parsed.qty, parsed.amount, kind);
-    return asResponse(AdminCatalogPurchaseUpdatedResponse, { id: purchaseId, productId: current.productId });
+    return AdminCatalogPurchaseUpdatedResponse.parse({ id: purchaseId, productId: current.productId });
   }
 
   removePurchase(purchaseId: number): AdminCatalogPurchaseDeletedResponse {
     const purchase = this.purchases.getPurchase(purchaseId);
     this.purchases.deletePurchase(purchaseId);
-    return asResponse(AdminCatalogPurchaseDeletedResponse, { productId: purchase.productId, kind: purchase.kind });
+    return AdminCatalogPurchaseDeletedResponse.parse({ productId: purchase.productId, kind: purchase.kind });
   }
 
   private purchasePayload(product: Product, purchase: Purchase): AdminCatalogPurchaseFormResponse {
-    return asResponse(AdminCatalogPurchaseFormResponse, {
+    return AdminCatalogPurchaseFormResponse.parse({
       product: presentProduct(product),
       purchase: presentPurchase(purchase),
       stores: this.locations.listStores().map(presentStore),
@@ -186,19 +184,19 @@ export class AdminCatalogHandler {
 
   private async save(body: z.infer<typeof ProductRequest>, productId: number, file?: Express.Multer.File): Promise<AdminCatalogIdResponse> {
     const { convs, msg } = parseExtraUnits(body, body.unit_id);
-    if (msg) problem(422, msg);
+    if (msg) throw new UnprocessableEntityException(msg);
     let imageName = '';
     try {
       imageName = await this.images.saveImage(file);
     } catch (err) {
-      problem(422, (err instanceof Error ? err.message : 'could not save image') + '.');
+      throw new UnprocessableEntityException((err instanceof Error ? err.message : 'could not save image') + '.');
     }
     const clearImage = body.clear_image === '1';
     try {
       if (productId === 0) {
         const created = this.products.createProduct(body.name, body.unit_id, imageName || null, convs, body.ean);
         this.groups.setProductComparisonGroups(created.id, body.group_id);
-        return asResponse(AdminCatalogIdResponse, { id: created.id });
+        return AdminCatalogIdResponse.parse({ id: created.id });
       }
       const current = this.products.getProduct(productId);
       this.products.updateProduct(
@@ -213,7 +211,7 @@ export class AdminCatalogHandler {
       this.groups.setProductComparisonGroups(productId, body.group_id);
       if (imageName && current.imagePath) this.images.deleteImage(current.imagePath);
       if (clearImage && imageName === '' && current.imagePath) this.images.deleteImage(current.imagePath);
-      return asResponse(AdminCatalogIdResponse, { id: productId });
+      return AdminCatalogIdResponse.parse({ id: productId });
     } catch (err) {
       if (imageName) this.images.deleteImage(imageName);
       throw err;

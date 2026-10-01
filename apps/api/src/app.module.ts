@@ -13,6 +13,7 @@ import {
   UnitsModule,
 } from '#app/store';
 import { McpMiddleware } from './mcp/mcp.middleware.js';
+import { HealthController } from './health.controller.js';
 import { LookupController } from './web/lookup.controller.js';
 import { BiedronkaController } from './web/biedronka.controller.js';
 import { WebModule } from './web/web.module.js';
@@ -52,7 +53,7 @@ import { AdminImportsModule } from './features/admin/imports/imports.module.js';
     AdminReceiptsModule,
     AdminImportsModule,
   ],
-  controllers: [LookupController, BiedronkaController],
+  controllers: [HealthController, LookupController, BiedronkaController],
   providers: [McpMiddleware],
 })
 export class AppModule implements NestModule {

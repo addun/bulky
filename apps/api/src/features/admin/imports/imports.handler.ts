@@ -1,10 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadGatewayException, Injectable, Logger, UnprocessableEntityException } from '@nestjs/common';
 import type { z } from 'zod';
 import { NotFoundError } from '../../../domain/errors.js';
 import { fetchBiedronkaShops, importedShopsFromBiedronka } from '../../../imports/biedronka-shops.js';
 import { LocationsRepository, type RetailChain } from '#app/store/locations';
 import { presentChain } from '../../../web/present.js';
-import { asResponse, problem } from '../http.js';
 import { type BiedronkaShopsImportRequest } from './contract/request.js';
 import {
   AdminBiedronkaImportedResponse,
@@ -19,7 +18,7 @@ export class AdminImportsHandler {
   constructor(private readonly locations: LocationsRepository) {}
 
   list(): AdminImportsResponse {
-    return asResponse(AdminImportsResponse, {
+    return AdminImportsResponse.parse({
       importers: [
         {
           id: 'biedronka',
@@ -33,7 +32,7 @@ export class AdminImportsHandler {
 
   biedronka(): AdminBiedronkaImportResponse {
     const chains = this.locations.listRetailChains();
-    return asResponse(AdminBiedronkaImportResponse, {
+    return AdminBiedronkaImportResponse.parse({
       retailChains: chains.map(presentChain),
       retailChainId: defaultChainId(chains),
     });
@@ -43,7 +42,7 @@ export class AdminImportsHandler {
     try {
       this.locations.getRetailChain(body.retail_chain_id);
     } catch (err) {
-      if (err instanceof NotFoundError) problem(422, 'Choose a retail chain.');
+      if (err instanceof NotFoundError) throw new UnprocessableEntityException('Choose a retail chain.');
       throw err;
     }
     let shops;
@@ -52,14 +51,14 @@ export class AdminImportsHandler {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Could not load Biedronka shops';
       this.log.warn(`biedronka shops fetch failed: ${message}`);
-      problem(502, message);
+      throw new BadGatewayException(message);
     }
     const imported = importedShopsFromBiedronka(shops);
     try {
       const counts = this.locations.upsertImportedStores(body.retail_chain_id, imported);
       const result = { ...counts, skipped: shops.length - imported.length, total: shops.length };
       this.log.log(`biedronka shops: ${result.created} created, ${result.updated} updated, ${result.skipped} skipped`);
-      return asResponse(AdminBiedronkaImportedResponse, { retailChainId: body.retail_chain_id, result });
+      return AdminBiedronkaImportedResponse.parse({ retailChainId: body.retail_chain_id, result });
     } catch (err) {
       this.log.warn(`biedronka shops save failed: ${err instanceof Error ? err.message : String(err)}`);
       throw err;

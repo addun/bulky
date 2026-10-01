@@ -1,4 +1,4 @@
-import { HttpException, Injectable } from '@nestjs/common';
+import { ConflictException, Injectable, InternalServerErrorException, UnprocessableEntityException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { z } from 'zod';
 import {
@@ -38,7 +38,6 @@ import {
 } from '../../../web/receipt-form.js';
 import { ImagesService } from '../../../web/images.service.js';
 import { ReceiptImagesService } from '../../../web/receipt-images.js';
-import { asResponse, problem } from '../http.js';
 import { type ReceiptVisitRequest } from './contract/request.js';
 import {
   AdminReceiptConfirmedResponse,
@@ -68,7 +67,7 @@ export class AdminReceiptsHandler {
   ) {}
 
   list(): AdminReceiptsResponse {
-    return asResponse(AdminReceiptsResponse, {
+    return AdminReceiptsResponse.parse({
       configured: this.ocr.configured(),
       model: this.settings.getSetting('ocr_model'),
       receipts: this.receipts.listReceipts().map(presentReceiptListItem),
@@ -76,20 +75,20 @@ export class AdminReceiptsHandler {
   }
 
   duplicates(): AdminReceiptDuplicatesResponse {
-    return asResponse(AdminReceiptDuplicatesResponse, {
+    return AdminReceiptDuplicatesResponse.parse({
       groups: this.receipts.listDuplicateReceipts().map(presentDuplicateGroup),
     });
   }
 
   async upload(files: { bill?: Express.Multer.File[]; bill_camera?: Express.Multer.File[] }): Promise<AdminReceiptIdResponse> {
-    if (!this.ocr.configured()) problem(422, 'Set OCR_API_KEY or OCR_BASE_URL so the reader can run.');
+    if (!this.ocr.configured()) throw new UnprocessableEntityException('Set OCR_API_KEY or OCR_BASE_URL so the reader can run.');
     const model = this.settings.getSetting('ocr_model');
-    if (model === '') problem(422, 'Set the AI model under Settings so the reader can run.');
+    if (model === '') throw new UnprocessableEntityException('Set the AI model under Settings so the reader can run.');
     const file = pickFormFile(files, 'bill', 'bill_camera');
-    if (!file) problem(422, 'Choose a photo or a PDF of the bill.');
+    if (!file) throw new UnprocessableEntityException('Choose a photo or a PDF of the bill.');
     const accepted = await this.acceptBill(file);
     this.queue.enqueueOCR(accepted.id);
-    return asResponse(AdminReceiptIdResponse, { id: accepted.id });
+    return AdminReceiptIdResponse.parse({ id: accepted.id });
   }
 
   previewPath(receiptId: number): string | null {
@@ -107,13 +106,13 @@ export class AdminReceiptsHandler {
   show(receiptId: number): AdminReceiptDetailResponse {
     const receipt = this.load(receiptId);
     if (receipt.status === RECEIPT_PENDING || receipt.status === RECEIPT_FAILED) {
-      return asResponse(AdminReceiptDetailResponse, { kind: 'status' as const, receipt: presentReceipt(receipt) });
+      return AdminReceiptDetailResponse.parse({ kind: 'status' as const, receipt: presentReceipt(receipt) });
     }
     if (receipt.status === RECEIPT_MIGRATED) {
       const buys = this.purchases.listPurchasesByReceipt(receipt.id);
       const stores = this.locations.listStores();
       const facts = receiptVisitFacts(receipt, buys, stores);
-      return asResponse(AdminReceiptDetailResponse, {
+      return AdminReceiptDetailResponse.parse({
         kind: 'show' as const,
         receipt: presentReceipt(receipt),
         purchases: buys,
@@ -128,9 +127,9 @@ export class AdminReceiptsHandler {
     try {
       view = receiptToView(receipt, lookups.products, lookups.stores, this.aliases.listAliases(), this.units.unitDefaults());
     } catch {
-      problem(500, 'Could not read the saved AI response.');
+      throw new InternalServerErrorException('Could not read the saved AI response.');
     }
-    return asResponse(AdminReceiptDetailResponse, {
+    return AdminReceiptDetailResponse.parse({
       kind: 'review' as const,
       view,
       products: lookups.products,
@@ -143,11 +142,11 @@ export class AdminReceiptsHandler {
 
   edit(receiptId: number): AdminReceiptEditResponse {
     const receipt = this.load(receiptId);
-    if (receipt.status !== RECEIPT_MIGRATED) problem(409, 'This receipt is not saved as purchases yet.');
+    if (receipt.status !== RECEIPT_MIGRATED) throw new ConflictException('This receipt is not saved as purchases yet.');
     const buys = this.purchases.listPurchasesByReceipt(receipt.id);
     const stores = this.locations.listStores();
     const facts = receiptVisitFacts(receipt, buys, stores);
-    return asResponse(AdminReceiptEditResponse, {
+    return AdminReceiptEditResponse.parse({
       receipt: presentReceipt(receipt),
       boughtOn: facts.boughtOn,
       store: presentStore(facts.store),
@@ -157,36 +156,36 @@ export class AdminReceiptsHandler {
 
   updateVisit(receiptId: number, body: z.infer<typeof ReceiptVisitRequest>): AdminReceiptIdResponse {
     const receipt = this.load(receiptId);
-    if (receipt.status !== RECEIPT_MIGRATED) problem(409, 'This receipt is not saved as purchases yet.');
+    if (receipt.status !== RECEIPT_MIGRATED) throw new ConflictException('This receipt is not saved as purchases yet.');
     const boughtOn = fromDatetimeLocal(body.bought_on);
-    if (boughtOn === '') problem(422, 'Date must be a valid day.');
+    if (boughtOn === '') throw new UnprocessableEntityException('Date must be a valid day.');
     const store = this.resolveStore(body.store_id);
-    if (store.msg) problem(422, store.msg);
+    if (store.msg) throw new UnprocessableEntityException(store.msg);
     this.receipts.updateReceiptVisit(receiptId, store.id, boughtOn);
-    return asResponse(AdminReceiptIdResponse, { id: receiptId });
+    return AdminReceiptIdResponse.parse({ id: receiptId });
   }
 
   async retry(receiptId: number): Promise<AdminReceiptIdResponse> {
     const receipt = this.load(receiptId);
     if (receipt.status !== RECEIPT_FAILED && receipt.status !== RECEIPT_PENDING) {
-      return asResponse(AdminReceiptIdResponse, { id: receiptId });
+      return AdminReceiptIdResponse.parse({ id: receiptId });
     }
     if (receipt.status === RECEIPT_FAILED) {
-      if (!this.ocr.configured()) problem(422, 'Set OCR_API_KEY or OCR_BASE_URL so the reader can run.');
-      if (this.settings.getSetting('ocr_model') === '') problem(422, 'Set the AI model under Settings so the reader can run.');
+      if (!this.ocr.configured()) throw new UnprocessableEntityException('Set OCR_API_KEY or OCR_BASE_URL so the reader can run.');
+      if (this.settings.getSetting('ocr_model') === '') throw new UnprocessableEntityException('Set the AI model under Settings so the reader can run.');
       try {
         await this.images.loadReceiptSource(receipt.imagePath);
       } catch {
-        problem(422, 'This bill is no longer on disk. Upload it again from Receipts.');
+        throw new UnprocessableEntityException('This bill is no longer on disk. Upload it again from Receipts.');
       }
       try {
         this.receipts.requeueReceipt(receiptId);
       } catch {
-        problem(422, 'Could not start reading again.');
+        throw new UnprocessableEntityException('Could not start reading again.');
       }
     }
     this.queue.enqueueOCR(receiptId);
-    return asResponse(AdminReceiptIdResponse, { id: receiptId });
+    return AdminReceiptIdResponse.parse({ id: receiptId });
   }
 
   confirm(receiptId: number, body: Record<string, string>): AdminReceiptConfirmedResponse {
@@ -205,7 +204,7 @@ export class AdminReceiptsHandler {
       rawJSON = viewToRawJSON(view);
       this.receipts.updateReceiptJSON(receiptId, rawJSON);
     } catch {
-      problem(500, 'Could not save the product list.');
+      throw new InternalServerErrorException('Could not save the product list.');
     }
     const review = () => ({
       view,
@@ -215,12 +214,12 @@ export class AdminReceiptsHandler {
       symbol: this.config.get<string>('CURRENCY_SYMBOL') || 'zł',
       currency: this.config.get<string>('CURRENCY') || 'PLN',
     });
-    if (receipt.status === RECEIPT_MIGRATED) problem(409, 'This bill is already saved as purchases.');
-    if (view.storeId === 0 && Number.parseInt(body.store_id ?? '', 10) > 0) throw new HttpException({ message: 'Choose a store.', ...review() }, 422);
-    if (msg !== '') throw new HttpException({ message: msg, ...review() }, 422);
+    if (receipt.status === RECEIPT_MIGRATED) throw new ConflictException('This bill is already saved as purchases.');
+    if (view.storeId === 0 && Number.parseInt(body.store_id ?? '', 10) > 0) throw new UnprocessableEntityException({ message: 'Choose a store.', ...review() });
+    if (msg !== '') throw new UnprocessableEntityException({ message: msg, ...review() });
     try {
       const result = this.receipts.migrateReceipt(receiptId, inn, rawJSON);
-      return asResponse(AdminReceiptConfirmedResponse, { id: receiptId, imported: result.purchases });
+      return AdminReceiptConfirmedResponse.parse({ id: receiptId, imported: result.purchases });
     } catch (err) {
       let message = 'Could not save the purchases.';
       if (err instanceof ReceiptMigratedError) message = 'This bill is already saved as purchases.';
@@ -228,7 +227,7 @@ export class AdminReceiptsHandler {
       else if (err instanceof InvalidUnitError) message = 'Choose a unit for each new product.';
       else if (err instanceof NotFoundError) message = 'A selected product is gone. Refresh and try again.';
       else if (err instanceof InvalidStoreError) message = 'Choose a store.';
-      throw new HttpException({ message, ...review() }, 422);
+      throw new UnprocessableEntityException({ message, ...review() });
     }
   }
 
@@ -236,7 +235,7 @@ export class AdminReceiptsHandler {
     const deleted = this.receipts.deleteReceipt(receiptId);
     await this.images.deleteReceiptFiles(deleted.imagePath);
     for (const image of deleted.productImages) this.catalogImages.deleteImage(image);
-    return asResponse(AdminReceiptDeletedResponse, { ok: true });
+    return AdminReceiptDeletedResponse.parse({ ok: true });
   }
 
   private load(receiptId: number): Receipt {
@@ -263,26 +262,26 @@ export class AdminReceiptsHandler {
   }
 
   private async acceptBill(file: Express.Multer.File): Promise<Receipt> {
-    if (file.size > MaxImageBytes || file.buffer.length > MaxImageBytes) problem(422, 'File must be 10 MB or smaller.');
-    if (file.buffer.length === 0) problem(422, 'Could not read the file.');
+    if (file.size > MaxImageBytes || file.buffer.length > MaxImageBytes) throw new UnprocessableEntityException('File must be 10 MB or smaller.');
+    if (file.buffer.length === 0) throw new UnprocessableEntityException('Could not read the file.');
     let jpeg: Buffer;
     try {
       jpeg = await previewJPEG(file.buffer);
     } catch (err) {
       const text = err instanceof Error ? err.message : String(err);
-      problem(422, text.replace(/\.$/, '') + '.');
+      throw new UnprocessableEntityException(text.replace(/\.$/, '') + '.');
     }
     let imagePath: string;
     try {
       imagePath = await this.images.saveReceiptFiles(file.buffer, jpeg);
     } catch {
-      problem(500, 'Could not store the bill.');
+      throw new InternalServerErrorException('Could not store the bill.');
     }
     try {
       return this.receipts.createReceipt(imagePath);
     } catch {
       await this.images.deleteReceiptFiles(imagePath);
-      problem(500, 'Could not save the receipt.');
+      throw new InternalServerErrorException('Could not save the receipt.');
     }
   }
 }

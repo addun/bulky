@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { decimalString } from '../../../../domain/decimal-string.js';
 
 export const AdminCatalogProductResponse = z.looseObject({
   id: z.number().int(),
@@ -6,7 +7,7 @@ export const AdminCatalogProductResponse = z.looseObject({
   ean: z.string(),
   unitId: z.number().int(),
   unitName: z.string(),
-  compareValue: z.string(),
+  compareValue: decimalString,
   imagePath: z.string().nullable(),
   createdAt: z.string(),
 });
@@ -15,7 +16,7 @@ export type AdminCatalogProductResponse = z.infer<typeof AdminCatalogProductResp
 export const AdminCatalogUnitResponse = z.looseObject({
   id: z.number().int(),
   name: z.string(),
-  compareValue: z.string(),
+  compareValue: decimalString,
 });
 
 export const AdminCatalogGroupResponse = z.looseObject({
@@ -32,8 +33,8 @@ export const AdminCatalogPurchaseResponse = z.looseObject({
   kind: z.string(),
   receiptId: z.number().int().nullable(),
   boughtOn: z.string(),
-  quantity: z.string(),
-  amount: z.string(),
+  quantity: decimalString,
+  amount: decimalString,
   createdAt: z.string(),
 });
 export type AdminCatalogPurchaseResponse = z.infer<typeof AdminCatalogPurchaseResponse>;

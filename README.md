@@ -16,7 +16,7 @@ pnpm install
 pnpm dev
 ```
 
-The current UI listens on [http://127.0.0.1:8080](http://127.0.0.1:8080). The Svelte app listens on [http://localhost:5173](http://localhost:5173) and proxies `/api`, `/images`, `/static`, `/mcp`, and receipt previews to the API. Admin pages are served by Svelte.
+The current UI listens on [http://127.0.0.1:8080](http://127.0.0.1:8080). The Svelte app listens on [http://localhost:5173](http://localhost:5173) and proxies `/api`, `/images`, `/static`, and `/mcp` to the API. Admin pages are served by Svelte.
 
 `pnpm build` builds both packages. `pnpm start` runs the built API. Seed fake catalog data with `pnpm seed` (see `apps/api/src/seed/cli.ts` for flags such as `--clamp-prices`). Generate Drizzle migrations with `pnpm db:generate`.
 
@@ -31,7 +31,7 @@ Optional environment (read by the API):
 | `OCR_API_KEY`     |                            | API key for the bill reader (`OPENAI_API_KEY` is also accepted) |
 | `OCR_BASE_URL`    | `https://api.openai.com/v1` | OpenAI-compatible base URL (Ollama, etc.)   |
 
-The Svelte home page calls `GET /api/lookup.json`. Admin pages are Svelte routes (`/admin/products`, `/admin/stores`, and the rest) that call `/api/admin/...`. Receipt and product files are served from `/images/`. Receipt previews stay at `/admin/receipts/:id/preview`.
+The Svelte home page calls `GET /api/lookup.json`. Admin pages are Svelte routes (`/admin/products`, `/admin/stores`, and the rest) that call `/api/admin/...`. Receipt and product files are served from `/images/`. Receipt previews are `GET /api/admin/receipts/:id/preview`.
 
 **Scan a bill:** open [http://localhost:5173/admin/receipts](http://localhost:5173/admin/receipts). **Moja Biedronka:** open [http://localhost:8080/imports/biedronka](http://localhost:8080/imports/biedronka). Docker includes Poppler so PDFs can be rasterized; locally, install the same with `brew install poppler`. The Chrome helper remains at `extensions/biedronka`.
 
@@ -41,7 +41,7 @@ The Svelte home page calls `GET /api/lookup.json`. Admin pages are Svelte routes
 docker compose up --build
 ```
 
-Compose publishes the Svelte app on [http://localhost:3000](http://localhost:3000) and the API on [http://localhost:8080](http://localhost:8080). The Svelte container forwards `/api`, images, static files, and receipt previews to the API. Data (SQLite + product photos) lives in the `bulkly-data` volume.
+Compose publishes the Svelte app on [http://localhost:3000](http://localhost:3000) and the API on [http://localhost:8080](http://localhost:8080). The Svelte container forwards `/api`, images, and static files to the API. Data (SQLite + product photos) lives in the `bulkly-data` volume.
 
 Published images from GitHub Releases go to the [GitHub Container Registry](https://ghcr.io) as `ghcr.io/<owner>/<repo>` (linux/amd64):
 

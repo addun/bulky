@@ -13,7 +13,7 @@
 
 <div class="grid items-start gap-6 lg:grid-cols-[16rem_1fr]">
   {#if receipt.imagePath}
-    <img class="w-full rounded-xl border" src="/admin/receipts/{receipt.id}/preview" alt="Uploaded bill" />
+    <img class="w-full rounded-xl border" src="/api/admin/receipts/{receipt.id}/preview" alt="Uploaded bill" />
   {/if}
 
   <div class="flex flex-col gap-3">
