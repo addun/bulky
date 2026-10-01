@@ -1,9 +1,10 @@
 import { z } from 'zod';
+import { decimalString } from '../../../../domain/decimal-string.js';
 
 export const AdminSettingsUnitResponse = z.object({
   id: z.number().int(),
   name: z.string(),
-  compareValue: z.string(),
+  compareValue: decimalString,
   productCount: z.number().int(),
 });
 export type AdminSettingsUnitResponse = z.infer<typeof AdminSettingsUnitResponse>;

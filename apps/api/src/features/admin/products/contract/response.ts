@@ -1,11 +1,12 @@
 import { z } from 'zod';
+import { decimalString } from '../../../../domain/decimal-string.js';
 
 export const AdminProductResponse = z.object({
   id: z.number().int(),
   name: z.string(),
   unitName: z.string(),
   image: z.string(),
-  compareValue: z.string(),
+  compareValue: decimalString,
   lastBought: z.string(),
   price: z.string(),
 });

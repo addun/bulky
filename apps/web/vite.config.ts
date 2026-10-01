@@ -13,14 +13,6 @@ export default defineConfig({
       '/images': api,
       '/static': api,
       '/mcp': api,
-      '/admin': {
-        target: api,
-        bypass(req) {
-          const path = (req.url ?? '').split('?')[0] ?? '';
-          if (/^\/admin\/receipts\/\d+\/preview$/.test(path)) return;
-          if (path === '/admin' || path.startsWith('/admin/')) return req.url;
-        },
-      },
     },
   },
 });

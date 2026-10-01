@@ -5,7 +5,6 @@ import { AliasesRepository, type ProductAlias } from '#app/store/aliases';
 import { LocationsRepository } from '#app/store/locations';
 import { ProductsRepository, type Product } from '#app/store/products';
 import { presentAlias, presentChain, presentStore } from '../../../web/present.js';
-import { asResponse } from '../http.js';
 import { type AliasRequest } from './contract/request.js';
 import {
   AdminAliasDeletedResponse,
@@ -25,7 +24,7 @@ export class AdminAliasesHandler {
   list(query: { product: number }): AdminAliasesResponse {
     const filter = query.product > 0 ? this.products.getProduct(query.product) : null;
     const rows = filter ? this.aliases.listAliasesByProduct(filter.id) : this.aliases.listAliases();
-    return asResponse(AdminAliasesResponse, {
+    return AdminAliasesResponse.parse({
       aliases: rows.map(presentAlias),
       filter,
       productQuery: filter ? `?product=${filter.id}` : '',
@@ -40,7 +39,7 @@ export class AdminAliasesHandler {
       locked = this.products.getProduct(query.product);
       alias.productId = locked.id;
     }
-    return asResponse(AdminAliasFormResponse, {
+    return AdminAliasFormResponse.parse({
       ...lookups,
       alias: presentAlias(alias),
       lockedProduct: locked,
@@ -49,7 +48,7 @@ export class AdminAliasesHandler {
   }
 
   get(aliasId: number): AdminAliasFormResponse {
-    return asResponse(AdminAliasFormResponse, {
+    return AdminAliasFormResponse.parse({
       ...this.lookups(),
       alias: presentAlias(this.aliases.getAlias(aliasId)),
       lockedProduct: null,
@@ -59,8 +58,7 @@ export class AdminAliasesHandler {
 
   create(body: z.infer<typeof AliasRequest>): AdminAliasResponse {
     const { storeID, chainID } = parseAliasScope(body.scope);
-    return asResponse(
-      AdminAliasResponse,
+    return AdminAliasResponse.parse(
       presentAlias(this.aliases.createAlias(body.product_id, storeID || null, chainID || null, body.alias)),
     );
   }
@@ -69,13 +67,13 @@ export class AdminAliasesHandler {
     this.aliases.getAlias(aliasId);
     const { storeID, chainID } = parseAliasScope(body.scope);
     this.aliases.updateAlias(aliasId, body.product_id, storeID || null, chainID || null, body.alias);
-    return asResponse(AdminAliasResponse, presentAlias(this.aliases.getAlias(aliasId)));
+    return AdminAliasResponse.parse(presentAlias(this.aliases.getAlias(aliasId)));
   }
 
   remove(aliasId: number): AdminAliasDeletedResponse {
     const alias = this.aliases.getAlias(aliasId);
     this.aliases.deleteAlias(aliasId);
-    return asResponse(AdminAliasDeletedResponse, { ok: true, alias: alias.alias });
+    return AdminAliasDeletedResponse.parse({ ok: true, alias: alias.alias });
   }
 
   private lookups() {

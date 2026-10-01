@@ -3,7 +3,6 @@ import type { z } from 'zod';
 import { ComparisonGroupsRepository } from '#app/store/comparison-groups';
 import { ProductsRepository } from '#app/store/products';
 import { UnitsRepository } from '#app/store/units';
-import { asResponse } from '../http.js';
 import { type ComparisonGroupRequest } from './contract/request.js';
 import {
   AdminComparisonGroupDeletedResponse,
@@ -21,7 +20,7 @@ export class AdminGroupsHandler {
   ) {}
 
   list(): AdminComparisonGroupsResponse {
-    return asResponse(AdminComparisonGroupsResponse, { groups: this.groups.listComparisonGroups() });
+    return AdminComparisonGroupsResponse.parse({ groups: this.groups.listComparisonGroups() });
   }
 
   blank(): AdminComparisonGroupFormResponse {
@@ -34,8 +33,7 @@ export class AdminGroupsHandler {
   }
 
   create(body: z.infer<typeof ComparisonGroupRequest>): AdminComparisonGroupResponse {
-    return asResponse(
-      AdminComparisonGroupResponse,
+    return AdminComparisonGroupResponse.parse(
       this.groups.createComparisonGroup(body.name, body.unit_id, body.product_id),
     );
   }
@@ -43,13 +41,13 @@ export class AdminGroupsHandler {
   update(groupId: number, body: z.infer<typeof ComparisonGroupRequest>): AdminComparisonGroupResponse {
     this.groups.getComparisonGroup(groupId);
     this.groups.updateComparisonGroup(groupId, body.name, body.unit_id, body.product_id);
-    return asResponse(AdminComparisonGroupResponse, this.groups.getComparisonGroup(groupId));
+    return AdminComparisonGroupResponse.parse(this.groups.getComparisonGroup(groupId));
   }
 
   remove(groupId: number): AdminComparisonGroupDeletedResponse {
     const group = this.groups.getComparisonGroup(groupId);
     this.groups.deleteComparisonGroup(groupId);
-    return asResponse(AdminComparisonGroupDeletedResponse, { ok: true, name: group.name });
+    return AdminComparisonGroupDeletedResponse.parse({ ok: true, name: group.name });
   }
 
   private form(
@@ -57,7 +55,7 @@ export class AdminGroupsHandler {
     selected: number[],
   ): AdminComparisonGroupFormResponse {
     const set = new Set(selected);
-    return asResponse(AdminComparisonGroupFormResponse, {
+    return AdminComparisonGroupFormResponse.parse({
       group,
       units: this.units.listUnits(),
       products: this.products.listProducts('').map((product) => ({ ...product, selected: set.has(product.id) })),

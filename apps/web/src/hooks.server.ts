@@ -3,15 +3,13 @@ import type { Handle } from '@sveltejs/kit';
 const API_ORIGIN = process.env.API_ORIGIN ?? '';
 
 function svelteAdmin(pathname: string): boolean {
-  if (pathname === '/admin' || pathname === '/admin/') return true;
-  if (!pathname.startsWith('/admin/')) return false;
-  return !/^\/admin\/receipts\/\d+\/preview$/.test(pathname);
+  return pathname === '/admin' || pathname.startsWith('/admin/');
 }
 
 /** In Docker, the page and the old screens share this origin. Vite already proxies them in dev. */
 function proxied(pathname: string): boolean {
   if (!API_ORIGIN) return false;
-  if (pathname === '/' || pathname.startsWith('/_app')) return false;
+  if (pathname === '/' || pathname === '/health' || pathname.startsWith('/_app')) return false;
   if (svelteAdmin(pathname)) return false;
   return true;
 }

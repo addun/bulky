@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { decimalString } from '../../../../domain/decimal-string.js';
 
 export const AdminComparisonGroupResponse = z.looseObject({
   id: z.number().int(),
@@ -17,7 +18,7 @@ export type AdminComparisonGroupsResponse = z.infer<typeof AdminComparisonGroups
 
 export const AdminComparisonGroupFormResponse = z.object({
   group: AdminComparisonGroupResponse,
-  units: z.array(z.looseObject({ id: z.number().int(), name: z.string(), compareValue: z.string() })),
+  units: z.array(z.looseObject({ id: z.number().int(), name: z.string(), compareValue: decimalString })),
   products: z.array(z.looseObject({ id: z.number().int(), name: z.string(), selected: z.boolean() })),
 });
 export type AdminComparisonGroupFormResponse = z.infer<typeof AdminComparisonGroupFormResponse>;

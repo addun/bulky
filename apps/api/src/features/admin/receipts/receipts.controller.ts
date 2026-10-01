@@ -45,7 +45,7 @@ export class AdminReceiptsController {
     return this.handler.upload(files);
   }
 
-  @Get('/admin/receipts/:id/preview')
+  @Get('/api/admin/receipts/:id/preview')
   preview(@Param('id', { schema: Id }) receiptId: number, @Res() res: Response): void {
     const path = this.handler.previewPath(receiptId);
     if (!path) {

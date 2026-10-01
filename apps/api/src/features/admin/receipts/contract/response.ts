@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { decimalString } from '../../../../domain/decimal-string.js';
 
 export const AdminReceiptListItemResponse = z.looseObject({
   id: z.number().int(),
@@ -63,8 +64,8 @@ export const AdminReceiptShowResponse = z.object({
     z.looseObject({
       id: z.number().int(),
       productId: z.number().int(),
-      quantity: z.string(),
-      amount: z.string(),
+      quantity: decimalString,
+      amount: decimalString,
       productName: z.string(),
       unitName: z.string(),
     }),
