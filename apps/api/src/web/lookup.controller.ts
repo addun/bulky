@@ -1,12 +1,13 @@
 import { Controller, Get, Param, Query, Res } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import type { Response } from 'express';
 import { ComparisonGroupsRepository } from '#app/store/comparison-groups';
 import { ProductsRepository, type ProductQuote } from '#app/store/products';
 import { PurchasesRepository, type Purchase } from '#app/store/purchases';
+import { NotFoundError } from '../domain/errors.js';
 import { compareUnitLabel, formatMoney, formatMoneyPerUnit, priceAtCompare } from '../domain/format.js';
 import { bestRecentPrice, pricesBetween } from '../domain/price-stats.js';
 import { boughtOnDate } from '../domain/bought-on.js';
-import { ViewsService } from './views.service.js';
 import { presentProductPage, presentPromoCard } from './present.js';
 import { id, qQuery } from './schema.js';
 
@@ -19,27 +20,8 @@ export class LookupController {
     private readonly products: ProductsRepository,
     private readonly purchases: PurchasesRepository,
     private readonly groups: ComparisonGroupsRepository,
-    private readonly views: ViewsService,
+    private readonly config: ConfigService,
   ) {}
-
-  @Get('/')
-  home(@Query({ schema: qQuery }) query: { q: string }, @Res() res: Response): void {
-    const q = query.q;
-    try {
-      const popularItems = this.loadPopular();
-      const popular = this.presentCards(popularItems);
-      const products = q ? this.presentCards(this.loadSuggestions(q)) : popular;
-      this.views.html(res, 'lookup', 200, {
-        page: this.views.page('Czy to promka', q, ''),
-        query: q,
-        mode: q ? 'search' : 'popular',
-        products,
-        popular,
-      });
-    } catch {
-      this.views.text(res, 500, 'could not search products');
-    }
-  }
 
   @Get('/api/lookup.json')
   lookupJSON(@Query({ schema: qQuery }) query: { q: string }, @Res() res: Response): void {
@@ -52,36 +34,11 @@ export class LookupController {
         products: this.toViewCards(this.presentCards(items)),
       });
     } catch {
-      this.views.text(res, 500, 'could not search products');
+      res.status(500).json({ error: 'could not search products' });
     }
   }
 
-  @Get('/api/products/suggestions.json')
-  suggestionsJSON(@Query({ schema: qQuery }) query: { q: string }, @Res() res: Response): void {
-    try {
-      const items = this.loadSuggestions(query.q);
-      res.json(this.toSuggestItems(items));
-    } catch {
-      this.views.text(res, 500, 'could not search products');
-    }
-  }
-
-  @Get('/api/products/suggestions.html')
-  suggestionsHTML(@Query({ schema: qQuery }) query: { q: string }, @Res() res: Response): void {
-    const q = query.q;
-    try {
-      const items = q ? this.loadSuggestions(q) : this.loadPopular();
-      this.views.html(res, 'lookup_suggestions', 200, {
-        query: q,
-        mode: q ? 'search' : 'popular',
-        products: this.presentCards(items),
-      });
-    } catch {
-      this.views.text(res, 500, 'could not search products');
-    }
-  }
-
-  @Get('/products/:id')
+  @Get('/api/lookup/:id')
   showLookup(@Param('id', { schema: id }) productId: number, @Res() res: Response): void {
     try {
       const p = this.products.getProduct(productId);
@@ -91,29 +48,64 @@ export class LookupController {
       const from365 = new Date(today);
       from365.setDate(from365.getDate() - 365);
       const points = pricesBetween(purchases, from365, today);
-      const rows = points.map((pt) => ({
+      const page = presentProductPage(p, purchases, bestRecentPrice(purchases, now), points);
+      const symbol = this.symbol;
+      const product = page.product;
+      const related = this.groups.relatedGroupProducts(productId, now);
+      const chartPoints = points.map((pt) => ({
         on: boughtOnDate(pt.boughtOn),
         price: priceAtCompare(pt.price, p.compareValue).toString(),
       }));
-      const related = this.groups.relatedGroupProducts(productId, now);
-      this.views.html(res, 'lookup_show', 200, {
-        page: this.views.page(p.name, '', ''),
-        ...presentProductPage(p, purchases, bestRecentPrice(purchases, now), points),
-        chartJSON: JSON.stringify(rows),
-        hasChart: points.length > 0,
-        chartFrom: fmtDay(from365),
-        chartTo: fmtDay(today),
-        related: this.presentCards(
-          related.map((r) => ({ product: this.products.getProduct(r.id), quote: r.quote })),
+      res.json({
+        id: product.id,
+        name: product.name,
+        image: product.imagePath && product.imagePath.trim() !== '' ? `/images/${product.imagePath}` : '',
+        initial: page.initial,
+        priceEyebrow: page.priceEyebrow,
+        priceNote: page.priceNote,
+        now: page.quote
+          ? formatMoneyPerUnit(
+              priceAtCompare(page.quote.price, product.compareValue),
+              symbol,
+              compareUnitLabel(product.unitName, product.compareValue),
+            )
+          : '',
+        extras: page.extras.map((extra) => ({
+          price: formatMoney(extra.price, symbol),
+          unitName: extra.unitName,
+        })),
+        stats: page.stats.map((stat) => ({
+          label: stat.label,
+          value: stat.money ? formatMoney(stat.money, symbol) : (stat.text ?? ''),
+        })),
+        chart: chartPoints.length
+          ? { points: chartPoints, from: fmtDay(from365), to: fmtDay(today), symbol }
+          : null,
+        related: this.toViewCards(
+          this.presentCards(related.map((r) => ({ product: this.products.getProduct(r.id), quote: r.quote }))),
         ),
       });
     } catch (err) {
-      if ((err as Error).name === 'NotFoundError') {
-        this.views.text(res, 404, 'not found');
+      if (err instanceof NotFoundError) {
+        res.status(404).json({ error: 'not found' });
         return;
       }
-      this.views.text(res, 500, 'could not load product');
+      res.status(500).json({ error: 'could not load product' });
     }
+  }
+
+  @Get('/api/products/suggestions.json')
+  suggestionsJSON(@Query({ schema: qQuery }) query: { q: string }, @Res() res: Response): void {
+    try {
+      const items = this.loadSuggestions(query.q);
+      res.json(this.toSuggestItems(items));
+    } catch {
+      res.status(500).json({ error: 'could not search products' });
+    }
+  }
+
+  private get symbol(): string {
+    return this.config.get<string>('CURRENCY_SYMBOL') || 'zł';
   }
 
   private loadSuggestions(q: string) {
@@ -129,8 +121,17 @@ export class LookupController {
     return items.map((it) => presentPromoCard(it.product, it.quote, byProduct.get(it.product.id) ?? []));
   }
 
-  private toViewCards(cards: Array<ReturnType<typeof presentPromoCard>>) {
-    const symbol = this.views.symbol;
+  private toViewCards(cards: Array<ReturnType<typeof presentPromoCard>>): Array<{
+    id: number;
+    name: string;
+    image: string;
+    tint: string;
+    initial: string;
+    now: string;
+    extras: Array<{ price: string; unitName: string }>;
+    priceNote: string;
+  }> {
+    const symbol = this.symbol;
     return cards.map((card) => {
       const product = card.product;
       return {
@@ -169,7 +170,7 @@ export class LookupController {
         price: it.quote
           ? formatMoneyPerUnit(
               priceAtCompare(it.quote.price, it.product.compareValue),
-              this.views.symbol,
+              this.symbol,
               compareUnitLabel(it.product.unitName, it.product.compareValue),
             )
           : undefined,

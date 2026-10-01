@@ -10,9 +10,7 @@ RUN pnpm install --frozen-lockfile --filter api...
 COPY apps/api apps/api
 RUN pnpm --filter api build \
  && pnpm --filter api deploy --prod --legacy /out \
- && cp -a apps/api/dist /out/dist \
- && cp -a apps/api/views /out/views \
- && cp -a apps/api/public /out/public
+ && cp -a apps/api/dist /out/dist
 
 FROM node:22-alpine
 RUN apk add --no-cache ca-certificates tzdata poppler-utils

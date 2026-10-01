@@ -31,7 +31,9 @@ function isBulklyImportUrl(url) {
     var u = new URL(url);
     if (u.pathname.indexOf("/imports/biedronka") !== 0) return false;
     var host = u.hostname;
-    if (host === "localhost" || host === "127.0.0.1") return u.port === "8080";
+    if (host === "localhost" || host === "127.0.0.1") {
+      return u.port === "5173" || u.port === "3000" || u.port === "8080";
+    }
     return host === "shop.home.arpa" || host === "shop.piekna2.pl";
   } catch (err) {
     return false;

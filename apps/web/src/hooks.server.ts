@@ -6,12 +6,17 @@ function svelteAdmin(pathname: string): boolean {
   return pathname === '/admin' || pathname.startsWith('/admin/');
 }
 
-/** In Docker, the page and the old screens share this origin. Vite already proxies them in dev. */
+function sveltePage(pathname: string): boolean {
+  if (pathname === '/' || pathname === '/health' || pathname.startsWith('/_app')) return true;
+  if (pathname === '/products' || pathname.startsWith('/products/')) return true;
+  if (pathname === '/imports/biedronka' || pathname.startsWith('/imports/biedronka/')) return true;
+  return svelteAdmin(pathname);
+}
+
+/** In Docker, JSON, images, and MCP still come from the API. */
 function proxied(pathname: string): boolean {
   if (!API_ORIGIN) return false;
-  if (pathname === '/' || pathname === '/health' || pathname.startsWith('/_app')) return false;
-  if (svelteAdmin(pathname)) return false;
-  return true;
+  return !sveltePage(pathname);
 }
 
 export const handle: Handle = async ({ event, resolve }) => {

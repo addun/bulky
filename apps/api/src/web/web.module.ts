@@ -8,12 +8,11 @@ import { SettingsModule } from '#app/store/settings';
 import { ImagesService } from './images.service.js';
 import { OcrQueueService } from './ocr-queue.service.js';
 import { ReceiptImagesService } from './receipt-images.js';
-import { ViewsService } from './views.service.js';
 
 @Global()
 @Module({
   imports: [DatabaseModule, ProductsModule, ReceiptsModule, SettingsModule],
-  providers: [OcrService, McpService, ViewsService, ImagesService, ReceiptImagesService, OcrQueueService],
-  exports: [OcrService, McpService, ViewsService, ImagesService, ReceiptImagesService, OcrQueueService],
+  providers: [OcrService, McpService, ImagesService, ReceiptImagesService, OcrQueueService],
+  exports: [OcrService, McpService, ImagesService, ReceiptImagesService, OcrQueueService],
 })
 export class WebModule {}

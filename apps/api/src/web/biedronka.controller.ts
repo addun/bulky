@@ -10,7 +10,6 @@ import { ProductsRepository } from '#app/store/products';
 import { RECEIPT_SOURCE_BIEDRONKA, ReceiptsRepository } from '#app/store/receipts';
 import { UnitsRepository } from '#app/store/units';
 import { billToImport, hydrateBill, matchStore, storeChainID } from './receipt-form.js';
-import { ViewsService } from './views.service.js';
 import { biedronkaImportBody, biedronkaPageQuery, biedronkaTokenBody, biedronkaTxId, formIssue } from './schema.js';
 
 const biedronkaAPIBase = 'https://api.prod.biedronka.cloud/api/v7';
@@ -30,27 +29,11 @@ export class BiedronkaController {
 
   constructor(
     private readonly receipts: ReceiptsRepository,
-    private readonly views: ViewsService,
     private readonly products: ProductsRepository,
     private readonly aliases: AliasesRepository,
     private readonly locations: LocationsRepository,
     private readonly units: UnitsRepository,
   ) {}
-
-  @Get('imports/biedronka')
-  biedronka(@Res() res: Response): void {
-    const state = this.biedronkaImportedState();
-    let raw: string;
-    try {
-      raw = JSON.stringify(state);
-    } catch {
-      raw = '{"ids":[],"since":""}';
-    }
-    this.views.html(res, 'biedronka', 200, {
-      page: this.views.page('Biedronka import', '', ''),
-      importedJSON: raw,
-    });
-  }
 
   @Get('api/biedronka/imported')
   biedronkaImported(@Res() res: Response): void {
