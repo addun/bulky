@@ -13,6 +13,6 @@ RUN pnpm --filter web build
 FROM node:22-alpine
 WORKDIR /app
 COPY --from=build /src/apps/web/build ./build
-ENV NODE_ENV=production HOST=0.0.0.0 PORT=3000 API_ORIGIN=http://api:8080
+ENV NODE_ENV=production HOST=0.0.0.0 PORT=3000 API_ORIGIN=http://api:8080 BODY_SIZE_LIMIT=15M
 EXPOSE 3000
 CMD ["node", "build/index.js"]

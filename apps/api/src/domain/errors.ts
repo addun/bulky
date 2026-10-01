@@ -1,4 +1,4 @@
-export class AppError extends Error {
+export abstract class AppError extends Error {
   constructor(message: string) {
     super(message);
     this.name = new.target.name;
@@ -12,8 +12,8 @@ export class NotFoundError extends AppError {
 }
 
 export class DuplicateError extends AppError {
-  constructor() {
-    super('already exists');
+  constructor(message = 'That value already exists.') {
+    super(message);
   }
 }
 
@@ -30,56 +30,56 @@ export class StoreInUseError extends AppError {
 }
 
 export class InvalidUnitError extends AppError {
-  constructor() {
-    super('invalid unit');
+  constructor(message = 'Choose a unit from the list.') {
+    super(message);
   }
 }
 
 export class InvalidStoreError extends AppError {
-  constructor() {
-    super('invalid store');
+  constructor(message = 'Choose a store.') {
+    super(message);
   }
 }
 
 export class InvalidKindError extends AppError {
-  constructor() {
-    super('invalid purchase kind');
+  constructor(message = 'Choose purchase or price.') {
+    super(message);
   }
 }
 
 export class InvalidQuantityError extends AppError {
-  constructor() {
-    super('quantity must be greater than zero');
+  constructor(message = 'Quantity must be greater than zero.') {
+    super(message);
   }
 }
 
 export class AliasScopeError extends AppError {
-  constructor() {
-    super('alias cannot be both store and chain');
+  constructor(message = 'Choose either a chain or a store, not both.') {
+    super(message);
   }
 }
 
 export class SameProductError extends AppError {
-  constructor() {
-    super('cannot merge a product into itself');
+  constructor(message = 'Choose a different product.') {
+    super(message);
   }
 }
 
 export class SameStoreError extends AppError {
-  constructor() {
-    super('cannot merge a store into itself');
+  constructor(message = 'Choose a different store.') {
+    super(message);
   }
 }
 
 export class UnitMismatchError extends AppError {
-  constructor() {
-    super('products use different units');
+  constructor(message = 'Those products use different units.') {
+    super(message);
   }
 }
 
 export class InvalidConversionError extends AppError {
-  constructor() {
-    super('invalid unit conversion');
+  constructor(message = 'Choose one of the extra units on this product.') {
+    super(message);
   }
 }
 
@@ -94,14 +94,14 @@ export class ConversionConflictError extends ConversionMismatchError {
     super();
     this.message =
       unitName === ''
-        ? 'products convert to a unit differently'
-        : `products convert to ${unitName} differently`;
+        ? 'Those products convert to a unit differently.'
+        : `Those products convert to ${unitName} differently.`;
   }
 }
 
 export class InvalidComparisonGroupError extends AppError {
-  constructor() {
-    super('invalid comparison group');
+  constructor(message = 'Choose a comparison group.') {
+    super(message);
   }
 }
 
@@ -112,8 +112,8 @@ export class RetailChainInUseError extends AppError {
 }
 
 export class InvalidRetailChainError extends AppError {
-  constructor() {
-    super('invalid retail chain');
+  constructor(message = 'Choose a retail chain.') {
+    super(message);
   }
 }
 

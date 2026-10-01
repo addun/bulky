@@ -2,7 +2,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { NoLinesError, NoPDFTextError, NotABillError } from '../ocr/types.js';
 import { OcrService } from '../ocr/ocr.service.js';
 import { RECEIPT_PENDING, ReceiptsRepository } from '#app/store/receipts';
-import { UnitsRepository } from '#app/store/units';
+import { SettingsRepository } from '#app/store/settings';
 import { ReceiptImagesService } from './receipt-images.js';
 
 const ocrJobBuffer = 32;
@@ -15,7 +15,7 @@ export class OcrQueueService implements OnModuleInit {
 
   constructor(
     private readonly receipts: ReceiptsRepository,
-    private readonly units: UnitsRepository,
+    private readonly settings: SettingsRepository,
     private readonly ocr: OcrService,
     private readonly images: ReceiptImagesService,
   ) {}
@@ -90,7 +90,7 @@ export class OcrQueueService implements OnModuleInit {
       return;
     }
     if (!this.ocr.configured()) return;
-    const model = this.units.ocrModel();
+    const model = this.settings.getSetting('ocr_model');
     if (model === '') return;
 
     try {

@@ -26,6 +26,7 @@ services:
       API_ORIGIN: http://api:8080
       PORT: "3000"
       HOST: 0.0.0.0
+      BODY_SIZE_LIMIT: 15M
     depends_on:
       - api
 

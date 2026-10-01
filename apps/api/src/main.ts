@@ -8,7 +8,7 @@ import { json, urlencoded } from 'express';
 import { AppModule } from './app.module.js';
 import { parseListenAddr } from './config/env.js';
 import { registerHandlebarsHelpers, setCurrencySymbol } from './web/helpers.js';
-import { HtmlExceptionFilter } from './web/html-exception.filter.js';
+import { ProblemFilter } from './web/problem.filter.js';
 import { DatabaseService } from './db/database.service.js';
 
 const WEB_ORIGINS = ['http://localhost:5173', 'http://127.0.0.1:5173'];
@@ -24,7 +24,7 @@ async function bootstrap(): Promise<void> {
         new BadRequestException({ error: issues[0]?.message ?? 'Invalid input.' }),
     }),
   );
-  app.useGlobalFilters(new HtmlExceptionFilter());
+  app.useGlobalFilters(new ProblemFilter());
 
   const viewsDir = join(import.meta.dirname, '..', 'views');
   const publicDir = join(import.meta.dirname, '..', 'public');

@@ -65,7 +65,7 @@ export class ComparisonGroupsRepository {
     try {
       this.units.getUnit(unitId);
     } catch (err) {
-      if (err instanceof NotFoundError) throw new InvalidUnitError();
+      if (err instanceof NotFoundError) throw new InvalidUnitError('Choose a comparison unit.');
       throw err;
     }
     const id = this.db.immediate(() => {
@@ -75,7 +75,7 @@ export class ComparisonGroupsRepository {
           this.orm.insert(comparisonGroups).values({ name, unitId, createdAt: nowRFC3339() }).run(),
         );
       } catch (err) {
-        if (isUniqueErr(err)) throw new DuplicateError();
+        if (isUniqueErr(err)) throw new DuplicateError('A group with that name already exists.');
         throw err;
       }
       this.setComparisonGroupProducts(gid, productIds);
@@ -88,7 +88,7 @@ export class ComparisonGroupsRepository {
     try {
       this.units.getUnit(unitId);
     } catch (err) {
-      if (err instanceof NotFoundError) throw new InvalidUnitError();
+      if (err instanceof NotFoundError) throw new InvalidUnitError('Choose a comparison unit.');
       throw err;
     }
     this.db.immediate(() => {
@@ -99,7 +99,7 @@ export class ComparisonGroupsRepository {
         if (n === 0) throw new NotFoundError();
       } catch (err) {
         if (err instanceof NotFoundError) throw err;
-        if (isUniqueErr(err)) throw new DuplicateError();
+        if (isUniqueErr(err)) throw new DuplicateError('A group with that name already exists.');
         throw err;
       }
       this.setComparisonGroupProducts(id, productIds);

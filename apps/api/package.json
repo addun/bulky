@@ -40,6 +40,10 @@
       "types": "./src/store/receipts/index.ts",
       "default": "./dist/store/receipts/index.js"
     },
+    "#app/store/settings": {
+      "types": "./src/store/settings/index.ts",
+      "default": "./dist/store/settings/index.js"
+    },
     "#app/store/units": {
       "types": "./src/store/units/index.ts",
       "default": "./dist/store/units/index.js"
@@ -53,7 +57,8 @@
     "start": "node dist/main.js",
     "start:dev": "nest start --watch",
     "seed": "node dist/seed/cli.js",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "lint": "eslint ."
   },
   "dependencies": {
     "@faker-js/faker": "9.9.0",
@@ -83,7 +88,9 @@
     "@types/hbs": "4.0.5",
     "@types/multer": "1.4.13",
     "@types/node": "24.13.4",
+    "@typescript-eslint/parser": "^8.71.0",
     "drizzle-kit": "0.31.6",
+    "eslint": "^10.11.0",
     "typescript": "6.0.3"
   }
 }

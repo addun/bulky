@@ -92,7 +92,7 @@ export class ProductsRepository {
       if (err instanceof NotFoundError) throw new InvalidUnitError();
       throw err;
     }
-    if (this.aliases.aliasExistsExcept(name, 0)) throw new DuplicateError();
+    if (this.aliases.aliasExistsExcept(name, 0)) throw new DuplicateError('That name is already used as an alias.');
     const id = this.db.immediate(() => {
       const pid = lastId(
         this.orm
@@ -121,9 +121,9 @@ export class ProductsRepository {
       if (err instanceof NotFoundError) throw new InvalidUnitError();
       throw err;
     }
-    if (this.aliases.aliasExistsExcept(name, id)) throw new DuplicateError();
+    if (this.aliases.aliasExistsExcept(name, id)) throw new DuplicateError('That name is already used as an alias.');
     const cur = this.getProduct(id);
-    if (unitId !== cur.unitId) throw new InvalidUnitError();
+    if (unitId !== cur.unitId) throw new InvalidUnitError('The purchase unit cannot be changed here.');
     let path: string | null;
     if (clearImage) path = null;
     else if (imagePathVal !== null) path = imagePathVal;
@@ -149,7 +149,7 @@ export class ProductsRepository {
 
   changePurchaseUnit(productId: number, newUnitId: number): void {
     const p = this.getProduct(productId);
-    if (newUnitId === p.unitId) throw new InvalidUnitError();
+    if (newUnitId === p.unitId) throw new InvalidUnitError('Choose a different unit from the current purchase unit.');
     const conv = p.conversions.find((c) => c.unitId === newUnitId);
     if (!conv) throw new InvalidConversionError();
     const factor = conv.factor;
@@ -491,9 +491,10 @@ export class ProductsRepository {
     const out: ProductConversion[] = [];
     for (const c of conversions) {
       if (c.unitId === 0) continue;
-      if (c.unitId === purchaseUnitId) throw new InvalidConversionError();
-      if (seen.has(c.unitId)) throw new InvalidConversionError();
-      if (c.factor.isNegative() || c.factor.isZero()) throw new InvalidConversionError();
+      const extra = 'Check the extra units: each must be different from the purchase unit, unique, and have a factor greater than zero.';
+      if (c.unitId === purchaseUnitId) throw new InvalidConversionError(extra);
+      if (seen.has(c.unitId)) throw new InvalidConversionError(extra);
+      if (c.factor.isNegative() || c.factor.isZero()) throw new InvalidConversionError(extra);
       const n = this.orm.select({ n: count() }).from(units).where(eq(units.id, c.unitId)).get();
       if (countOf(n?.n) === 0) throw new InvalidUnitError();
       seen.add(c.unitId);

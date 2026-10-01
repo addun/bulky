@@ -3,15 +3,10 @@ import { count, eq, sql } from 'drizzle-orm';
 import { Decimal } from 'decimal.js';
 import { DatabaseService } from '../../db/database.service.js';
 import { changesOf, countOf, lastId, nocaseEq, nocaseOrder } from '../../db/query.js';
-import { comparisonGroups, settings, units } from '../../db/schema.js';
+import { comparisonGroups, units } from '../../db/schema.js';
 import { DuplicateError, InvalidUnitError, isUniqueErr, NotFoundError, UnitInUseError } from '../../domain/errors.js';
-import {
-  SETTING_OCR_MODEL,
-  SETTING_PIECE_UNIT_ID,
-  SETTING_WEIGHT_UNIT_ID,
-  type Unit,
-  type UnitDefaults,
-} from './units.models.js';
+import { SettingsRepository } from '#app/store/settings';
+import { type Unit, type UnitDefaults } from './units.models.js';
 
 const unitUseCount = sql<number>`cast((
   select count(*) from products p where p.unit_id = ${units.id}
@@ -21,7 +16,10 @@ const unitUseCount = sql<number>`cast((
 
 @Injectable()
 export class UnitsRepository {
-  constructor(private readonly db: DatabaseService) {}
+  constructor(
+    private readonly db: DatabaseService,
+    private readonly settings: SettingsRepository,
+  ) {}
 
   private get orm() {
     return this.db.drizzle;
@@ -58,7 +56,7 @@ export class UnitsRepository {
       );
       return this.getUnit(id);
     } catch (err) {
-      if (isUniqueErr(err)) throw new DuplicateError();
+      if (isUniqueErr(err)) throw new DuplicateError('That unit already exists.');
       throw err;
     }
   }
@@ -71,7 +69,7 @@ export class UnitsRepository {
       if (n === 0) throw new NotFoundError();
     } catch (err) {
       if (err instanceof NotFoundError) throw err;
-      if (isUniqueErr(err)) throw new DuplicateError();
+      if (isUniqueErr(err)) throw new DuplicateError('That unit already exists.');
       throw err;
     }
   }
@@ -89,30 +87,18 @@ export class UnitsRepository {
     if (n === 0) throw new NotFoundError();
   }
 
-  getSetting(key: string): string {
-    const row = this.orm.select({ value: settings.value }).from(settings).where(eq(settings.key, key)).get();
-    return row?.value ?? '';
-  }
-
-  setSetting(key: string, value: string): void {
-    this.orm
-      .insert(settings)
-      .values({ key, value })
-      .onConflictDoUpdate({ target: settings.key, set: { value } })
-      .run();
-  }
-
   unitDefaults(): UnitDefaults {
-    return { pieceId: this.settingUnitID(SETTING_PIECE_UNIT_ID), weightId: this.settingUnitID(SETTING_WEIGHT_UNIT_ID) };
+    return {
+      pieceId: this.existingUnitId(this.settings.getSetting('piece_unit_id')),
+      weightId: this.existingUnitId(this.settings.getSetting('weight_unit_id')),
+    };
   }
 
   setUnitDefaults(d: UnitDefaults): void {
-    this.setSettingUnitID(SETTING_PIECE_UNIT_ID, d.pieceId);
-    this.setSettingUnitID(SETTING_WEIGHT_UNIT_ID, d.weightId);
-  }
-
-  ocrModel(): string {
-    return this.getSetting(SETTING_OCR_MODEL);
+    this.requireUnit(d.pieceId);
+    this.requireUnit(d.weightId);
+    this.settings.setSetting('piece_unit_id', d.pieceId);
+    this.settings.setSetting('weight_unit_id', d.weightId);
   }
 
   private unitColumns() {
@@ -133,11 +119,8 @@ export class UnitsRepository {
     };
   }
 
-  private settingUnitID(key: string): number | null {
-    const raw = this.getSetting(key);
-    if (raw === '') return null;
-    const id = Number.parseInt(raw, 10);
-    if (!Number.isFinite(id) || id <= 0) return null;
+  private existingUnitId(id: number | null): number | null {
+    if (id == null) return null;
     try {
       this.getUnit(id);
       return id;
@@ -147,17 +130,13 @@ export class UnitsRepository {
     }
   }
 
-  private setSettingUnitID(key: string, id: number | null): void {
-    if (!id) {
-      this.orm.delete(settings).where(eq(settings.key, key)).run();
-      return;
-    }
+  private requireUnit(id: number | null): void {
+    if (!id) return;
     try {
       this.getUnit(id);
     } catch (err) {
       if (err instanceof NotFoundError) throw new InvalidUnitError();
       throw err;
     }
-    this.setSetting(key, String(id));
   }
 }
