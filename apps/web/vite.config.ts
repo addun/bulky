@@ -11,7 +11,6 @@ export default defineConfig({
     proxy: {
       '/api': api,
       '/images': api,
-      '/static': api,
       '/mcp': api,
     },
   },

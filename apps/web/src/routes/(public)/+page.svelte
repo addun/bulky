@@ -17,8 +17,6 @@
     priceNote: string;
   };
 
-  const legacy = import.meta.env.DEV ? 'http://127.0.0.1:8080' : '';
-
   let query = $state('');
   let mode = $state<'search' | 'popular'>('popular');
   let products = $state<PromoCard[]>([]);
@@ -60,7 +58,7 @@
     if (event.key === 'Enter') {
       if (active < 0) return;
       event.preventDefault();
-      location.href = `${legacy}/products/${products[active]!.id}`;
+      location.href = `/products/${products[active]!.id}`;
       return;
     }
     event.preventDefault();
@@ -129,7 +127,7 @@
 
 {#snippet promo(card: PromoCard, index: number)}
   <li>
-    <a href="{legacy}/products/{card.id}" class="block rounded-xl {index === active ? 'ring-ring ring-2' : ''}">
+    <a href="/products/{card.id}" class="block rounded-xl {index === active ? 'ring-ring ring-2' : ''}">
       <Card.Root class="transition-colors hover:bg-muted/40">
         <Card.Content class="flex items-start justify-between gap-4">
           <span class="flex min-w-0 items-start gap-3">

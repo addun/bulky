@@ -31,40 +31,6 @@ import { yearlySummaries } from '../domain/yearly-summaries.js';
 import { KIND_PRICE, KIND_PURCHASE, type Purchase } from '#app/store/purchases';
 import { RECEIPT_PENDING, receiptStatusLabel, type Receipt, type ReceiptListItem } from '#app/store/receipts';
 
-export type Page = {
-  title: string;
-  query: string;
-  error: string;
-  symbol: string;
-  currency: string;
-  today: string;
-  admin: boolean;
-  refreshSeconds: number;
-};
-
-export function makePage(
-  title: string,
-  query: string,
-  errMsg: string,
-  symbol: string,
-  currency: string,
-  admin = false,
-  refreshSeconds = 0,
-): Page {
-  const now = new Date();
-  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  return {
-    title,
-    query,
-    error: errMsg,
-    symbol,
-    currency,
-    today,
-    admin,
-    refreshSeconds,
-  };
-}
-
 export function presentProduct(p: Product): Product & { unitIdsAttr: string; packConversionsJSON: string } {
   return { ...p, unitIdsAttr: unitIdsAttr(p), packConversionsJSON: packConversionsJSON(p) };
 }

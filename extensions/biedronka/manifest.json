@@ -6,6 +6,10 @@
   "permissions": ["webRequest", "webNavigation", "tabs"],
   "host_permissions": [
     "https://konto.biedronka.pl/*",
+    "http://localhost:5173/*",
+    "http://127.0.0.1:5173/*",
+    "http://localhost:3000/*",
+    "http://127.0.0.1:3000/*",
     "http://localhost:8080/*",
     "http://127.0.0.1:8080/*",
     "*://shop.home.arpa/*",
@@ -17,6 +21,14 @@
   "content_scripts": [
     {
       "matches": [
+        "http://localhost:5173/imports/biedronka",
+        "http://localhost:5173/imports/biedronka*",
+        "http://127.0.0.1:5173/imports/biedronka",
+        "http://127.0.0.1:5173/imports/biedronka*",
+        "http://localhost:3000/imports/biedronka",
+        "http://localhost:3000/imports/biedronka*",
+        "http://127.0.0.1:3000/imports/biedronka",
+        "http://127.0.0.1:3000/imports/biedronka*",
         "http://localhost:8080/imports/biedronka",
         "http://localhost:8080/imports/biedronka*",
         "http://127.0.0.1:8080/imports/biedronka",
