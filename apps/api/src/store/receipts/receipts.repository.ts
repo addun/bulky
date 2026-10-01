@@ -289,7 +289,7 @@ export class ReceiptsRepository {
       );
       return this.getReceipt(id);
     } catch (err) {
-      if (isUniqueErr(err)) throw new DuplicateError();
+      if (isUniqueErr(err)) throw new DuplicateError('That receipt is already imported.');
       throw err;
     }
   }

@@ -15,18 +15,20 @@ import {
   ProductsRepository,
   PurchasesRepository,
   ReceiptsRepository,
+  SettingsRepository,
   UnitsRepository,
 } from '#app/store';
 
 function createStore(db: DatabaseService) {
-  const units = new UnitsRepository(db);
+  const settings = new SettingsRepository(db);
+  const units = new UnitsRepository(db, settings);
   const locations = new LocationsRepository(db);
   const aliases = new AliasesRepository(db, locations);
   const purchases = new PurchasesRepository(db, locations);
   const groups = new ComparisonGroupsRepository(db, units, purchases);
   const products = new ProductsRepository(db, units, aliases, purchases, groups, locations);
   const receipts = new ReceiptsRepository(db, products, aliases, purchases, locations);
-  return { units, locations, aliases, purchases, groups, products, receipts };
+  return { units, locations, aliases, purchases, groups, products, receipts, settings };
 }
 
 function assertMigrationCleanup(db: DatabaseService): void {
@@ -316,8 +318,8 @@ function runStoreSmoke(): void {
     if (merged.keeper.id !== flour.id) throw new Error('merge keeper');
     if (repos.purchases.listPurchases(flour.id).length !== 2) throw new Error('merge purchases');
 
-    repos.units.setSetting('ocr_model', 'vision');
-    if (repos.units.ocrModel() !== 'vision') throw new Error('settings upsert');
+    repos.settings.setSetting('ocr_model', 'vision');
+    if (repos.settings.getSetting('ocr_model') !== 'vision') throw new Error('settings upsert');
 
     const pending = repos.receipts.createReceipt('pending.jpg');
     const pendingRow = repos.receipts.listReceipts().find((r) => r.id === pending.id);

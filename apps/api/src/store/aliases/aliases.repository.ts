@@ -66,7 +66,7 @@ export class AliasesRepository {
       );
       return this.getAlias(id);
     } catch (err) {
-      if (isUniqueErr(err)) throw new DuplicateError();
+      if (isUniqueErr(err)) throw new DuplicateError("That alias already exists for this scope, or matches another product's name.");
       throw err;
     }
   }
@@ -90,7 +90,7 @@ export class AliasesRepository {
       if (n === 0) throw new NotFoundError();
     } catch (err) {
       if (err instanceof NotFoundError) throw err;
-      if (isUniqueErr(err)) throw new DuplicateError();
+      if (isUniqueErr(err)) throw new DuplicateError("That alias already exists for this scope, or matches another product's name.");
       throw err;
     }
   }
@@ -153,7 +153,7 @@ export class AliasesRepository {
   private prepareAlias(productId: number, storeId: number | null, chainId: number | null, alias: string) {
     if (storeId && chainId) throw new AliasScopeError();
     alias = stripAliasWhitespace(alias);
-    if (alias === '') throw new DuplicateError();
+    if (alias === '') throw new DuplicateError("That alias already exists for this scope, or matches another product's name.");
     const n = this.orm.select({ n: count() }).from(products).where(eq(products.id, productId)).get();
     if (countOf(n?.n) === 0) throw new NotFoundError();
     const store = this.locations.optionalStore(storeId);
@@ -163,7 +163,7 @@ export class AliasesRepository {
       .from(products)
       .where(ne(products.id, productId))
       .all();
-    if (names.some((p) => stripAliasWhitespace(p.name).toLowerCase() === alias.toLowerCase())) throw new DuplicateError();
+    if (names.some((p) => stripAliasWhitespace(p.name).toLowerCase() === alias.toLowerCase())) throw new DuplicateError("That alias already exists for this scope, or matches another product's name.");
     return { productId, storeId: store, chainId: chain, alias };
   }
 }

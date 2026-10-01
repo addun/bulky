@@ -43,7 +43,7 @@ export class LocationsRepository {
       );
       return this.getRetailChain(id);
     } catch (err) {
-      if (isUniqueErr(err)) throw new DuplicateError();
+      if (isUniqueErr(err)) throw new DuplicateError('A chain with that name or tax ID already exists.');
       throw err;
     }
   }
@@ -61,7 +61,7 @@ export class LocationsRepository {
       if (n === 0) throw new NotFoundError();
     } catch (err) {
       if (err instanceof NotFoundError) throw err;
-      if (isUniqueErr(err)) throw new DuplicateError();
+      if (isUniqueErr(err)) throw new DuplicateError('A chain with that name or tax ID already exists.');
       throw err;
     }
   }
@@ -137,7 +137,7 @@ export class LocationsRepository {
       if (n === 0) throw new NotFoundError();
     } catch (err) {
       if (err instanceof NotFoundError || err instanceof InvalidRetailChainError) throw err;
-      if (isUniqueErr(err)) throw new DuplicateError();
+      if (isUniqueErr(err)) throw new DuplicateError('That store code is already used.');
       throw err;
     }
   }
@@ -262,7 +262,7 @@ export class LocationsRepository {
           .run(),
       );
     } catch (err) {
-      if (isUniqueErr(err)) throw new DuplicateError();
+      if (isUniqueErr(err)) throw new DuplicateError('That store code is already used.');
       throw err;
     }
   }
@@ -369,7 +369,7 @@ export class LocationsRepository {
     const into = this.getStore(intoId);
     const from = this.getStore(fromId);
     if (into.externalId !== '' && from.externalId !== '' && into.externalId.toLowerCase() !== from.externalId.toLowerCase()) {
-      throw new DuplicateError();
+      throw new DuplicateError('Those stores use different store codes.');
     }
     return { into, from };
   }

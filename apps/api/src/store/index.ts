@@ -5,4 +5,5 @@ export * from './locations/index.js';
 export * from './products/index.js';
 export * from './purchases/index.js';
 export * from './receipts/index.js';
+export * from './settings/index.js';
 export * from './units/index.js';
