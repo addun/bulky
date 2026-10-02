@@ -13,6 +13,10 @@ RUN pnpm --filter web build
 FROM node:22-alpine
 WORKDIR /app
 COPY --from=build /src/apps/web/build ./build
-ENV NODE_ENV=production HOST=0.0.0.0 PORT=3000 API_ORIGIN=http://api:8080 BODY_SIZE_LIMIT=15M
+COPY deploy/healthcheck.js /healthcheck.js
+COPY deploy/web-entrypoint.sh /web-entrypoint.sh
+ENV NODE_ENV=production WEB_HOST=0.0.0.0 WEB_PORT=3000 API_ORIGIN=http://api:8080 BODY_SIZE_LIMIT=15M
 EXPOSE 3000
-CMD ["node", "build/index.js"]
+HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=5 \
+  CMD node /healthcheck.js http://127.0.0.1:$${WEB_PORT:-3000}/health
+CMD ["sh", "/web-entrypoint.sh"]

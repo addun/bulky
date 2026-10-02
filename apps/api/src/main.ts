@@ -4,7 +4,6 @@ import { BadRequestException, StandardSchemaValidationPipe } from '@nestjs/commo
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { json, urlencoded } from 'express';
 import { AppModule } from './app.module.js';
-import { parseListenAddr } from './config/env.js';
 import { ProblemFilter } from './web/problem.filter.js';
 import { DatabaseService } from './db/database.service.js';
 
@@ -26,10 +25,11 @@ async function bootstrap(): Promise<void> {
   const db = app.get(DatabaseService);
   app.useStaticAssets(db.imagesDirPath(), { prefix: '/images/' });
 
-  const addr = parseListenAddr(process.env.ADDR || ':8080');
-  await app.listen(addr.port, addr.host);
+  const host = process.env.API_HOST || '0.0.0.0';
+  const port = Number(process.env.API_PORT) || 8080;
+  await app.listen(port, host);
 
-  console.log(`bulkly listening on ${addr.host}:${addr.port} (data ${process.env.DATA_DIR || './data'})`);
+  console.log(`bulkly listening on ${host}:${port} (data ${process.env.DATA_DIR || './data'})`);
 }
 
 void bootstrap();

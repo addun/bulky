@@ -25,7 +25,8 @@ Optional environment (read by the API):
 | Variable          | Default                    | Meaning                                      |
 | ----------------- | -------------------------- | -------------------------------------------- |
 | `DATA_DIR`        | `./data`                   | SQLite file and `images/`, relative to the API process |
-| `ADDR`            | `:8080`                    | Listen address                               |
+| `API_HOST`        | `0.0.0.0`                  | API listen host                              |
+| `API_PORT`        | `8080`                     | API listen port                              |
 | `CURRENCY`        | `PLN`                      | Label only                                   |
 | `CURRENCY_SYMBOL` | `zł`                       | Shown next to amounts                        |
 | `OCR_API_KEY`     |                            | API key for the bill reader (`OPENAI_API_KEY` is also accepted) |
@@ -41,12 +42,12 @@ The Svelte home page calls `GET /api/lookup.json`. Admin pages are Svelte routes
 docker compose up --build
 ```
 
-Compose publishes the Svelte app on [http://localhost:3000](http://localhost:3000) and the API on [http://localhost:8080](http://localhost:8080). The Svelte container forwards `/api`, images, and MCP to the API. Data (SQLite + product photos) lives in the `bulkly-data` volume.
+Compose publishes the Svelte app on [http://localhost:3000](http://localhost:3000) and the API on [http://localhost:8080](http://localhost:8080). Both containers read the repo root `.env`. The API listens on `API_HOST`:`API_PORT`. The web app listens on `WEB_HOST`:`WEB_PORT` and forwards `/api`, images, and MCP to `API_ORIGIN`. `ORIGIN` is the public site URL; form saves are rejected when it does not match the address in the browser. Data (SQLite + product photos) lives in the `bulkly-data` volume.
 
 Published images from GitHub Releases go to the [GitHub Container Registry](https://ghcr.io) as `ghcr.io/<owner>/<repo>` (linux/amd64):
 
 ```bash
-docker pull ghcr.io/addun/bulky:v1.0.0
+docker pull ghcr.io/addun/cowkoszyku:v1.0.0
 ```
 
 Create a GitHub Release whose tag is a semantic version starting with `v` (`v1.0.0`, `v1.2.3`, `v2.0.0-rc.1`). That publishes:
