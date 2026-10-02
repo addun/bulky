@@ -3,6 +3,7 @@
 *.db
 *.exe
 .DS_Store
+.env
 node_modules
 .pnpm-store
 dist
