@@ -21,5 +21,5 @@ ENV DATA_DIR=/data API_HOST=0.0.0.0 API_PORT=8080 CURRENCY=PLN CURRENCY_SYMBOL=z
 VOLUME /data
 EXPOSE 8080
 HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=5 \
-  CMD node /healthcheck.js http://127.0.0.1:$${API_PORT:-8080}/api/health
+  CMD node /healthcheck.js http://127.0.0.1:${API_PORT:-8080}/api/health
 CMD ["node", "dist/main.js"]
